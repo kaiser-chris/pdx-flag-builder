@@ -1,0 +1,17 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.bin
+
+# Ignore user IDE settings
+/.vscode/
+
+# Ignore GoLand settings
+/.idea/
+/.run/
+
+# Application Specific
+/settings.json
