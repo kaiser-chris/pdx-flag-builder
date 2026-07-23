@@ -50,6 +50,15 @@ loadSettings :: proc() {
         }
     }
 
+    delete(jsonBytes)
+}
+
+freeSettings :: proc() {
+    for _, index in state.Settings.Databases {
+        delete(state.Settings.Databases[index].Name)
+        delete(state.Settings.Databases[index].Path)
+    }
+    delete(state.Settings.Databases)
 }
 
 saveSettings :: proc() {

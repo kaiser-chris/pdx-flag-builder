@@ -5,8 +5,11 @@ import "core:strings"
 import rl "vendor:raylib"
 import mu "vendor:microui"
 import fmt "core:fmt"
+import "core:mem"
+import "core:sync/chan"
 
 TEXTURE_RECT_IDENTIFIER: u8: 1
+TEXTURE_RECT_IDENTIFIER_TRANSPARENCY: u8: 2
 TOOLBAR_HEIGHT: i32: 35
 FLAG_HEIGHT: i32: 512
 FLAG_WIDTH: i32: 768
@@ -18,13 +21,40 @@ State :: struct {
     SettingsWindowOpen: bool,
     DatabaseWindowOpen: bool,
     FlagWindowOpen: bool,
-    atlas_texture: rl.Texture2D,
-    TextureCache: map[cstring]rl.Texture2D,
-    FrameTextures: [dynamic]FrameTexture,
+    AtlasTexture: rl.Texture2D,
+    TextureCache: map[int]rl.Texture2D,
+    TextureMap: map[string]int,
+    TextureLoadChannel: chan.Chan(TextureRequest),
     TransparencyTexture: rl.Texture2D,
     InvalidTexture: rl.Texture2D,
     Flag: Flag,
-    ButtonIdentifier: i32
+    ButtonIdentifier: i32,
+    NextTextureIdentifier: int,
+}
+
+setupState :: proc() {
+    state.TextureCache = make(map[int]rl.Texture2D)
+    state.TextureMap = make(map[string]int)
+    channel, err := chan.create(chan.Chan(TextureRequest), 2048, context.allocator)
+    if err != nil {
+        fmt.eprintfln("Could not create TextureLoadChannel: %v", err)
+    }
+    state.TextureLoadChannel = channel
+    state.FlagWindowOpen = true
+    state.Flag = createFlag()
+    state.NextTextureIdentifier = 1
+}
+freeState :: proc() {
+    for key in state.TextureCache {
+        rl.UnloadTexture(state.TextureCache[key])
+    }
+    delete(state.TextureCache)
+    for key in state.TextureMap {
+        delete(key)
+    }
+    delete(state.TextureMap)
+    delete(state.Databases)
+    chan.destroy(state.TextureLoadChannel)
 }
 
 state := State{}
@@ -37,6 +67,11 @@ DatabaseState :: struct {
     BufferPathLength: int,
 }
 
+TextureRequest :: struct {
+    Identifier: int,
+    Path: string,
+}
+
 FrameTexture :: struct {
     TransparencyBackground: bool,
     Path: cstring,
@@ -44,10 +79,26 @@ FrameTexture :: struct {
 }
 
 main :: proc() {
+    track: mem.Tracking_Allocator
+    mem.tracking_allocator_init(&track, context.allocator)
+    context.allocator = mem.tracking_allocator(&track)
+
+    // Check for leaks after the walker is destroyed
+    defer {
+        if len(track.allocation_map) > 0 {
+            fmt.printfln("Real Memory Leak! %v allocations not freed.", len(track.allocation_map))
+            for _, entry in track.allocation_map {
+                fmt.printfln("- %v bytes at %v", entry.size, entry.location)
+            }
+        } else {
+            fmt.println("No leaks detected! Memory is safely pooled by the allocator.")
+        }
+    }
+
     loadSettings()
-    state.FrameTextures = make([dynamic]FrameTexture)
-    state.TextureCache = make(map[cstring]rl.Texture2D)
-    state.FlagWindowOpen = true
+    defer freeSettings()
+    setupState()
+    defer freeState()
 
     rl.SetConfigFlags({.WINDOW_RESIZABLE})
     rl.InitWindow(1280, 800, "PDX Flag Editor")
@@ -69,8 +120,8 @@ main :: proc() {
         mipmaps = 1,
         format  = .UNCOMPRESSED_R8G8B8A8,
     }
-    state.atlas_texture = rl.LoadTextureFromImage(image)
-    defer rl.UnloadTexture(state.atlas_texture)
+    state.AtlasTexture = rl.LoadTextureFromImage(image)
+    defer rl.UnloadTexture(state.AtlasTexture)
 
     state.TransparencyTexture = rl.LoadTexture("textures/transparency.dds")
     defer rl.UnloadTexture(state.TransparencyTexture)
@@ -159,12 +210,8 @@ main :: proc() {
         mu.end(ctx)
 
         render(ctx)
-        clear(&state.FrameTextures)
-        state.ButtonIdentifier = 0
-    }
 
-    for key in state.TextureCache {
-        rl.UnloadTexture(state.TextureCache[key])
+        state.ButtonIdentifier = 0
     }
 }
 
@@ -178,20 +225,18 @@ render :: proc(ctx: ^mu.Context) {
         }
         position := rl.Vector2{f32(pos.x), f32(pos.y)}
 
-        rl.DrawTextureRec(state.atlas_texture, source, position, transmute(rl.Color)color)
+        rl.DrawTextureRec(state.AtlasTexture, source, position, transmute(rl.Color)color)
     }
 
     rl.ClearBackground(transmute(rl.Color)state.Settings.BackgroundColor)
 
-    rl.BeginDrawing()
+    // Load textures needed by MicroUI
+    loadRequestedTextures()
 
-    renderFlagPreview()
+    rl.BeginDrawing()
 
     rl.BeginScissorMode(0, 0, rl.GetScreenWidth(), rl.GetScreenHeight())
     defer rl.EndScissorMode()
-
-    // Load textures needed by MicroUI
-    loadFrameTextures()
 
     command_backing: ^mu.Command
     for variant in mu.next_command_iterator(ctx, &command_backing) {
@@ -205,9 +250,12 @@ render :: proc(ctx: ^mu.Context) {
                 pos.x += rect.w
             }
         case ^mu.Command_Rect:
-            if isTextureRect(cmd.color) {
+            switch {
+            case isTextureRect(cmd.color):
                 renderTexture(cmd)
-            } else {
+            case isTextureWithTransparencyRect(cmd.color):
+                renderTransparentTexture(cmd)
+            case:
                 rl.DrawRectangle(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, transmute(rl.Color)cmd.color)
             }
         case ^mu.Command_Icon:
@@ -235,24 +283,61 @@ get_clipboard :: proc(user_data: rawptr) -> (string, bool) {
     return string(rl.GetClipboardText()), true
 }
 
-loadFrameTextures :: proc() {
-    for _, index in state.FrameTextures {
-        texture, exists := state.TextureCache[state.FrameTextures[index].Path]
-        if !exists {
-            texture = rl.LoadTexture(state.FrameTextures[index].Path)
-            state.TextureCache[state.FrameTextures[index].Path] = texture
-            fmt.printfln("%i", texture.format)
-            if texture.format == rl.PixelFormat.UNKNOWN {
-                texture = state.InvalidTexture
-                state.TextureCache[state.FrameTextures[index].Path] = texture
-            }
+loadRequestedTextures :: proc() {
+    for {
+        request, ok := chan.try_recv(state.TextureLoadChannel)
+        if !ok { break } // No more load requests right now
+
+        if _, exists := state.TextureCache[request.Identifier]; exists {
+            fmt.eprintfln("duplicate request: %s", request.Identifier)
+            continue
         }
-        state.FrameTextures[index].Texture = texture
+
+        // Load the texture into the GPU
+        path := strings.clone_to_cstring(request.Path, context.temp_allocator)
+        texture := rl.LoadTexture(path)
+
+        // Store it in the render cache
+        state.TextureCache[request.Identifier] = texture
+
+        // Free the string memory that the UI thread cloned
+        delete(request.Path)
     }
+}
+
+// When the UI needs to draw an image:
+getTextureIdentifier :: proc(path: string) -> (int, bool) {
+    if identifier, ok := state.TextureMap[path]; ok {
+        return identifier, true
+    }
+
+    // It's a new texture! Generate an ID.
+    identifier := state.NextTextureIdentifier
+    state.NextTextureIdentifier += 1
+
+    // Store it in the UI cache
+    state.TextureMap[strings.clone(path)] = identifier
+
+    // Send a load request to the render thread.
+    // We clone the string so the render thread can safely use and delete it.
+    request := TextureRequest{
+        Identifier = identifier,
+        Path = strings.clone(path),
+    }
+    ok := chan.try_send(state.TextureLoadChannel, request)
+    if !ok {
+        fmt.eprintfln("Could not request texture load: %s", path)
+        state.NextTextureIdentifier -= 1
+    }
+
+    return identifier, !ok
 }
 
 isTextureRect :: proc(textureId: mu.Color) -> bool {
     return textureId.a == TEXTURE_RECT_IDENTIFIER
+}
+isTextureWithTransparencyRect :: proc(textureId: mu.Color) -> bool {
+    return textureId.a == TEXTURE_RECT_IDENTIFIER_TRANSPARENCY
 }
 
 u8_slider :: proc(ctx: ^mu.Context, val: ^u8, lo, hi: u8) -> (res: mu.Result_Set) {
@@ -268,28 +353,29 @@ u8_slider :: proc(ctx: ^mu.Context, val: ^u8, lo, hi: u8) -> (res: mu.Result_Set
 
 renderTexture :: proc(cmd: ^mu.Command_Rect) {
     index := (int(cmd.color.r) << 16) | (int(cmd.color.g) << 8) | int(cmd.color.b)
-    if len(state.FrameTextures) <= index {
-        // Texture does not exist
-        fmt.eprintfln("Texture index out of bounds")
-        return
-    }
-    texture := state.FrameTextures[index]
     destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
-    if texture.TransparencyBackground {
-        source := rl.Rectangle{0, 0, f32(state.TransparencyTexture.width), f32(state.TransparencyTexture.height)}
-        rl.DrawTexturePro(state.TransparencyTexture, source, destination, { 0 , 0 }, 0, rl.WHITE)
+    source := rl.Rectangle{0, 0, f32(state.TransparencyTexture.width), f32(state.TransparencyTexture.height)}
+    rl.DrawTexturePro(state.TransparencyTexture, source, destination, { 0 , 0 }, 0, rl.WHITE)
+    if texture, ok := state.TextureCache[index]; ok {
+        source := rl.Rectangle{0, 0, f32(texture.width), f32(texture.height)}
+        rl.DrawTexturePro(texture, source, destination, { 0, 0 }, 0, rl.WHITE)
     }
-    source := rl.Rectangle{0, 0, f32(texture.Texture.width), f32(texture.Texture.height)}
-    rl.DrawTexturePro(texture.Texture, source, destination, { 0 , 0 }, 0, rl.WHITE)
+}
+renderTransparentTexture :: proc(cmd: ^mu.Command_Rect) {
+    index := (int(cmd.color.r) << 16) | (int(cmd.color.g) << 8) | int(cmd.color.b)
+    destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
+    source := rl.Rectangle{0, 0, f32(state.TransparencyTexture.width), f32(state.TransparencyTexture.height)}
+    if texture, ok := state.TextureCache[index]; ok {
+        source := rl.Rectangle{0, 0, f32(texture.width), f32(texture.height)}
+        rl.DrawTexturePro(texture, source, destination, { 0, 0 }, 0, rl.WHITE)
+    }
 }
 
-drawTexture :: proc(ctx: ^mu.Context, texturePath: string, width, height: i32, transparencyBackground: bool = false) {
-    texture := FrameTexture{
-        TransparencyBackground = transparencyBackground,
-        Path = strings.clone_to_cstring(texturePath),
+drawTexture :: proc(ctx: ^mu.Context, texturePath: string, width, height: i32) {
+    index, ok := getTextureIdentifier(texturePath)
+    if !ok {
+        return
     }
-    index := len(state.FrameTextures)
-    append(&state.FrameTextures, texture)
 
     magicColor := mu.Color{
         r = u8((index >> 16) & 0xFF),
@@ -304,36 +390,37 @@ drawTexture :: proc(ctx: ^mu.Context, texturePath: string, width, height: i32, t
     mu.draw_rect(ctx, rect, magicColor)
 }
 
-renderFlagPreview :: proc() {
-    destination := rl.Rectangle{
-        x = f32(rl.GetScreenWidth() - state.TransparencyTexture.width) / 2,
-        y = f32(rl.GetScreenHeight() - state.TransparencyTexture.height + TOOLBAR_HEIGHT) / 2,
-        width = f32(FLAG_WIDTH),
-        height = f32(FLAG_HEIGHT),
+drawTransparentTexture :: proc(ctx: ^mu.Context, texturePath: string, width: i32 = 0, height: i32 = 0) {
+    index, ok := getTextureIdentifier(texturePath)
+    if !ok {
+        return
     }
-    // Draw Background
-    {
-        source := rl.Rectangle{
-            x = 0,
-            y = 0,
-            width = f32(state.TransparencyTexture.width),
-            height = f32(state.TransparencyTexture.height),
-        }
-        rl.DrawTexturePro(state.TransparencyTexture, source, destination, { 0, 0 }, 0, rl.WHITE)
+
+    magicColor := mu.Color{
+        r = u8((index >> 16) & 0xFF),
+        g = u8((index >> 8) & 0xFF),
+        b = u8(index & 0xFF),
+        a = TEXTURE_RECT_IDENTIFIER_TRANSPARENCY,
     }
-    if state.Flag.Pattern.Name != "" {
-        texture := state.TextureCache[state.Flag.Pattern.Texture]
-        source := rl.Rectangle{
-            x = 0,
-            y = 0,
-            width = f32(texture.width),
-            height = f32(texture.height),
-        }
-        rl.DrawTexturePro(texture, source, destination, { 0, 0 }, 0, rl.WHITE)
+
+    rect := mu.layout_next(ctx)
+    if width != 0 {
+        rect.w = width
     }
+    if width != 0 {
+        rect.h = height
+    }
+    mu.draw_rect(ctx, rect, magicColor)
 }
 
 setButtonIdentifier :: proc(ctx: ^mu.Context) {
     mu.push_id(ctx, fmt.tprintf("%i", state.ButtonIdentifier))
     state.ButtonIdentifier += 1
+}
+
+createFlag :: proc() -> Flag {
+    return Flag{
+        Colors = make([dynamic]FlagColorVariant),
+        Layers = make([dynamic]FlagLayerVariant),
+    }
 }
