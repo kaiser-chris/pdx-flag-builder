@@ -41,12 +41,13 @@ loadSettings :: proc() {
         state.Databases = make([dynamic]DatabaseState, len(state.Settings.Databases))
         for _, index in state.Settings.Databases {
             state.Databases[index] = DatabaseState{
-                Settings = state.Settings.Databases[index]
+                Settings = state.Settings.Databases[index],
             }
             state.Databases[index].BufferNameLength = len(state.Databases[index].Settings.Name)
             copy(state.Databases[index].BufferName[:], state.Databases[index].Settings.Name)
             state.Databases[index].BufferPathLength = len(state.Databases[index].Settings.Path)
             copy(state.Databases[index].BufferPath[:], state.Databases[index].Settings.Path)
+            loadNamedColors(&state.Databases[index])
         }
     }
 
@@ -65,6 +66,8 @@ saveSettings :: proc() {
     state.Settings.Databases = make([dynamic]FlagDatabase, len(state.Databases))
     for _, index in state.Databases {
         state.Settings.Databases[index] = state.Databases[index].Settings
+        destroyNamedColors(&state.Databases[index])
+        loadNamedColors(&state.Databases[index])
     }
 
     json_bytes, err := json.marshal(state.Settings)

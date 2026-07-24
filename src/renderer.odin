@@ -33,6 +33,7 @@ State :: struct {
 }
 
 setupState :: proc() {
+    state.Databases = make([dynamic]DatabaseState)
     state.TextureCache = make(map[int]rl.Texture2D)
     state.TextureMap = make(map[string]int)
     channel, err := chan.create(chan.Chan(TextureRequest), 2048, context.allocator)
@@ -45,6 +46,9 @@ setupState :: proc() {
     state.NextTextureIdentifier = 1
 }
 freeState :: proc() {
+    for _, index in state.Databases {
+        destroyNamedColors(&state.Databases[index])
+    }
     for key in state.TextureCache {
         rl.UnloadTexture(state.TextureCache[key])
     }
@@ -65,6 +69,7 @@ DatabaseState :: struct {
     BufferNameLength: int,
     BufferPath: [512]byte,
     BufferPathLength: int,
+    NamedColors: [dynamic]FlagColorVariant,
 }
 
 TextureRequest :: struct {
@@ -95,6 +100,8 @@ main :: proc() {
         }
     }
 
+    setupParsing()
+    defer freeParsing()
     loadSettings()
     defer freeSettings()
     setupState()
@@ -340,7 +347,29 @@ isTextureWithTransparencyRect :: proc(textureId: mu.Color) -> bool {
     return textureId.a == TEXTURE_RECT_IDENTIFIER_TRANSPARENCY
 }
 
-u8_slider :: proc(ctx: ^mu.Context, val: ^u8, lo, hi: u8) -> (res: mu.Result_Set) {
+guranteeBounds :: proc(ctx: ^mu.Context) {
+    window := mu.get_current_container(ctx)
+    if (window.rect.h + TOOLBAR_HEIGHT) > rl.GetScreenHeight() {
+        window.rect.h = rl.GetScreenHeight() - TOOLBAR_HEIGHT
+    }
+    if window.rect.w > rl.GetScreenWidth() {
+        window.rect.w = rl.GetScreenWidth()
+    }
+    if (window.rect.x + window.rect.w) > rl.GetScreenWidth() {
+        window.rect.x = rl.GetScreenWidth() - window.rect.w
+    }
+    if (window.rect.y + window.rect.h) > rl.GetScreenHeight() {
+        window.rect.y = rl.GetScreenHeight() - window.rect.h
+    }
+    if window.rect.x < 0 {
+        window.rect.x = 0
+    }
+    if window.rect.y < TOOLBAR_HEIGHT {
+        window.rect.y = TOOLBAR_HEIGHT
+    }
+}
+
+colorSlider :: proc(ctx: ^mu.Context, val: ^u8, lo, hi: u8) -> (res: mu.Result_Set) {
     mu.push_id(ctx, uintptr(val))
 
     @static tmp: mu.Real
@@ -361,6 +390,7 @@ renderTexture :: proc(cmd: ^mu.Command_Rect) {
         rl.DrawTexturePro(texture, source, destination, { 0, 0 }, 0, rl.WHITE)
     }
 }
+
 renderTransparentTexture :: proc(cmd: ^mu.Command_Rect) {
     index := (int(cmd.color.r) << 16) | (int(cmd.color.g) << 8) | int(cmd.color.b)
     destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
