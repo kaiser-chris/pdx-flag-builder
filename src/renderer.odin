@@ -11,6 +11,7 @@ import "texture"
 import "core:thread"
 import os "core:os"
 import time "core:time"
+import "pdx"
 
 TEXTURE_LOADING_THREAD_IDENTIFIER: int: 1
 
@@ -41,7 +42,7 @@ State :: struct {
     TextureLoadChannel: chan.Chan(TextureRequest),
     TransparencyTexture: rl.Texture2D,
     InvalidTexture: rl.Texture2D,
-    Flag: Flag,
+    Flag: pdx.Flag,
     ButtonIdentifier: i32,
     NextTextureIdentifier: int,
     SelectedFlagElement: SelectedFlagElement,
@@ -67,7 +68,7 @@ setupState :: proc() {
     state.TextureLoadChannel = textureChannel
     state.SidebarOpen = true
     state.SidebarWidth = 300
-    state.Flag = createFlag()
+    state.Flag = pdx.createFlag()
     state.NextTextureIdentifier = 1
     state.TextureLoadingThread = createTextureLoadingThread()
 }
@@ -96,7 +97,7 @@ destroyState :: proc() {
     delete(state.DatabaseSearch)
     chan.destroy(state.ImageLoadChannel)
     chan.destroy(state.TextureLoadChannel)
-    destroyFlag(state.Flag)
+    pdx.destroyFlag(state.Flag)
     thread.destroy(state.TextureLoadingThread)
     rl.UnloadShader(state.RecolorShader.Shader)
 }
@@ -139,7 +140,7 @@ DatabaseState :: struct {
     BufferNameLength: int,
     BufferPath: [512]byte,
     BufferPathLength: int,
-    NamedColors: [dynamic]FlagColorVariant,
+    NamedColors: [dynamic]pdx.FlagColorVariant,
 }
 
 ImageRequest :: struct {
@@ -188,8 +189,8 @@ main :: proc() {
         }
     }
 
-    setupParsing()
-    defer destroyParsing()
+    pdx.setupParsing()
+    defer pdx.destroyParsing()
     setupState()
     defer destroyState()
     loadSettings()
@@ -379,21 +380,13 @@ get_clipboard :: proc(user_data: rawptr) -> (string, bool) {
     return string(rl.GetClipboardText()), true
 }
 
-// When the UI needs to draw an image:
 getTextureIdentifier :: proc(path: string) -> (int, bool) {
     if identifier, ok := state.TextureMap[path]; ok {
         return identifier, true
     }
-
-    // It's a new texture! Generate an ID.
     identifier := state.NextTextureIdentifier
     state.NextTextureIdentifier += 1
-
-    // Store it in the UI cache
     state.TextureMap[strings.clone(path)] = identifier
-
-    // Send a load request to the render thread.
-    // We clone the string so the render thread can safely use and delete it.
     request := ImageRequest{
         Identifier = identifier,
         Path = strings.clone(path),
@@ -470,34 +463,6 @@ renderTransparentTexture :: proc(cmd: ^mu.Command_Rect) {
     }
 }
 
-renderFlagTexture :: proc(cmd: ^mu.Command_Rect) {
-    destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
-
-    if state.Flag.Pattern.Name != "" {
-        pattern, ok := state.RenderTextureMap[state.Flag.Pattern.Path]
-        source := rl.Rectangle{0, 0, f32(pattern.width), f32(pattern.height)}
-
-        testColor1 := rl.Color{165, 255, 177, 255}
-        testColor2 := rl.Color{255, 117, 255, 255}
-        testColor3 := rl.Color{109, 172, 255, 255}
-
-        texture.DrawRecoloredTexture(
-            pattern,
-            source,
-            destination,
-            { { PATTERN_COLOR_1, testColor1 }, { PATTERN_COLOR_2, testColor2 }, { PATTERN_COLOR_3, testColor3 } },
-            state.RecolorShader,
-        )
-    }
-
-
-//    source := rl.Rectangle{0, 0, f32(state.TransparencyTexture.width), f32(state.TransparencyTexture.height)}
-//    if texture, ok := state.RenderTextureCache[index]; ok {
-//        source := rl.Rectangle{0, 0, f32(texture.width), f32(texture.height)}
-//        rl.DrawTexturePro(texture, source, destination, { 0, 0 }, 0, rl.WHITE)
-//    }
-}
-
 drawTexture :: proc(ctx: ^mu.Context, texturePath: string, width, height: i32) {
     index, ok := getTextureIdentifier(texturePath)
     if !ok {
@@ -561,11 +526,4 @@ drawFlagTexture :: proc(ctx: ^mu.Context, width: i32 = 0, height: i32 = 0) {
 setButtonIdentifier :: proc(ctx: ^mu.Context) {
     mu.push_id(ctx, fmt.tprintf("%i", state.ButtonIdentifier))
     state.ButtonIdentifier += 1
-}
-
-createFlag :: proc() -> Flag {
-    return Flag{
-        Colors = make([dynamic]FlagColorVariant),
-        Layers = make([dynamic]FlagLayerVariant),
-    }
 }

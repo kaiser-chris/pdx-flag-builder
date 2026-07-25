@@ -5,6 +5,9 @@ import "core:os"
 import "core:strings"
 import rl "vendor:raylib"
 import mu "vendor:microui"
+import "texture"
+import "ui"
+import "pdx"
 
 WINDOM_PREVIEW: string: "Preview"
 WINDOM_TOOLBAR: string: "Toolbar"
@@ -22,12 +25,12 @@ FLAG_HEIGHT: i32: 512
 FLAG_WIDTH: i32: 768
 
 SelectedFlagElement :: union {
-    ^Flag,
-    ^FlagLayerColoredEmblem,
-    ^FlagLayerTexturedEmblem,
-    ^FlagColorNamed,
-    ^FlagColorHsv,
-    ^FlagColorRgb,
+    ^pdx.Flag,
+    ^pdx.FlagLayerColoredEmblem,
+    ^pdx.FlagLayerTexturedEmblem,
+    ^pdx.FlagColorNamed,
+    ^pdx.FlagColorHsv,
+    ^pdx.FlagColorRgb,
 }
 
 renderGui :: proc(ctx: ^mu.Context) {
@@ -119,6 +122,27 @@ renderFlagPreview :: proc(ctx: ^mu.Context) {
     }
 }
 
+renderFlagTexture :: proc(cmd: ^mu.Command_Rect) {
+    destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
+
+    if state.Flag.Pattern.Name != "" {
+        pattern, ok := state.RenderTextureMap[state.Flag.Pattern.Path]
+        source := rl.Rectangle{0, 0, f32(pattern.width), f32(pattern.height)}
+
+        testColor1 := rl.Color{165, 255, 177, 255}
+        testColor2 := rl.Color{255, 117, 255, 255}
+        testColor3 := rl.Color{109, 172, 255, 255}
+
+        texture.DrawRecoloredTexture(
+            pattern,
+            source,
+            destination,
+            { { PATTERN_COLOR_1, testColor1 }, { PATTERN_COLOR_2, testColor2 }, { PATTERN_COLOR_3, testColor3 } },
+            state.RecolorShader,
+        )
+    }
+}
+
 renderSettings :: proc(ctx: ^mu.Context) {
     if mu.window(ctx, WINDOM_SETTINGS, {10, 10 + TOOLBAR_HEIGHT, 500, 400}, {}) {
         guranteeBounds(ctx)
@@ -142,7 +166,7 @@ renderSettings :: proc(ctx: ^mu.Context) {
             if .SUBMIT in mu.button(ctx, "Add new path") {
                 element := DatabaseState{
                     Settings = FlagDatabase{"", ""},
-                    NamedColors = make([dynamic]FlagColorVariant)
+                    NamedColors = make([dynamic]pdx.FlagColorVariant)
                 }
                 append(&state.Databases, element)
             }
@@ -201,32 +225,32 @@ renderDatabase :: proc(ctx: ^mu.Context) {
             if .ACTIVE in mu.header(ctx, database.Settings.Name, {.EXPANDED}) {
                 setButtonIdentifier(ctx)
                 if .ACTIVE in mu.treenode(ctx, "Patterns", options) {
-                    path, err := os.join_path([]string{ database.Settings.Path, FOLDER_GFX, FOLDER_COA, FOLDER_PATTERNS }, context.allocator)
+                    path, err := os.join_path([]string{ database.Settings.Path, pdx.FOLDER_GFX, pdx.FOLDER_COA, pdx.FOLDER_PATTERNS }, context.allocator)
                     defer delete(path)
                     if err != nil {
-                        fmt.eprintfln("Could not build %s path: %v", FOLDER_PATTERNS, err)
+                        fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_PATTERNS, err)
                     }
-                    renderDatabaseFolder(ctx, path, FOLDER_PATTERNS)
+                    renderDatabaseFolder(ctx, path, pdx.FOLDER_PATTERNS)
                 }
                 mu.pop_id(ctx)
                 setButtonIdentifier(ctx)
                 if .ACTIVE in mu.treenode(ctx, "Colored Emblems", options) {
-                    path, err := os.join_path([]string{ database.Settings.Path, FOLDER_GFX, FOLDER_COA, FOLDER_COLORED_EMBLEMS }, context.allocator)
+                    path, err := os.join_path([]string{ database.Settings.Path, pdx.FOLDER_GFX, pdx.FOLDER_COA, pdx.FOLDER_COLORED_EMBLEMS }, context.allocator)
                     defer delete(path)
                     if err != nil {
-                        fmt.eprintfln("Could not build %s path: %v", FOLDER_COLORED_EMBLEMS, err)
+                        fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_COLORED_EMBLEMS, err)
                     }
-                    renderDatabaseFolder(ctx, path, FOLDER_COLORED_EMBLEMS)
+                    renderDatabaseFolder(ctx, path, pdx.FOLDER_COLORED_EMBLEMS)
                 }
                 mu.pop_id(ctx)
                 setButtonIdentifier(ctx)
                 if .ACTIVE in mu.treenode(ctx, "Textured Emblems", options) {
-                    path, err := os.join_path([]string{ database.Settings.Path, FOLDER_GFX, FOLDER_COA, FOLDER_TEXTURED_EMBLEMS }, context.allocator)
+                    path, err := os.join_path([]string{ database.Settings.Path, pdx.FOLDER_GFX, pdx.FOLDER_COA, pdx.FOLDER_TEXTURED_EMBLEMS }, context.allocator)
                     defer delete(path)
                     if err != nil {
-                        fmt.eprintfln("Could not build %s path: %v", FOLDER_TEXTURED_EMBLEMS, err)
+                        fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_TEXTURED_EMBLEMS, err)
                     }
-                    renderDatabaseFolder(ctx, path, FOLDER_TEXTURED_EMBLEMS)
+                    renderDatabaseFolder(ctx, path, pdx.FOLDER_TEXTURED_EMBLEMS)
                 }
                 mu.pop_id(ctx)
             }
@@ -283,23 +307,23 @@ renderDatabaseFolder :: proc(ctx: ^mu.Context, path: string, type: string) {
         {
             mu.layout_row(ctx, {-1, -1}, 20)
             switch type {
-            case FOLDER_PATTERNS:
+            case pdx.FOLDER_PATTERNS:
                 setButtonIdentifier(ctx)
                 if .SUBMIT in mu.button(ctx, "Set as pattern") {
-                    state.Flag.Pattern = FlagTexture{
+                    state.Flag.Pattern = pdx.FlagTexture{
                         Name = strings.clone(info.name),
                         Path = strings.clone(info.fullpath),
                     }
                 }
                 mu.pop_id(ctx)
-            case FOLDER_COLORED_EMBLEMS:
+            case pdx.FOLDER_COLORED_EMBLEMS:
                 setButtonIdentifier(ctx)
                 if .SUBMIT in mu.button(ctx, "Add as layer") {
-                    layer := new_clone(FlagLayerColoredEmblem{
-                        Instances = make([dynamic]LayerInstance),
-                        Colors = make([dynamic]FlagColorVariant),
+                    layer := new_clone(pdx.FlagLayerColoredEmblem{
+                        Instances = make([dynamic]pdx.LayerInstance),
+                        Colors = make([dynamic]pdx.FlagColorVariant),
                     })
-                    layer.Texture = FlagTexture{
+                    layer.Texture = pdx.FlagTexture{
                         Name = strings.clone(info.name),
                         Path = strings.clone(info.fullpath),
                     }
@@ -307,13 +331,13 @@ renderDatabaseFolder :: proc(ctx: ^mu.Context, path: string, type: string) {
                     append(&state.Flag.Layers, layer)
                 }
                 mu.pop_id(ctx)
-            case FOLDER_TEXTURED_EMBLEMS:
+            case pdx.FOLDER_TEXTURED_EMBLEMS:
                 setButtonIdentifier(ctx)
                 if .SUBMIT in mu.button(ctx, "Add as layer") {
-                    layer := new_clone(FlagLayerTexturedEmblem{
-                        Instances = make([dynamic]LayerInstance),
+                    layer := new_clone(pdx.FlagLayerTexturedEmblem{
+                        Instances = make([dynamic]pdx.LayerInstance),
                     })
-                    layer.Texture = FlagTexture{
+                    layer.Texture = pdx.FlagTexture{
                         Name = strings.clone(info.name),
                         Path = strings.clone(info.fullpath),
                     }
@@ -424,14 +448,14 @@ renderFlagMenu :: proc(ctx: ^mu.Context) {
 
         for variant, index in state.Flag.Layers {
             switch layer in variant {
-            case ^FlagLayerColoredEmblem:
+            case ^pdx.FlagLayerColoredEmblem:
                 mu.layout_row(ctx, {-1, -1}, 20)
                 setButtonIdentifier(ctx)
                 if .SUBMIT in mu.button(ctx, fmt.tprintf("Colored Emblem: %s", layer.Texture.Name)) {
                     state.SelectedFlagElement = layer
                 }
                 mu.pop_id(ctx)
-            case ^FlagLayerTexturedEmblem:
+            case ^pdx.FlagLayerTexturedEmblem:
                 mu.layout_row(ctx, {-1, -1}, 20)
                 setButtonIdentifier(ctx)
                 if .SUBMIT in mu.button(ctx, fmt.tprintf("Textured Emblem: %s", layer.Texture.Name)) {
@@ -465,17 +489,17 @@ renderSelectedElementMenu :: proc(ctx: ^mu.Context) {
             mu.draw_control_text(ctx, "Nothing Selected", r, .TEXT, {.ALIGN_CENTER})
         } else {
             switch element in state.SelectedFlagElement {
-            case ^Flag:
+            case ^pdx.Flag:
                 renderSelectedFlag(ctx)
-            case ^FlagLayerColoredEmblem:
+            case ^pdx.FlagLayerColoredEmblem:
                 renderSelectedFlagLayerColoredEmblem(ctx)
-            case ^FlagLayerTexturedEmblem:
+            case ^pdx.FlagLayerTexturedEmblem:
                 renderSelectedFlagLayerTexturedEmblem(ctx)
-            case ^FlagColorNamed:
+            case ^pdx.FlagColorNamed:
                 renderSelectedFlagColorNamed(ctx)
-            case ^FlagColorHsv:
+            case ^pdx.FlagColorHsv:
                 renderSelectedFlagColorHsv(ctx)
-            case ^FlagColorRgb:
+            case ^pdx.FlagColorRgb:
                 renderSelectedFlagColorRgb(ctx)
             }
         }
@@ -483,79 +507,46 @@ renderSelectedElementMenu :: proc(ctx: ^mu.Context) {
 }
 
 renderSelectedFlag :: proc(ctx: ^mu.Context) {
-    drawAttributeRow(ctx, "Type", "Flag")
+    ui.drawTextAttributeRow(ctx, "Layer", "Pattern & Colors")
+    if state.Flag.Pattern.Name != "" {
+        ui.drawTextAttributeRow(ctx, "Pattern", state.Flag.Pattern.Name)
+    } else {
+        ui.drawTextAttributeRow(ctx, "Pattern", "None")
+    }
+    for variant in state.Flag.Colors {
+    switch color in variant {
+        case ^pdx.FlagColorNamed:
+            ui.drawTextAttributeRow(ctx, color.Name, "Named")
+        case ^pdx.FlagColorRgb:
+            ui.drawTextAttributeRow(ctx, color.Name, "RGB")
+        case ^pdx.FlagColorHsv:
+            ui.drawTextAttributeRow(ctx, color.Name, "HSV")
+    }
+    }
 }
 
 renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context) {
-    drawAttributeRow(ctx, "Type", "Colored Emblem")
+    ui.drawTextAttributeRow(ctx, "Type", "Colored Emblem")
 }
 
 renderSelectedFlagLayerTexturedEmblem :: proc(ctx: ^mu.Context) {
-    drawAttributeRow(ctx, "Type", "Textured Emblem")
+    ui.drawTextAttributeRow(ctx, "Type", "Textured Emblem")
 }
 
 renderSelectedFlagColorNamed :: proc(ctx: ^mu.Context) {
-    drawAttributeRow(ctx, "Type", "Named Color")
+    ui.drawTextAttributeRow(ctx, "Type", "Named Color")
 }
 
 renderSelectedFlagColorHsv :: proc(ctx: ^mu.Context) {
-    drawAttributeRow(ctx, "Type", "HSV Color")
+    ui.drawTextAttributeRow(ctx, "Type", "HSV Color")
 }
 
 renderSelectedFlagColorRgb :: proc(ctx: ^mu.Context) {
-    drawAttributeRow(ctx, "Type", "RGB Color")
-}
-
-drawAttributeRow :: proc(ctx: ^mu.Context, name, value: string) {
-    mu.layout_row(ctx, { -1, -1 }, 20)
-    window := mu.get_current_container(ctx)
-
-    originalRect := mu.layout_next(ctx)
-    rowRect := mu.Rect{
-        x = window.rect.x,
-        y = originalRect.y - ctx.style.padding,
-        w = window.rect.w,
-        h = originalRect.h + (ctx.style.padding * 2),
-    }
-    mu.layout_set_next(ctx, rowRect, false)
-    mu.layout_begin_column(ctx)
-    mu.draw_rect(ctx, rowRect, ctx.style.colors[.SELECTION_BG])
-    mu.draw_box(ctx, rowRect, ctx.style.colors[.BORDER])
-
-    dividerRect := mu.Rect{
-        x = rowRect.x + (rowRect.w / 2),
-        y = rowRect.y,
-        w = 1,
-        h = rowRect.h,
-    }
-    mu.draw_rect(ctx, dividerRect, ctx.style.colors[.BORDER])
-
-    nameRect := mu.Rect{
-        x = rowRect.x + ctx.style.padding,
-        y = rowRect.y + ctx.style.padding,
-        w = rowRect.w / 2 - (ctx.style.padding * 2),
-        h = rowRect.h - (ctx.style.padding * 2),
-    }
-
-    valueRect := mu.Rect{
-        x = rowRect.x + nameRect.w + ctx.style.padding + ctx.style.padding + ctx.style.padding,
-        y = rowRect.y + ctx.style.padding,
-        w = rowRect.w - nameRect.w - (ctx.style.padding * 2),
-        h = rowRect.h - (ctx.style.padding * 2),
-    }
-
-    mu.draw_control_text(ctx, name, nameRect, .TEXT, {})
-
-    mu.draw_control_text(ctx, value, valueRect, .TEXT, {})
-    mu.layout_end_column(ctx)
-
-    layout := mu.get_layout(ctx)
-    layout.position.y += ctx.style.spacing
-    layout.next_row += ctx.style.spacing
+    ui.drawTextAttributeRow(ctx, "Type", "RGB Color")
 }
 
 removeLayer :: proc(index: int){
     variant := state.Flag.Layers[index]
     ordered_remove(&state.Flag.Layers, index)
-    destroyLayer(variant)
+    pdx.destroyLayer(variant)
 }
