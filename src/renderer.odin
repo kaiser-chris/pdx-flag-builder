@@ -4,9 +4,10 @@ import "core:unicode/utf8"
 import "core:strings"
 import rl "vendor:raylib"
 import mu "vendor:microui"
-import fmt "core:fmt"
+import "core:fmt"
 import "core:mem"
 import "core:sync/chan"
+import "texture"
 
 TEXTURE_RECT_IDENTIFIER: u8: 1
 TEXTURE_RECT_IDENTIFIER_TRANSPARENCY: u8: 2
@@ -88,7 +89,7 @@ main :: proc() {
     mem.tracking_allocator_init(&track, context.allocator)
     context.allocator = mem.tracking_allocator(&track)
 
-    // Check for leaks after the walker is destroyed
+    // Check for leaks
     defer {
         if len(track.allocation_map) > 0 {
             fmt.printfln("Real Memory Leak! %v allocations not freed.", len(track.allocation_map))
@@ -102,10 +103,10 @@ main :: proc() {
 
     setupParsing()
     defer freeParsing()
-    loadSettings()
-    defer freeSettings()
     setupState()
     defer freeState()
+    loadSettings()
+    defer freeSettings()
 
     rl.SetConfigFlags({.WINDOW_RESIZABLE})
     rl.InitWindow(1280, 800, "PDX Flag Editor")
@@ -130,10 +131,10 @@ main :: proc() {
     state.AtlasTexture = rl.LoadTextureFromImage(image)
     defer rl.UnloadTexture(state.AtlasTexture)
 
-    state.TransparencyTexture = rl.LoadTexture("textures/transparency.dds")
+    state.TransparencyTexture = texture.LoadTexture("textures/transparency.dds")
     defer rl.UnloadTexture(state.TransparencyTexture)
 
-    state.InvalidTexture = rl.LoadTexture("textures/invalid.dds")
+    state.InvalidTexture = texture.LoadTexture("textures/invalid.dds")
     defer rl.UnloadTexture(state.InvalidTexture)
 
     ctx := &state.Context
@@ -301,8 +302,7 @@ loadRequestedTextures :: proc() {
         }
 
         // Load the texture into the GPU
-        path := strings.clone_to_cstring(request.Path, context.temp_allocator)
-        texture := rl.LoadTexture(path)
+        texture := texture.LoadTexture(request.Path)
 
         // Store it in the render cache
         state.TextureCache[request.Identifier] = texture

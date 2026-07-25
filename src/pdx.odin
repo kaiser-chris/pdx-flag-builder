@@ -23,7 +23,7 @@ COLOR_TYPE_HSV360: string: "hsv360"
 
 regexNamedColor: regex.Regular_Expression
 
-setupParsing :: proc(){
+setupParsing :: proc() {
     regex, err := regex.create(PATTERN_NAMED_COLOR, {})
     if err != nil {
         fmt.eprintfln("Could not parse named color pattern: %v", err)
@@ -31,7 +31,7 @@ setupParsing :: proc(){
     }
     regexNamedColor = regex
 }
-freeParsing :: proc(){
+freeParsing :: proc() {
     regex.destroy(regexNamedColor)
 }
 
