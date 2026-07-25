@@ -11,9 +11,6 @@ import "texture"
 
 TEXTURE_RECT_IDENTIFIER: u8: 1
 TEXTURE_RECT_IDENTIFIER_TRANSPARENCY: u8: 2
-TOOLBAR_HEIGHT: i32: 35
-FLAG_HEIGHT: i32: 512
-FLAG_WIDTH: i32: 768
 
 State :: struct {
     Settings: Settings,
@@ -21,7 +18,8 @@ State :: struct {
     Context: mu.Context,
     SettingsWindowOpen: bool,
     DatabaseWindowOpen: bool,
-    FlagWindowOpen: bool,
+    SidebarOpen: bool,
+    SidebarWidth: i32,
     AtlasTexture: rl.Texture2D,
     TextureCache: map[int]rl.Texture2D,
     TextureMap: map[string]int,
@@ -31,6 +29,7 @@ State :: struct {
     Flag: Flag,
     ButtonIdentifier: i32,
     NextTextureIdentifier: int,
+    SelectedFlagElement: SelectedFlagElement,
 }
 
 setupState :: proc() {
@@ -42,7 +41,8 @@ setupState :: proc() {
         fmt.eprintfln("Could not create TextureLoadChannel: %v", err)
     }
     state.TextureLoadChannel = channel
-    state.FlagWindowOpen = true
+    state.SidebarOpen = true
+    state.SidebarWidth = 300
     state.Flag = createFlag()
     state.NextTextureIdentifier = 1
 }
@@ -112,9 +112,6 @@ main :: proc() {
     rl.SetConfigFlags({.WINDOW_RESIZABLE})
     rl.InitWindow(1280, 800, "PDX Flag Editor")
     defer rl.CloseWindow()
-
-    rl.SetWindowMinSize(FLAG_WIDTH, FLAG_HEIGHT + TOOLBAR_HEIGHT)
-
 
     pixels := make([][4]u8, mu.DEFAULT_ATLAS_WIDTH*mu.DEFAULT_ATLAS_HEIGHT)
     for alpha, i in mu.default_atlas_alpha {
