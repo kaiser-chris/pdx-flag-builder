@@ -10,8 +10,8 @@ WINDOM_PREVIEW: string: "Preview"
 WINDOM_TOOLBAR: string: "Toolbar"
 WINDOM_SETTINGS: string: "Settings"
 WINDOM_DATABASE: string: "Database"
-WINDOM_FLAG: string: "Flag"
-WINDOM_SELECTED: string: "Selected"
+WINDOM_FLAG: string: "Layers"
+WINDOM_SELECTED: string: "Selected Element"
 WINDOM_SIDEBAR: string: "Side"
 
 SIDEBAR_HANDLE_WIDTH:i32: 10
@@ -418,13 +418,7 @@ renderSidebarHandle :: proc(ctx: ^mu.Context) {
 
 renderFlagMenu :: proc(ctx: ^mu.Context) {
     width := state.SidebarWidth
-    height: i32
-
-    if state.SidebarOpen {
-        height = 300
-    } else {
-        height = rl.GetScreenHeight() - (TOOLBAR_HEIGHT + 1)
-    }
+    height: i32 = 300
     x := rl.GetScreenWidth() - width
     y := TOOLBAR_HEIGHT + 1
 
@@ -437,7 +431,7 @@ renderFlagMenu :: proc(ctx: ^mu.Context) {
 
         mu.layout_row(ctx, {-1, -1}, 20)
         setButtonIdentifier(ctx)
-        if .SUBMIT in mu.button(ctx, "Select Flag") {
+        if .SUBMIT in mu.button(ctx, "Pattern & Colors") {
             state.SelectedFlagElement = &state.Flag
         }
         mu.pop_id(ctx)
@@ -465,21 +459,11 @@ renderFlagMenu :: proc(ctx: ^mu.Context) {
 }
 
 renderSelectedElementMenu :: proc(ctx: ^mu.Context) {
+    flagWindow := mu.get_container(ctx, WINDOM_FLAG)
     width := state.SidebarWidth
-    height: i32
-    x: i32
-    y: i32
-
-    if state.SidebarOpen {
-        flagWindow := mu.get_container(ctx, WINDOM_FLAG)
-        height = rl.GetScreenHeight() - (flagWindow.rect.y + flagWindow.rect.h + 1)
-        x = rl.GetScreenWidth() - width
-        y = flagWindow.rect.y + flagWindow.rect.h + 1
-    } else {
-        height = rl.GetScreenHeight() - (TOOLBAR_HEIGHT + 1)
-        x = rl.GetScreenWidth() - width
-        y = TOOLBAR_HEIGHT + 1
-    }
+    height := rl.GetScreenHeight() - (flagWindow.rect.y + flagWindow.rect.h + 1)
+    x :=  rl.GetScreenWidth() - width
+    y := flagWindow.rect.y + flagWindow.rect.h + 1
 
     if mu.window(ctx, WINDOM_SELECTED, { x, y, width, height }, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT}) {
         window := mu.get_current_container(ctx)
@@ -489,16 +473,99 @@ renderSelectedElementMenu :: proc(ctx: ^mu.Context) {
         window.rect.y = y
 
         if state.SelectedFlagElement == nil {
-            mu.layout_row(ctx, {-1, -1}, 50)
+            mu.layout_row(ctx, {-1, -1}, -1)
             r := mu.layout_next(ctx)
             mu.draw_rect(ctx, r, ctx.style.colors[.WINDOW_BG])
             mu.draw_control_text(ctx, "Nothing Selected", r, .TEXT, {.ALIGN_CENTER})
-            mu.layout_row(ctx, {-1, -1}, 50)
-            r = mu.layout_next(ctx)
-            mu.draw_rect(ctx, r, ctx.style.colors[.WINDOW_BG])
-            mu.draw_control_text(ctx, "Click an element in the window above.", r, .TEXT, {.ALIGN_CENTER})
+        } else {
+            switch element in state.SelectedFlagElement {
+            case ^Flag:
+                renderSelectedFlag(ctx)
+            case ^FlagLayerColoredEmblem:
+                renderSelectedFlagLayerColoredEmblem(ctx)
+            case ^FlagLayerTexturedEmblem:
+                renderSelectedFlagLayerTexturedEmblem(ctx)
+            case ^FlagColorNamed:
+                renderSelectedFlagColorNamed(ctx)
+            case ^FlagColorHsv:
+                renderSelectedFlagColorHsv(ctx)
+            case ^FlagColorRgb:
+                renderSelectedFlagColorRgb(ctx)
+            }
         }
     }
+}
+
+renderSelectedFlag :: proc(ctx: ^mu.Context) {
+    attributeRow(ctx, "Type", "Flag")
+}
+
+renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context) {
+    attributeRow(ctx, "Type", "Colored Emblem")
+}
+
+renderSelectedFlagLayerTexturedEmblem :: proc(ctx: ^mu.Context) {
+    attributeRow(ctx, "Type", "Textured Emblem")
+}
+
+renderSelectedFlagColorNamed :: proc(ctx: ^mu.Context) {
+    attributeRow(ctx, "Type", "Named Color")
+}
+
+renderSelectedFlagColorHsv :: proc(ctx: ^mu.Context) {
+    attributeRow(ctx, "Type", "HSV Color")
+}
+
+renderSelectedFlagColorRgb :: proc(ctx: ^mu.Context) {
+    attributeRow(ctx, "Type", "RGB Color")
+}
+
+attributeRow :: proc(ctx: ^mu.Context, name, value: string) {
+    mu.layout_row(ctx, { -1, -1 }, 20)
+    window := mu.get_current_container(ctx)
+
+    originalRect := mu.layout_next(ctx)
+    rowRect := mu.Rect{
+        x = window.rect.x,
+        y = originalRect.y - ctx.style.padding,
+        w = window.rect.w,
+        h = originalRect.h + (ctx.style.padding * 2),
+    }
+    mu.layout_set_next(ctx, rowRect, false)
+    mu.layout_begin_column(ctx)
+    mu.draw_rect(ctx, rowRect, ctx.style.colors[.SELECTION_BG])
+    mu.draw_box(ctx, rowRect, ctx.style.colors[.BORDER])
+
+    dividerRect := mu.Rect{
+        x = rowRect.x + (rowRect.w / 2),
+        y = rowRect.y,
+        w = 1,
+        h = rowRect.h,
+    }
+    mu.draw_rect(ctx, dividerRect, ctx.style.colors[.BORDER])
+
+    nameRect := mu.Rect{
+        x = rowRect.x + ctx.style.padding,
+        y = rowRect.y + ctx.style.padding,
+        w = rowRect.w / 2 - (ctx.style.padding * 2),
+        h = rowRect.h - (ctx.style.padding * 2),
+    }
+
+    valueRect := mu.Rect{
+        x = rowRect.x + nameRect.w + ctx.style.padding + ctx.style.padding + ctx.style.padding,
+        y = rowRect.y + ctx.style.padding,
+        w = rowRect.w - nameRect.w - (ctx.style.padding * 2),
+        h = rowRect.h - (ctx.style.padding * 2),
+    }
+
+    mu.draw_control_text(ctx, name, nameRect, .TEXT, {})
+
+    mu.draw_control_text(ctx, value, valueRect, .TEXT, {})
+    mu.layout_end_column(ctx)
+
+    layout := mu.get_layout(ctx)
+    layout.position.y += ctx.style.spacing
+    layout.next_row += ctx.style.spacing
 }
 
 removeLayer :: proc(index: int){

@@ -143,12 +143,6 @@ TextureRequest :: struct {
     Image: rl.Image,
 }
 
-FrameTexture :: struct {
-    TransparencyBackground: bool,
-    Path: cstring,
-    Texture: rl.Texture2D,
-}
-
 handleTextureRequests :: proc() {
     for {
         request, ok := chan.try_recv(state.TextureLoadChannel)
