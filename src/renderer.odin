@@ -18,10 +18,12 @@ State :: struct {
     Context: mu.Context,
     SettingsWindowOpen: bool,
     DatabaseWindowOpen: bool,
+    DatabaseSearch: string,
     SidebarOpen: bool,
     SidebarWidth: i32,
     AtlasTexture: rl.Texture2D,
-    TextureCache: map[int]rl.Texture2D,
+    RenderTextureCache: map[int]rl.Texture2D,
+    GuiTextureCache: map[string]rl.Texture2D,
     TextureMap: map[string]int,
     TextureLoadChannel: chan.Chan(TextureRequest),
     TransparencyTexture: rl.Texture2D,
@@ -34,7 +36,8 @@ State :: struct {
 
 setupState :: proc() {
     state.Databases = make([dynamic]DatabaseState)
-    state.TextureCache = make(map[int]rl.Texture2D)
+    state.RenderTextureCache = make(map[int]rl.Texture2D)
+    state.GuiTextureCache = make(map[string]rl.Texture2D)
     state.TextureMap = make(map[string]int)
     channel, err := chan.create(chan.Chan(TextureRequest), 2048, context.allocator)
     if err != nil {
@@ -46,19 +49,24 @@ setupState :: proc() {
     state.Flag = createFlag()
     state.NextTextureIdentifier = 1
 }
-freeState :: proc() {
+destroyState :: proc() {
     for _, index in state.Databases {
         destroyNamedColors(&state.Databases[index])
     }
-    for key in state.TextureCache {
-        rl.UnloadTexture(state.TextureCache[key])
+    for key in state.RenderTextureCache {
+        rl.UnloadTexture(state.RenderTextureCache[key])
     }
-    delete(state.TextureCache)
+    delete(state.RenderTextureCache)
+    for key in state.GuiTextureCache {
+        delete(key)
+    }
+    delete(state.GuiTextureCache)
     for key in state.TextureMap {
         delete(key)
     }
     delete(state.TextureMap)
     delete(state.Databases)
+    delete(state.DatabaseSearch)
     chan.destroy(state.TextureLoadChannel)
     destroyFlag(state.Flag)
 }
@@ -103,11 +111,11 @@ main :: proc() {
     }
 
     setupParsing()
-    defer freeParsing()
+    defer destroyParsing()
     setupState()
-    defer freeState()
+    defer destroyState()
     loadSettings()
-    defer freeSettings()
+    defer destroySettings()
 
     rl.SetConfigFlags({.WINDOW_RESIZABLE})
     rl.InitWindow(1280, 800, "PDX Flag Editor")
@@ -292,21 +300,16 @@ get_clipboard :: proc(user_data: rawptr) -> (string, bool) {
 loadRequestedTextures :: proc() {
     for {
         request, ok := chan.try_recv(state.TextureLoadChannel)
-        if !ok { break } // No more load requests right now
-
-        if _, exists := state.TextureCache[request.Identifier]; exists {
+        if !ok {
+            break
+        }
+        if _, exists := state.RenderTextureCache[request.Identifier]; exists {
             fmt.eprintfln("duplicate request: %s", request.Identifier)
             continue
         }
-
-        // Load the texture into the GPU
         texture := texture.LoadTexture(request.Path)
-
-        // Store it in the render cache
-        state.TextureCache[request.Identifier] = texture
-
-        // Free the string memory that the UI thread cloned
-        delete(request.Path)
+        state.GuiTextureCache[request.Path] = texture
+        state.RenderTextureCache[request.Identifier] = texture
     }
 }
 
@@ -383,7 +386,7 @@ renderTexture :: proc(cmd: ^mu.Command_Rect) {
     destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
     source := rl.Rectangle{0, 0, f32(state.TransparencyTexture.width), f32(state.TransparencyTexture.height)}
     rl.DrawTexturePro(state.TransparencyTexture, source, destination, { 0 , 0 }, 0, rl.WHITE)
-    if texture, ok := state.TextureCache[index]; ok {
+    if texture, ok := state.RenderTextureCache[index]; ok {
         source := rl.Rectangle{0, 0, f32(texture.width), f32(texture.height)}
         rl.DrawTexturePro(texture, source, destination, { 0, 0 }, 0, rl.WHITE)
     }
@@ -393,7 +396,7 @@ renderTransparentTexture :: proc(cmd: ^mu.Command_Rect) {
     index := (int(cmd.color.r) << 16) | (int(cmd.color.g) << 8) | int(cmd.color.b)
     destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
     source := rl.Rectangle{0, 0, f32(state.TransparencyTexture.width), f32(state.TransparencyTexture.height)}
-    if texture, ok := state.TextureCache[index]; ok {
+    if texture, ok := state.RenderTextureCache[index]; ok {
         source := rl.Rectangle{0, 0, f32(texture.width), f32(texture.height)}
         rl.DrawTexturePro(texture, source, destination, { 0, 0 }, 0, rl.WHITE)
     }

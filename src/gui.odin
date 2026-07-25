@@ -15,7 +15,7 @@ WINDOM_SELECTED: string: "Selected"
 WINDOM_SIDEBAR: string: "Side"
 
 SIDEBAR_HANDLE_WIDTH:i32: 10
-SIDEBAR_MIN_WIDTH: i32: 160
+SIDEBAR_MIN_WIDTH: i32: 200
 SIDEBAR_MAX_WIDTH: i32: 600
 TOOLBAR_HEIGHT: i32: 35
 FLAG_HEIGHT: i32: 512
@@ -192,11 +192,29 @@ renderDatabase :: proc(ctx: ^mu.Context) {
     if mu.window(ctx, WINDOM_DATABASE, {10, 10 + TOOLBAR_HEIGHT, 500, rl.GetScreenHeight() - 20 - TOOLBAR_HEIGHT}, {}) {
         guranteeBounds(ctx)
 
+        mu.layout_row(ctx, {-1, -1}, 15)
+        mu.text(ctx, "Search:")
+        @static searchBuffer: [128]byte
+        @static searchBufferLength: int
+        mu.layout_row(ctx, {-1, -1}, 20)
+        if .CHANGE in mu.textbox(ctx, searchBuffer[:], &searchBufferLength) {
+            delete(state.DatabaseSearch)
+            state.DatabaseSearch = strings.to_lower(string(searchBuffer[:searchBufferLength]))
+        }
+        mu.layout_row(ctx, {-1, -1}, 5)
+        r := mu.layout_next(ctx)
+        mu.draw_rect(ctx, r, ctx.style.colors[.WINDOW_BG])
+
+        options: mu.Options
+        if state.DatabaseSearch != "" {
+            options = { .EXPANDED }
+        }
+
         for database in state.Databases {
             setButtonIdentifier(ctx)
             if .ACTIVE in mu.header(ctx, database.Settings.Name, {.EXPANDED}) {
                 setButtonIdentifier(ctx)
-                if .ACTIVE in mu.treenode(ctx, "Patterns") {
+                if .ACTIVE in mu.treenode(ctx, "Patterns", options) {
                     path, err := os.join_path([]string{ database.Settings.Path, FOLDER_GFX, FOLDER_COA, FOLDER_PATTERNS }, context.allocator)
                     defer delete(path)
                     if err != nil {
@@ -206,7 +224,7 @@ renderDatabase :: proc(ctx: ^mu.Context) {
                 }
                 mu.pop_id(ctx)
                 setButtonIdentifier(ctx)
-                if .ACTIVE in mu.treenode(ctx, "Colored Emblems") {
+                if .ACTIVE in mu.treenode(ctx, "Colored Emblems", options) {
                     path, err := os.join_path([]string{ database.Settings.Path, FOLDER_GFX, FOLDER_COA, FOLDER_COLORED_EMBLEMS }, context.allocator)
                     defer delete(path)
                     if err != nil {
@@ -216,7 +234,7 @@ renderDatabase :: proc(ctx: ^mu.Context) {
                 }
                 mu.pop_id(ctx)
                 setButtonIdentifier(ctx)
-                if .ACTIVE in mu.treenode(ctx, "Textured Emblems") {
+                if .ACTIVE in mu.treenode(ctx, "Textured Emblems", options) {
                     path, err := os.join_path([]string{ database.Settings.Path, FOLDER_GFX, FOLDER_COA, FOLDER_TEXTURED_EMBLEMS }, context.allocator)
                     defer delete(path)
                     if err != nil {
@@ -259,16 +277,20 @@ renderDatabaseFolder :: proc(ctx: ^mu.Context, path: string, type: string) {
             continue
         }
 
-//        path := strings.clone_to_cstring(info.fullpath)
-//        defer delete(path)
-//        texture := state.TextureCache[path]
-//        width := (f32(texture.width) / f32(texture.height)) * 128
+        lower := strings.to_lower(info.name)
+        defer delete(lower)
+        if state.DatabaseSearch != "" && !strings.contains(lower, state.DatabaseSearch) {
+            continue
+        }
+
+        texture := state.GuiTextureCache[info.fullpath]
+        width := i32((f32(texture.width) / f32(texture.height)) * 128)
 
         mu.layout_row(ctx, {200, -1}, 128)
         mu.layout_begin_column(ctx)
         {
             mu.layout_row(ctx, {192, -1}, 128)
-            drawTexture(ctx, info.fullpath, 192, 128)
+            drawTexture(ctx, info.fullpath, width, 128)
         }
         mu.layout_end_column(ctx)
         mu.layout_begin_column(ctx)
@@ -317,7 +339,7 @@ renderDatabaseFolder :: proc(ctx: ^mu.Context, path: string, type: string) {
             mu.layout_row(ctx, {-1, -1}, 20)
             mu.text(ctx, info.name)
             mu.layout_row(ctx, {-1, -1}, 20)
-            //mu.text(ctx, fmt.tprintf("%ix%i", texture.width, texture.height))
+            mu.text(ctx, fmt.tprintf("%ix%i", texture.width, texture.height))
         }
         mu.layout_end_column(ctx)
         count += 1
@@ -368,14 +390,6 @@ renderSidebarHandle :: proc(ctx: ^mu.Context) {
 
         mu.layout_set_next(ctx, window.rect, false)
         r := mu.layout_next(ctx)
-
-        resize_w: i32 = 6
-        resize_rect := mu.Rect{
-            x = x + width - resize_w/2,
-            y = y,
-            w = resize_w,
-            h = height,
-        }
 
         id := mu.get_id(ctx, "sidebar-resize")
         mu.update_control(ctx, id, r)

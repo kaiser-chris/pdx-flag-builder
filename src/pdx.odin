@@ -31,7 +31,7 @@ setupParsing :: proc() {
     }
     regexNamedColor = regex
 }
-freeParsing :: proc() {
+destroyParsing :: proc() {
     regex.destroy(regexNamedColor)
 }
 
