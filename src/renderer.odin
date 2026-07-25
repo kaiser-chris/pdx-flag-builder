@@ -8,6 +8,11 @@ import "core:fmt"
 import "core:mem"
 import "core:sync/chan"
 import "texture"
+import "core:thread"
+import os "core:os"
+import time "core:time"
+
+TEXTURE_LOADING_THREAD_IDENTIFIER: int: 1
 
 TEXTURE_RECT_IDENTIFIER: u8: 1
 TEXTURE_RECT_IDENTIFIER_TRANSPARENCY: u8: 2
@@ -22,9 +27,11 @@ State :: struct {
     SidebarOpen: bool,
     SidebarWidth: i32,
     AtlasTexture: rl.Texture2D,
+    TextureLoadingThread: ^thread.Thread,
     RenderTextureCache: map[int]rl.Texture2D,
     GuiTextureCache: map[string]rl.Texture2D,
     TextureMap: map[string]int,
+    ImageLoadChannel: chan.Chan(ImageRequest),
     TextureLoadChannel: chan.Chan(TextureRequest),
     TransparencyTexture: rl.Texture2D,
     InvalidTexture: rl.Texture2D,
@@ -32,6 +39,7 @@ State :: struct {
     ButtonIdentifier: i32,
     NextTextureIdentifier: int,
     SelectedFlagElement: SelectedFlagElement,
+    Done: bool,
 }
 
 setupState :: proc() {
@@ -39,17 +47,27 @@ setupState :: proc() {
     state.RenderTextureCache = make(map[int]rl.Texture2D)
     state.GuiTextureCache = make(map[string]rl.Texture2D)
     state.TextureMap = make(map[string]int)
-    channel, err := chan.create(chan.Chan(TextureRequest), 2048, context.allocator)
-    if err != nil {
-        fmt.eprintfln("Could not create TextureLoadChannel: %v", err)
+    imageChannel, imErr := chan.create(chan.Chan(ImageRequest), 2048, context.allocator)
+    if imErr != nil {
+        fmt.eprintfln("Could not create ImageLoadChannel: %v", imErr)
     }
-    state.TextureLoadChannel = channel
+    state.ImageLoadChannel = imageChannel
+    textureChannel, txErr := chan.create(chan.Chan(TextureRequest), 64, context.allocator)
+    if txErr != nil {
+        fmt.eprintfln("Could not create TextureLoadChannel: %v", txErr)
+    }
+    state.TextureLoadChannel = textureChannel
     state.SidebarOpen = true
     state.SidebarWidth = 300
     state.Flag = createFlag()
     state.NextTextureIdentifier = 1
+    state.TextureLoadingThread = createTextureLoadingThread()
 }
 destroyState :: proc() {
+    state.Done = true
+    for !thread.is_done(state.TextureLoadingThread) {
+        time.sleep(10)
+    }
     for _, index in state.Databases {
         destroyNamedColors(&state.Databases[index])
     }
@@ -67,8 +85,40 @@ destroyState :: proc() {
     delete(state.TextureMap)
     delete(state.Databases)
     delete(state.DatabaseSearch)
+    chan.destroy(state.ImageLoadChannel)
     chan.destroy(state.TextureLoadChannel)
     destroyFlag(state.Flag)
+    thread.destroy(state.TextureLoadingThread)
+}
+
+createTextureLoadingThread :: proc() -> ^thread.Thread {
+    imageLoader :: proc(t: ^thread.Thread) {
+        for !state.Done {
+            request, ok := chan.try_recv(state.ImageLoadChannel)
+            if !ok {
+                continue
+            }
+            if _, exists := state.RenderTextureCache[request.Identifier]; exists {
+                fmt.eprintfln("duplicate request: %s", request.Identifier)
+                continue
+            }
+            image := texture.LoadImage(request.Path)
+            textureRequest := TextureRequest{
+                Identifier = request.Identifier,
+                Path = request.Path,
+                Image = image
+            }
+            chan.send(state.TextureLoadChannel, textureRequest)
+        }
+    }
+    if imageThread := thread.create(imageLoader); imageThread != nil {
+        imageThread.init_context = context
+        imageThread.user_index = TEXTURE_LOADING_THREAD_IDENTIFIER
+        return imageThread
+    } else {
+        fmt.eprintfln("Could not create texture loading thread")
+        os.exit(2)
+    }
 }
 
 state := State{}
@@ -82,15 +132,38 @@ DatabaseState :: struct {
     NamedColors: [dynamic]FlagColorVariant,
 }
 
+ImageRequest :: struct {
+    Identifier: int,
+    Path: string,
+}
+
 TextureRequest :: struct {
     Identifier: int,
     Path: string,
+    Image: rl.Image,
 }
 
 FrameTexture :: struct {
     TransparencyBackground: bool,
     Path: cstring,
     Texture: rl.Texture2D,
+}
+
+handleTextureRequests :: proc() {
+    for {
+        request, ok := chan.try_recv(state.TextureLoadChannel)
+        if !ok {
+            break
+        }
+        if _, exists := state.RenderTextureCache[request.Identifier]; exists {
+            fmt.eprintfln("duplicate request: %s", request.Identifier)
+            continue
+        }
+        texture := rl.LoadTextureFromImage(request.Image)
+        state.GuiTextureCache[request.Path] = texture
+        state.RenderTextureCache[request.Identifier] = texture
+        rl.UnloadImage(request.Image)
+    }
 }
 
 main :: proc() {
@@ -148,6 +221,8 @@ main :: proc() {
 
     ctx.text_width = mu.default_atlas_text_width
     ctx.text_height = mu.default_atlas_text_height
+
+    thread.start(state.TextureLoadingThread)
 
     rl.SetTargetFPS(120)
     main_loop: for !rl.WindowShouldClose() {
@@ -226,6 +301,7 @@ main :: proc() {
         render(ctx)
 
         state.ButtonIdentifier = 0
+        handleTextureRequests()
     }
 }
 
@@ -243,9 +319,6 @@ render :: proc(ctx: ^mu.Context) {
     }
 
     rl.ClearBackground(transmute(rl.Color)state.Settings.BackgroundColor)
-
-    // Load textures needed by MicroUI
-    loadRequestedTextures()
 
     rl.BeginDrawing()
 
@@ -297,22 +370,6 @@ get_clipboard :: proc(user_data: rawptr) -> (string, bool) {
     return string(rl.GetClipboardText()), true
 }
 
-loadRequestedTextures :: proc() {
-    for {
-        request, ok := chan.try_recv(state.TextureLoadChannel)
-        if !ok {
-            break
-        }
-        if _, exists := state.RenderTextureCache[request.Identifier]; exists {
-            fmt.eprintfln("duplicate request: %s", request.Identifier)
-            continue
-        }
-        texture := texture.LoadTexture(request.Path)
-        state.GuiTextureCache[request.Path] = texture
-        state.RenderTextureCache[request.Identifier] = texture
-    }
-}
-
 // When the UI needs to draw an image:
 getTextureIdentifier :: proc(path: string) -> (int, bool) {
     if identifier, ok := state.TextureMap[path]; ok {
@@ -328,13 +385,12 @@ getTextureIdentifier :: proc(path: string) -> (int, bool) {
 
     // Send a load request to the render thread.
     // We clone the string so the render thread can safely use and delete it.
-    request := TextureRequest{
+    request := ImageRequest{
         Identifier = identifier,
         Path = strings.clone(path),
     }
-    ok := chan.try_send(state.TextureLoadChannel, request)
+    ok := chan.try_send(state.ImageLoadChannel, request)
     if !ok {
-        fmt.eprintfln("Could not request texture load: %s", path)
         state.NextTextureIdentifier -= 1
     }
 

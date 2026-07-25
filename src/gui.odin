@@ -104,8 +104,8 @@ renderToolbar :: proc(ctx: ^mu.Context) {
 
 renderFlagPreview :: proc(ctx: ^mu.Context) {
     destination := mu.Rect{
-        x = (rl.GetScreenWidth() - state.TransparencyTexture.width - state.SidebarWidth) / 2,
-        y = (rl.GetScreenHeight() - state.TransparencyTexture.height + TOOLBAR_HEIGHT) / 2,
+        x = (rl.GetScreenWidth() - FLAG_WIDTH - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH - 10) / 2,
+        y = TOOLBAR_HEIGHT + ((rl.GetScreenHeight() - FLAG_HEIGHT - TOOLBAR_HEIGHT - 6) / 2),
         w = FLAG_WIDTH,
         h = FLAG_HEIGHT,
     }

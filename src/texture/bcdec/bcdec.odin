@@ -1,5 +1,6 @@
 package bcdec
 
+import "core:mem"
 import "core:c"
 import "core:os"
 
@@ -64,107 +65,134 @@ LoadBc7Texture :: proc(
     path: string,
     allocator := context.allocator,
 ) -> (rl.Texture2D, DDS_BC7_Error) {
+    image, err := LoadBc7Image(path)
+
+    if err != .None {
+        return rl.Texture2D{}, err
+    }
+
+    return rl.LoadTextureFromImage(image), .None
+}
+
+LoadBc7Image :: proc(
+    path: string,
+    allocator := context.allocator,
+) -> (rl.Image, DDS_BC7_Error) {
     file_data, err := os.read_entire_file(path, allocator)
     if err != nil {
-        return rl.Texture2D{}, .File_Read_Failed
+        return rl.Image{}, .File_Read_Failed
     }
     defer delete(file_data)
 
     if len(file_data) < DDS_BC7_DATA_OFFSET {
-        return rl.Texture2D{}, .File_Too_Small
+        return rl.Image{}, .File_Too_Small
     }
 
     magic, magicOk := read_u32_le(file_data, 0)
     if !magicOk || magic != DDS_MAGIC {
-        return rl.Texture2D{}, .Invalid_Magic
+        return rl.Image{}, .Invalid_Magic
     }
 
     // DDS_HEADER starts immediately after the 4-byte "DDS " magic.
     header_size, headerOk := read_u32_le(file_data, 4)
     if !headerOk || header_size != DDS_HEADER_SIZE {
-        return rl.Texture2D{}, .Invalid_Header
+        return rl.Image{}, .Invalid_Header
     }
 
     height_u32, heightOk := read_u32_le(file_data, 12)
     if !heightOk || height_u32 == 0 {
-        return rl.Texture2D{}, .Invalid_Header
+        return rl.Image{}, .Invalid_Header
     }
 
     width_u32, widthOk := read_u32_le(file_data, 16)
     if !widthOk || width_u32 == 0 {
-        return rl.Texture2D{}, .Invalid_Header
+        return rl.Image{}, .Invalid_Header
     }
 
     // DDS_PIXELFORMAT starts at byte 76 in the file:
     // 4-byte magic + 72-byte offset inside DDS_HEADER.
     pixel_format_size, sizeOk := read_u32_le(file_data, 76)
     if !sizeOk || pixel_format_size != DDS_PIXEL_FORMAT_SIZE {
-        return rl.Texture2D{}, .Invalid_Header
+        return rl.Image{}, .Invalid_Header
     }
 
     fourcc, fourccOk := read_u32_le(file_data, 84)
     if !fourccOk || fourcc != DDS_FOURCC_DX10 {
-        return rl.Texture2D{}, .Not_DX10_DDS
+        return rl.Image{}, .Not_DX10_DDS
     }
 
     // DDS_HEADER_DXT10 begins after magic + DDS_HEADER, at byte 128.
     dxgi_format, dxgiOk := read_u32_le(file_data, 128)
     if !dxgiOk {
-        return rl.Texture2D{}, .Invalid_Header
+        return rl.Image{}, .Invalid_Header
     }
 
     if dxgi_format != DXGI_FORMAT_BC7_UNORM &&
     dxgi_format != DXGI_FORMAT_BC7_UNORM_SRGB {
-        return rl.Texture2D{}, .Not_BC7
+        return rl.Image{}, .Not_BC7
     }
 
     resource_dimension, domainOk := read_u32_le(file_data, 132)
     if !domainOk || resource_dimension != D3D10_RESOURCE_DIMENSION_TEXTURE2D {
-        return rl.Texture2D{}, .Unsupported_Texture_Type
+        return rl.Image{}, .Unsupported_Texture_Type
     }
 
     misc_flag, miscOk := read_u32_le(file_data, 136)
     if !miscOk {
-        return rl.Texture2D{}, .Invalid_Header
+        return rl.Image{}, .Invalid_Header
     }
 
     // Cubemaps need six faces and are intentionally not handled here.
     if (misc_flag & D3D11_RESOURCE_MISC_TEXTURECUBE) != 0 {
-        return rl.Texture2D{}, .Unsupported_Texture_Type
+        return rl.Image{}, .Unsupported_Texture_Type
     }
 
     array_size, arrayOk := read_u32_le(file_data, 140)
     if !arrayOk || array_size != 1 {
-        return rl.Texture2D{}, .Unsupported_Texture_Type
+        return rl.Image{}, .Unsupported_Texture_Type
     }
 
     width  := int(width_u32)
     height := int(height_u32)
 
-    // BC7 has 16 bytes per 4x4 pixel block.
+    if width <= 0 || height <= 0 {
+        return rl.Image{}, .Invalid_Header
+    }
+
+    // BC7 is encoded as 4x4 blocks, each 16 bytes.
     blocks_x := (width + 3) / 4
     blocks_y := (height + 3) / 4
-    compressed_size := blocks_x * blocks_y * 16
 
+    compressed_size := blocks_x * blocks_y * 16
     if DDS_BC7_DATA_OFFSET + compressed_size > len(file_data) {
-        return rl.Texture2D{}, .Truncated_Pixel_Data
+        return rl.Image{}, .Truncated_Pixel_Data
     }
 
     rgba_size := width * height * 4
-    if width <= 0 || height <= 0 || rgba_size <= 0 {
-        return rl.Texture2D{}, .Invalid_Header
+    if rgba_size <= 0 {
+        return rl.Image{}, .Invalid_Header
     }
 
-    rgba := make([]u8, rgba_size, allocator)
-    if len(rgba) != rgba_size {
-        return rl.Texture2D{}, .Allocation_Failed
+    // IMPORTANT:
+    // This is NOT an Odin `make([]u8, ...)` allocation.
+    // It is raylib-owned, hence `rl.UnloadImage(image)` is safe.
+    pixel_memory := rl.MemAlloc(u32(rgba_size))
+    if pixel_memory == nil {
+        return rl.Image{}, .Allocation_Failed
     }
-    defer delete(rgba)
 
-    compressed := file_data[DDS_BC7_DATA_OFFSET: DDS_BC7_DATA_OFFSET + compressed_size]
+    // Convert the raylib raw pointer into a writable, non-owning Odin slice.
+    rgba := mem.slice_ptr((^u8)(pixel_memory), rgba_size)
 
-    // A temporary full 4x4 RGBA block prevents writes past the end for
-    // textures whose width or height is not divisible by four.
+    // Any return below this point must free the raylib allocation.
+    decode_succeeded := false
+    defer if !decode_succeeded {
+        rl.MemFree(pixel_memory)
+    }
+
+    compressed := file_data[DDS_BC7_DATA_OFFSET : DDS_BC7_DATA_OFFSET + compressed_size]
+
+    // One decoded 4x4 RGBA8 block: 4 * 4 * 4 = 64 bytes.
     block_rgba: [64]u8
 
     for block_y in 0..<blocks_y {
@@ -175,17 +203,18 @@ LoadBc7Texture :: proc(
             bc7_decode_rgba8(
             &compressed[source_offset],
             &block_rgba[0],
-            4 * 4, // 4 RGBA pixels per temporary row
+            c.int(16), // Four RGBA pixels per decoded row
             )
 
             pixel_x := block_x * 4
             pixel_y := block_y * 4
 
-            copy_width  := min(4, width  - pixel_x)
+            // Edge blocks may contain pixels beyond texture dimensions.
+            copy_width  := min(4, width - pixel_x)
             copy_height := min(4, height - pixel_y)
 
             for local_y in 0..<copy_height {
-                source_row := local_y * 4 * 4
+                source_row := local_y * 16
                 target_row := ((pixel_y + local_y) * width + pixel_x) * 4
 
                 for local_x in 0..<copy_width {
@@ -202,17 +231,13 @@ LoadBc7Texture :: proc(
     }
 
     image := rl.Image{
-        data    = raw_data(rgba),
+        data    = pixel_memory,
         width   = c.int(width),
         height  = c.int(height),
         mipmaps = 1,
         format  = .UNCOMPRESSED_R8G8B8A8,
     }
 
-    texture := rl.LoadTextureFromImage(image)
-    if texture.id == 0 {
-        return rl.Texture2D{}, .Allocation_Failed
-    }
-
-    return texture, .None
+    decode_succeeded = true
+    return image, .None
 }
