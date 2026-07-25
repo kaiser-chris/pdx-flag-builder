@@ -16,6 +16,11 @@ TEXTURE_LOADING_THREAD_IDENTIFIER: int: 1
 
 TEXTURE_RECT_IDENTIFIER: u8: 1
 TEXTURE_RECT_IDENTIFIER_TRANSPARENCY: u8: 2
+TEXTURE_RECT_IDENTIFIER_FLAG: u8: 3
+
+PATTERN_COLOR_1 :: rl.Color{255, 0, 0, 255}
+PATTERN_COLOR_2 :: rl.Color{255, 255, 0, 255}
+PATTERN_COLOR_3 :: rl.Color{255, 255, 255, 255}
 
 State :: struct {
     Settings: Settings,
@@ -29,6 +34,7 @@ State :: struct {
     AtlasTexture: rl.Texture2D,
     TextureLoadingThread: ^thread.Thread,
     RenderTextureCache: map[int]rl.Texture2D,
+    RenderTextureMap: map[string]rl.Texture2D,
     GuiTextureCache: map[string]rl.Texture2D,
     TextureMap: map[string]int,
     ImageLoadChannel: chan.Chan(ImageRequest),
@@ -40,11 +46,13 @@ State :: struct {
     NextTextureIdentifier: int,
     SelectedFlagElement: SelectedFlagElement,
     Done: bool,
+    RecolorShader: texture.RecolorShader,
 }
 
 setupState :: proc() {
     state.Databases = make([dynamic]DatabaseState)
     state.RenderTextureCache = make(map[int]rl.Texture2D)
+    state.RenderTextureMap = make(map[string]rl.Texture2D)
     state.GuiTextureCache = make(map[string]rl.Texture2D)
     state.TextureMap = make(map[string]int)
     imageChannel, imErr := chan.create(chan.Chan(ImageRequest), 2048, context.allocator)
@@ -83,12 +91,14 @@ destroyState :: proc() {
         delete(key)
     }
     delete(state.TextureMap)
+    delete(state.RenderTextureMap)
     delete(state.Databases)
     delete(state.DatabaseSearch)
     chan.destroy(state.ImageLoadChannel)
     chan.destroy(state.TextureLoadChannel)
     destroyFlag(state.Flag)
     thread.destroy(state.TextureLoadingThread)
+    rl.UnloadShader(state.RecolorShader.Shader)
 }
 
 createTextureLoadingThread :: proc() -> ^thread.Thread {
@@ -155,6 +165,7 @@ handleTextureRequests :: proc() {
         }
         texture := rl.LoadTextureFromImage(request.Image)
         state.GuiTextureCache[request.Path] = texture
+        state.RenderTextureMap[request.Path] = texture
         state.RenderTextureCache[request.Identifier] = texture
         rl.UnloadImage(request.Image)
     }
@@ -187,6 +198,8 @@ main :: proc() {
     rl.SetConfigFlags({.WINDOW_RESIZABLE})
     rl.InitWindow(1280, 800, "PDX Flag Editor")
     defer rl.CloseWindow()
+
+    state.RecolorShader = texture.LoadRecolorShader("shaders/recolor.fs")
 
     pixels := make([][4]u8, mu.DEFAULT_ATLAS_WIDTH*mu.DEFAULT_ATLAS_HEIGHT)
     for alpha, i in mu.default_atlas_alpha {
@@ -336,6 +349,8 @@ render :: proc(ctx: ^mu.Context) {
                 renderTexture(cmd)
             case isTextureWithTransparencyRect(cmd.color):
                 renderTransparentTexture(cmd)
+            case isFlagRect(cmd.color):
+                renderFlagTexture(cmd)
             case:
                 rl.DrawRectangle(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, transmute(rl.Color)cmd.color)
             }
@@ -397,6 +412,9 @@ isTextureRect :: proc(textureId: mu.Color) -> bool {
 isTextureWithTransparencyRect :: proc(textureId: mu.Color) -> bool {
     return textureId.a == TEXTURE_RECT_IDENTIFIER_TRANSPARENCY
 }
+isFlagRect :: proc(textureId: mu.Color) -> bool {
+    return textureId.a == TEXTURE_RECT_IDENTIFIER_FLAG
+}
 
 guranteeBounds :: proc(ctx: ^mu.Context) {
     window := mu.get_current_container(ctx)
@@ -452,6 +470,34 @@ renderTransparentTexture :: proc(cmd: ^mu.Command_Rect) {
     }
 }
 
+renderFlagTexture :: proc(cmd: ^mu.Command_Rect) {
+    destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
+
+    if state.Flag.Pattern.Name != "" {
+        pattern, ok := state.RenderTextureMap[state.Flag.Pattern.Path]
+        source := rl.Rectangle{0, 0, f32(pattern.width), f32(pattern.height)}
+
+        testColor1 := rl.Color{165, 255, 177, 255}
+        testColor2 := rl.Color{255, 117, 255, 255}
+        testColor3 := rl.Color{109, 172, 255, 255}
+
+        texture.DrawRecoloredTexture(
+            pattern,
+            source,
+            destination,
+            { { PATTERN_COLOR_1, testColor1 }, { PATTERN_COLOR_2, testColor2 }, { PATTERN_COLOR_3, testColor3 } },
+            state.RecolorShader,
+        )
+    }
+
+
+//    source := rl.Rectangle{0, 0, f32(state.TransparencyTexture.width), f32(state.TransparencyTexture.height)}
+//    if texture, ok := state.RenderTextureCache[index]; ok {
+//        source := rl.Rectangle{0, 0, f32(texture.width), f32(texture.height)}
+//        rl.DrawTexturePro(texture, source, destination, { 0, 0 }, 0, rl.WHITE)
+//    }
+}
+
 drawTexture :: proc(ctx: ^mu.Context, texturePath: string, width, height: i32) {
     index, ok := getTextureIdentifier(texturePath)
     if !ok {
@@ -482,6 +528,24 @@ drawTransparentTexture :: proc(ctx: ^mu.Context, texturePath: string, width: i32
         g = u8((index >> 8) & 0xFF),
         b = u8(index & 0xFF),
         a = TEXTURE_RECT_IDENTIFIER_TRANSPARENCY,
+    }
+
+    rect := mu.layout_next(ctx)
+    if width != 0 {
+        rect.w = width
+    }
+    if width != 0 {
+        rect.h = height
+    }
+    mu.draw_rect(ctx, rect, magicColor)
+}
+
+drawFlagTexture :: proc(ctx: ^mu.Context, width: i32 = 0, height: i32 = 0) {
+    magicColor := mu.Color{
+        r = 0,
+        g = 0,
+        b = 0,
+        a = TEXTURE_RECT_IDENTIFIER_FLAG,
     }
 
     rect := mu.layout_next(ctx)

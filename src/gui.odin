@@ -115,21 +115,7 @@ renderFlagPreview :: proc(ctx: ^mu.Context) {
         window.rect = destination
         target := mu.Rect{x = 0, y = 0, w = FLAG_WIDTH, h = FLAG_HEIGHT}
         mu.layout_set_next(ctx, target, true)
-        drawTransparentTexture(ctx, "textures/transparency.dds")
-        if state.Flag.Pattern.Name != "" {
-            mu.layout_set_next(ctx, target, true)
-            drawTransparentTexture(ctx, state.Flag.Pattern.Path)
-        }
-        for variant in state.Flag.Layers {
-            switch layer in variant {
-            case ^FlagLayerColoredEmblem:
-                mu.layout_set_next(ctx, target, true)
-                drawTransparentTexture(ctx, layer.Texture.Path)
-            case ^FlagLayerTexturedEmblem:
-                mu.layout_set_next(ctx, target, true)
-                drawTransparentTexture(ctx, layer.Texture.Path)
-            }
-        }
+        drawFlagTexture(ctx)
     }
 }
 
@@ -497,30 +483,30 @@ renderSelectedElementMenu :: proc(ctx: ^mu.Context) {
 }
 
 renderSelectedFlag :: proc(ctx: ^mu.Context) {
-    attributeRow(ctx, "Type", "Flag")
+    drawAttributeRow(ctx, "Type", "Flag")
 }
 
 renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context) {
-    attributeRow(ctx, "Type", "Colored Emblem")
+    drawAttributeRow(ctx, "Type", "Colored Emblem")
 }
 
 renderSelectedFlagLayerTexturedEmblem :: proc(ctx: ^mu.Context) {
-    attributeRow(ctx, "Type", "Textured Emblem")
+    drawAttributeRow(ctx, "Type", "Textured Emblem")
 }
 
 renderSelectedFlagColorNamed :: proc(ctx: ^mu.Context) {
-    attributeRow(ctx, "Type", "Named Color")
+    drawAttributeRow(ctx, "Type", "Named Color")
 }
 
 renderSelectedFlagColorHsv :: proc(ctx: ^mu.Context) {
-    attributeRow(ctx, "Type", "HSV Color")
+    drawAttributeRow(ctx, "Type", "HSV Color")
 }
 
 renderSelectedFlagColorRgb :: proc(ctx: ^mu.Context) {
-    attributeRow(ctx, "Type", "RGB Color")
+    drawAttributeRow(ctx, "Type", "RGB Color")
 }
 
-attributeRow :: proc(ctx: ^mu.Context, name, value: string) {
+drawAttributeRow :: proc(ctx: ^mu.Context, name, value: string) {
     mu.layout_row(ctx, { -1, -1 }, 20)
     window := mu.get_current_container(ctx)
 
