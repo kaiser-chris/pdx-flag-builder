@@ -113,20 +113,51 @@ LayerInstance :: struct {
 
 destroyNamedColors :: proc(database: ^DatabaseState) {
     for _, index in database.NamedColors {
-        switch color in database.NamedColors[index] {
-        case ^FlagColorRgb:
-            delete(color.Name)
-            free(color)
-        case ^FlagColorHsv:
-            delete(color.Name)
-            free(color)
-        case ^FlagColorNamed:
-            delete(color.Name)
-            delete(color.NamedColor)
-            free(color)
-        }
+        destroyColor(database.NamedColors[index])
     }
     delete(database.NamedColors)
+}
+destroyColor :: proc(variant: FlagColorVariant) {
+    switch color in variant {
+    case ^FlagColorRgb:
+        delete(color.Name)
+        free(color)
+    case ^FlagColorHsv:
+        delete(color.Name)
+        free(color)
+    case ^FlagColorNamed:
+        delete(color.Name)
+        delete(color.NamedColor)
+        free(color)
+    }
+}
+destroyLayer :: proc(variant: FlagLayerVariant) {
+    switch layer in variant {
+    case ^FlagLayerColoredEmblem:
+        destroyTexture(layer.Texture)
+        for _, index in layer.Colors {
+            destroyColor(layer.Colors[index])
+        }
+        free(layer)
+    case ^FlagLayerTexturedEmblem:
+        destroyTexture(layer.Texture)
+        free(layer)
+    }
+}
+destroyTexture :: proc(texture: FlagTexture) {
+    delete(texture.Name)
+    delete(texture.Path)
+}
+destroyFlag :: proc(flag: Flag) {
+    destroyTexture(flag.Pattern)
+    for _, index in flag.Colors {
+        destroyColor(flag.Colors[index])
+    }
+    delete(flag.Colors)
+    for _, index in flag.Layers {
+        destroyLayer(flag.Layers[index])
+    }
+    delete(flag.Layers)
 }
 
 loadNamedColors :: proc(database: ^DatabaseState) {

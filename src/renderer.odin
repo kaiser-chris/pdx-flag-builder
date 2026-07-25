@@ -60,6 +60,7 @@ freeState :: proc() {
     delete(state.TextureMap)
     delete(state.Databases)
     chan.destroy(state.TextureLoadChannel)
+    destroyFlag(state.Flag)
 }
 
 state := State{}
