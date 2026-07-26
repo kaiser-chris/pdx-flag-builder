@@ -1,7 +1,6 @@
 package pdx_flag_builder
 
 import "core:fmt"
-import "core:os"
 import "core:strings"
 import rl "vendor:raylib"
 import mu "vendor:microui"
@@ -29,9 +28,7 @@ SelectedFlagElement :: union {
     ^pdx.Flag,
     ^pdx.FlagLayerColoredEmblem,
     ^pdx.FlagLayerTexturedEmblem,
-    ^pdx.FlagColorNamed,
-    ^pdx.FlagColorHsv,
-    ^pdx.FlagColorRgb,
+    ^pdx.LayerInstance,
 }
 
 renderGui :: proc(ctx: ^mu.Context) {
@@ -209,6 +206,70 @@ renderFlagPreviewTexture :: proc(cmd: ^mu.Command_Rect) {
             state.RecolorShader,
         )
     }
+
+    for variant in state.Flag.Layers {
+        switch layer in variant {
+        case ^pdx.FlagLayerColoredEmblem:
+            renderColoredEmblemInstances(cmd, layer)
+        case ^pdx.FlagLayerTexturedEmblem:
+        }
+    }
+}
+
+renderColoredEmblemInstances :: proc(cmd: ^mu.Command_Rect, layer: ^pdx.FlagLayerColoredEmblem) {
+    emblem, ok := state.RenderTextureMap[layer.Texture.Path]
+    if !ok {
+        fmt.eprintfln("Could not find colored emblem texture: %s", layer.Texture.Path)
+        return
+    }
+    source := rl.Rectangle{0, 0, f32(emblem.width), f32(emblem.height)}
+
+    colorMappings := make([dynamic]texture.ColorRecolor)
+    defer delete(colorMappings)
+    for color in layer.Colors {
+        fillColorMapping(&colorMappings, color, pdx.COLORED_EMBLEM_REPLACE_COLORS)
+    }
+
+    for instance in layer.Instances {
+        texture.DrawRecoloredTexture(
+            emblem,
+            source,
+            calculateInstanceDestination(instance, cmd.rect),
+            colorMappings[:],
+            state.RecolorShader,
+            rotation = f32(instance.Rotation)
+        )
+    }
+}
+
+renderTexturedEmblemInstances :: proc(cmd: ^mu.Command_Rect, layer: ^pdx.FlagLayerTexturedEmblem) {
+    emblem, ok := state.RenderTextureMap[layer.Texture.Path]
+    if !ok {
+        fmt.eprintfln("Could not find textured emblem texture: %s", layer.Texture.Path)
+        return
+    }
+    source := rl.Rectangle{0, 0, f32(emblem.width), f32(emblem.height)}
+
+    for instance in layer.Instances {
+        rl.DrawTexturePro(
+            emblem,
+            source,
+            calculateInstanceDestination(instance, cmd.rect),
+            { 0, 0 },
+            f32(instance.Rotation),
+            rl.WHITE
+        )
+    }
+}
+
+calculateInstanceDestination :: proc(instance: ^pdx.LayerInstance, target: mu.Rect) -> rl.Rectangle {
+    x: f32 = f32(target.x) + (f32(target.w) * instance.Position.X)
+    y: f32 = f32(target.y) + (f32(target.h) * instance.Position.Y)
+    width: f32 = f32(target.w) * instance.Scale.X
+    height: f32 = f32(target.h) * instance.Scale.Y
+
+    // TODO: Validate scaling and positioning
+    return rl.Rectangle{ x, y, width, height }
 }
 
 fillColorMapping :: proc(mappings: ^[dynamic]texture.ColorRecolor, variant: pdx.FlagColorVariant, sourceColors: []rl.Color) {
@@ -521,6 +582,7 @@ renderFlagMenu :: proc(ctx: ^mu.Context) {
                     state.SelectedFlagElement = layer
                 }
                 mu.pop_id(ctx)
+                renderLayerInstances(ctx, layer.Instances)
             case ^pdx.FlagLayerTexturedEmblem:
                 mu.layout_row(ctx, {-1, -1}, 20)
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
@@ -528,9 +590,25 @@ renderFlagMenu :: proc(ctx: ^mu.Context) {
                     state.SelectedFlagElement = layer
                 }
                 mu.pop_id(ctx)
+                renderLayerInstances(ctx, layer.Instances)
             }
         }
         mu.layout_row(ctx, { -1, -1 }, 20)
+    }
+}
+
+renderLayerInstances :: proc(ctx: ^mu.Context, instances: [dynamic]^pdx.LayerInstance) {
+    for instance, index in instances {
+        mu.layout_row(ctx, {-1, -1}, 20)
+        buttonRect := mu.layout_next(ctx)
+        buttonRect.w = buttonRect.w - ctx.style.indent
+        buttonRect.x = buttonRect.x + ctx.style.indent
+        mu.layout_set_next(ctx, buttonRect, false)
+        ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+        if .SUBMIT in mu.button(ctx, fmt.tprintf("Instance: %i", index + 1)) {
+            state.SelectedFlagElement = instance
+        }
+        mu.pop_id(ctx)
     }
 }
 
@@ -556,32 +634,26 @@ renderSelectedElementMenu :: proc(ctx: ^mu.Context) {
         } else {
             switch element in state.SelectedFlagElement {
             case ^pdx.Flag:
-                renderSelectedFlag(ctx)
+                renderSelectedFlag(ctx, element)
             case ^pdx.FlagLayerColoredEmblem:
-                renderSelectedFlagLayerColoredEmblem(ctx)
+                renderSelectedFlagLayerColoredEmblem(ctx, element)
             case ^pdx.FlagLayerTexturedEmblem:
-                renderSelectedFlagLayerTexturedEmblem(ctx)
-            case ^pdx.FlagColorNamed:
-                renderSelectedFlagColorNamed(ctx)
-            case ^pdx.FlagColorHsv:
-                renderSelectedFlagColorHsv(ctx)
-            case ^pdx.FlagColorRgb:
-                renderSelectedFlagColorRgb(ctx)
+                renderSelectedFlagLayerTexturedEmblem(ctx, element)
+            case ^pdx.LayerInstance:
+                renderSelectedLayerInstance(ctx, element)
             }
         }
     }
 }
 
-renderSelectedFlag :: proc(ctx: ^mu.Context) {
+renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
     ui.DrawAttributeRow(ctx, "Layer", "Pattern & Colors")
-    if state.Flag.Pattern.Name != "" {
-        ui.DrawAttributeRow(ctx, "Pattern", state.Flag.Pattern.Name)
+    if flag.Pattern.Name != "" {
+        ui.DrawAttributeRow(ctx, "Pattern", flag.Pattern.Name)
     } else {
         ui.DrawAttributeRow(ctx, "Pattern", "None")
     }
-
-
-    for variant, index in state.Flag.Colors {
+    for variant, index in flag.Colors {
         switch color in variant {
         case ^pdx.FlagColorNamed:
             ui.DrawAttributeRow(ctx, color.Name, color)
@@ -593,36 +665,56 @@ renderSelectedFlag :: proc(ctx: ^mu.Context) {
             renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
         }
     }
+    renderAddColorButtons(ctx, &flag.Colors)
+}
+
+renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagLayerColoredEmblem) {
+    ui.DrawAttributeRow(ctx, "Type", "Colored Emblem")
+    ui.DrawAttributeRow(ctx, "Texture", layer.Texture.Name)
+    ui.DrawAttributeRow(ctx, "Instances", fmt.tprintf("%i", len(layer.Instances)))
+    for variant, index in layer.Colors {
+        switch color in variant {
+        case ^pdx.FlagColorNamed:
+            ui.DrawAttributeRow(ctx, color.Name, color)
+        case ^pdx.FlagColorRgb:
+            buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, color.Name, color)
+            renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
+        case ^pdx.FlagColorHsv:
+            buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, color.Name, color)
+            renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
+        }
+    }
+    renderAddColorButtons(ctx, &layer.Colors)
+
     mu.layout_row(ctx, { -1, -1 }, 20)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in mu.button(ctx, "Add new color") {
-        colorName := pdx.GetNextFreeColor(state.Flag.Colors[:])
-        if colorName != "" {
-            color := pdx.CreateColorRgb(colorName, 0, 0, 0)
-            append(&state.Flag.Colors, color)
-        }
+    if .SUBMIT in mu.button(ctx, "Add new insance") {
+        instance := pdx.CreateLayerInstance()
+        append(&layer.Instances, instance)
     }
     mu.pop_id(ctx)
 }
 
-renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context) {
-    ui.DrawAttributeRow(ctx, "Type", "Colored Emblem")
-}
-
-renderSelectedFlagLayerTexturedEmblem :: proc(ctx: ^mu.Context) {
+renderSelectedFlagLayerTexturedEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagLayerTexturedEmblem) {
     ui.DrawAttributeRow(ctx, "Type", "Textured Emblem")
+    ui.DrawAttributeRow(ctx, "Texture", layer.Texture.Name)
+    ui.DrawAttributeRow(ctx, "Instances", fmt.tprintf("%i", len(layer.Instances)))
+    mu.layout_row(ctx, { -1, -1 }, 20)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in mu.button(ctx, "Add new insance") {
+        instance := pdx.CreateLayerInstance()
+        append(&layer.Instances, instance)
+    }
+    mu.pop_id(ctx)
 }
 
-renderSelectedFlagColorNamed :: proc(ctx: ^mu.Context) {
-    ui.DrawAttributeRow(ctx, "Type", "Named Color")
-}
-
-renderSelectedFlagColorHsv :: proc(ctx: ^mu.Context) {
-    ui.DrawAttributeRow(ctx, "Type", "HSV Color")
-}
-
-renderSelectedFlagColorRgb :: proc(ctx: ^mu.Context) {
-    ui.DrawAttributeRow(ctx, "Type", "RGB Color")
+renderSelectedLayerInstance :: proc(ctx: ^mu.Context, instance: ^pdx.LayerInstance) {
+    ui.DrawAttributeRow(ctx, "Type", "Textured Emblem")
+    ui.DrawAttributeRow(ctx, "Rotation", fmt.tprintf("%i", instance.Rotation))
+    ui.DrawAttributeRow(ctx, "Scale Width", fmt.tprintf("%.2f", instance.Scale.X))
+    ui.DrawAttributeRow(ctx, "Scale Height", fmt.tprintf("%.2f", instance.Scale.Y))
+    ui.DrawAttributeRow(ctx, "Position X", fmt.tprintf("%.2f", instance.Position.X))
+    ui.DrawAttributeRow(ctx, "Position Y", fmt.tprintf("%.2f", instance.Position.Y))
 }
 
 renderColorButtons :: proc(ctx: ^mu.Context, color: pdx.FlagColorVariant, index: int, edit, delete: mu.Rect) {
@@ -642,6 +734,57 @@ renderColorButtons :: proc(ctx: ^mu.Context, color: pdx.FlagColorVariant, index:
         pdx.DestroyColor(color)
     }
     mu.pop_id(ctx)
+}
+
+renderAddColorButtons :: proc(ctx: ^mu.Context, list: ^[dynamic]pdx.FlagColorVariant) {
+    mu.layout_row_items(ctx, 1, 20)
+    mu.layout_begin_column(ctx)
+    {
+        mu.layout_row_items(ctx, 3, 20)
+        mu.layout_begin_column(ctx)
+        {
+            mu.layout_row(ctx, {-1,-1}, 20)
+            ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+            if .SUBMIT in mu.button(ctx, "Add RGB color") {
+                colorName := pdx.GetNextFreeColor(list[:])
+                if colorName != "" {
+                    color := pdx.CreateColorRgb(colorName, 0, 0, 0)
+                    append(list, color)
+                }
+            }
+            mu.pop_id(ctx)
+        }
+        mu.layout_end_column(ctx)
+        mu.layout_begin_column(ctx)
+        {
+            mu.layout_row(ctx, {-1,-1}, 20)
+            ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+            if .SUBMIT in mu.button(ctx, "Add HSV color") {
+                colorName := pdx.GetNextFreeColor(list[:])
+                if colorName != "" {
+                    color := pdx.CreateColorHsv(colorName, 0, 0, 0)
+                    append(list, color)
+                }
+            }
+            mu.pop_id(ctx)
+        }
+        mu.layout_end_column(ctx)
+        mu.layout_begin_column(ctx)
+        {
+            mu.layout_row(ctx, {-1,-1}, 20)
+            ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+            if .SUBMIT in mu.button(ctx, "Add Named color") {
+                colorName := pdx.GetNextFreeColor(list[:])
+                if colorName != "" {
+                    color := pdx.CreateColorNamed(colorName, "")
+                    append(list, color)
+                }
+            }
+            mu.pop_id(ctx)
+        }
+        mu.layout_end_column(ctx)
+    }
+    mu.layout_end_column(ctx)
 }
 
 removeLayer :: proc(index: int){

@@ -104,8 +104,8 @@ DestroyLayer :: proc(variant: FlagLayerVariant) {
 }
 
 LayerVector :: struct {
-    X: f64,
-    Y: f64,
+    X: f32,
+    Y: f32,
 }
 LayerInstance :: struct {
     Rotation: i32,
