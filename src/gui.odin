@@ -334,32 +334,41 @@ renderDatabase :: proc(ctx: ^mu.Context) {
             if .ACTIVE in mu.header(ctx, database.Settings.Name, {.EXPANDED}) {
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
                 if .ACTIVE in mu.treenode(ctx, "Patterns", options) {
-                    path, err := os.join_path([]string{ database.Settings.Path, pdx.FOLDER_GFX, pdx.FOLDER_COA, pdx.FOLDER_PATTERNS }, context.allocator)
-                    defer delete(path)
-                    if err != nil {
-                        fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_PATTERNS, err)
+                    for texture in database.Patterns {
+                        renderDatabaseItem(ctx, texture, pdx.FOLDER_PATTERNS)
                     }
-                    renderDatabaseFolder(ctx, path, pdx.FOLDER_PATTERNS)
+                    if len(database.Patterns) == 0 {
+                        mu.layout_row(ctx, {-1, -1}, 50)
+                        r := mu.layout_next(ctx)
+                        mu.draw_rect(ctx, r, ctx.style.colors[.WINDOW_BG])
+                        mu.draw_control_text(ctx, "No Items", r, .TEXT, {.ALIGN_CENTER})
+                    }
                 }
                 mu.pop_id(ctx)
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
                 if .ACTIVE in mu.treenode(ctx, "Colored Emblems", options) {
-                    path, err := os.join_path([]string{ database.Settings.Path, pdx.FOLDER_GFX, pdx.FOLDER_COA, pdx.FOLDER_COLORED_EMBLEMS }, context.allocator)
-                    defer delete(path)
-                    if err != nil {
-                        fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_COLORED_EMBLEMS, err)
+                    for texture in database.ColoredEmblems {
+                        renderDatabaseItem(ctx, texture, pdx.FOLDER_COLORED_EMBLEMS)
                     }
-                    renderDatabaseFolder(ctx, path, pdx.FOLDER_COLORED_EMBLEMS)
+                    if len(database.Patterns) == 0 {
+                        mu.layout_row(ctx, {-1, -1}, 50)
+                        r := mu.layout_next(ctx)
+                        mu.draw_rect(ctx, r, ctx.style.colors[.WINDOW_BG])
+                        mu.draw_control_text(ctx, "No Items", r, .TEXT, {.ALIGN_CENTER})
+                    }
                 }
                 mu.pop_id(ctx)
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
                 if .ACTIVE in mu.treenode(ctx, "Textured Emblems", options) {
-                    path, err := os.join_path([]string{ database.Settings.Path, pdx.FOLDER_GFX, pdx.FOLDER_COA, pdx.FOLDER_TEXTURED_EMBLEMS }, context.allocator)
-                    defer delete(path)
-                    if err != nil {
-                        fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_TEXTURED_EMBLEMS, err)
+                    for texture in database.TexturedEmblems {
+                        renderDatabaseItem(ctx, texture, pdx.FOLDER_TEXTURED_EMBLEMS)
                     }
-                    renderDatabaseFolder(ctx, path, pdx.FOLDER_TEXTURED_EMBLEMS)
+                    if len(database.Patterns) == 0 {
+                        mu.layout_row(ctx, {-1, -1}, 50)
+                        r := mu.layout_next(ctx)
+                        mu.draw_rect(ctx, r, ctx.style.colors[.WINDOW_BG])
+                        mu.draw_control_text(ctx, "No Items", r, .TEXT, {.ALIGN_CENTER})
+                    }
                 }
                 mu.pop_id(ctx)
             }
@@ -375,85 +384,48 @@ renderDatabase :: proc(ctx: ^mu.Context) {
     }
 }
 
-renderDatabaseFolder :: proc(ctx: ^mu.Context, path: string, type: string) {
-    walker := os.walker_create_path(path)
-    defer os.walker_destroy(&walker)
+renderDatabaseItem :: proc(ctx: ^mu.Context, item: pdx.FlagTexture, type: string) {
+    texture := state.GuiTextureCache[item.Path]
+    width := i32((f32(texture.width) / f32(texture.height)) * 128)
 
-    count: int
-    for info in os.walker_walk(&walker) {
-        _ = os.walker_error(&walker) or_break
-
-        if path, err := os.walker_error(&walker); err != nil {
-            fmt.eprintfln("failed walking %s: %s", path, err)
-            continue
-        }
-
-        if !strings.has_suffix(info.fullpath, ".dds") && !strings.has_suffix(info.fullpath, ".tga") {
-            continue
-        }
-
-        if info.type != os.File_Type.Regular {
-            continue
-        }
-
-        lower := strings.to_lower(info.name)
-        defer delete(lower)
-        if state.DatabaseSearch != "" && !strings.contains(lower, state.DatabaseSearch) {
-            continue
-        }
-
-        texture := state.GuiTextureCache[info.fullpath]
-        width := i32((f32(texture.width) / f32(texture.height)) * 128)
-
-        mu.layout_row(ctx, {200, -1}, 128)
-        mu.layout_begin_column(ctx)
-        {
-            mu.layout_row(ctx, {192, -1}, 128)
-            drawTexture(ctx, info.fullpath, width, 128)
-        }
-        mu.layout_end_column(ctx)
-        mu.layout_begin_column(ctx)
-        {
-            mu.layout_row(ctx, {-1, -1}, 20)
-            switch type {
-            case pdx.FOLDER_PATTERNS:
-                ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-                if .SUBMIT in mu.button(ctx, "Set as pattern") {
-                    state.Flag.Pattern = pdx.FlagTexture{
-                        Name = strings.clone(info.name),
-                        Path = strings.clone(info.fullpath),
-                    }
-                }
-                mu.pop_id(ctx)
-            case pdx.FOLDER_COLORED_EMBLEMS:
-                ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-                if .SUBMIT in mu.button(ctx, "Add as layer") {
-                    layer := pdx.CreateLayerColoredEmblem(info.name, info.fullpath)
-                    append(&state.Flag.Layers, layer)
-                }
-                mu.pop_id(ctx)
-            case pdx.FOLDER_TEXTURED_EMBLEMS:
-                ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-                if .SUBMIT in mu.button(ctx, "Add as layer") {
-                    layer := pdx.CreateLayerTexturedEmblem(info.name, info.fullpath)
-                    append(&state.Flag.Layers, layer)
-                }
-                mu.pop_id(ctx)
+    mu.layout_row(ctx, {200, -1}, 128)
+    mu.layout_begin_column(ctx)
+    {
+        mu.layout_row(ctx, {192, -1}, 128)
+        drawTexture(ctx, item.Path, width, 128)
+    }
+    mu.layout_end_column(ctx)
+    mu.layout_begin_column(ctx)
+    {
+        mu.layout_row(ctx, {-1, -1}, 20)
+        switch type {
+        case pdx.FOLDER_PATTERNS:
+            ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+            if .SUBMIT in mu.button(ctx, "Set as pattern") {
+                state.Flag.Pattern = pdx.CreateFlagTexture(item.Name, item.Path)
             }
-            mu.layout_row(ctx, {-1, -1}, 20)
-            mu.text(ctx, info.name)
-            mu.layout_row(ctx, {-1, -1}, 20)
-            mu.text(ctx, fmt.tprintf("%ix%i", texture.width, texture.height))
+            mu.pop_id(ctx)
+        case pdx.FOLDER_COLORED_EMBLEMS:
+            ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+            if .SUBMIT in mu.button(ctx, "Add as layer") {
+                layer := pdx.CreateLayerColoredEmblem(item.Name, item.Path)
+                append(&state.Flag.Layers, layer)
+            }
+            mu.pop_id(ctx)
+        case pdx.FOLDER_TEXTURED_EMBLEMS:
+            ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+            if .SUBMIT in mu.button(ctx, "Add as layer") {
+                layer := pdx.CreateLayerTexturedEmblem(item.Name, item.Path)
+                append(&state.Flag.Layers, layer)
+            }
+            mu.pop_id(ctx)
         }
-        mu.layout_end_column(ctx)
-        count += 1
+        mu.layout_row(ctx, {-1, -1}, 20)
+        mu.text(ctx, item.Name)
+        mu.layout_row(ctx, {-1, -1}, 20)
+        mu.text(ctx, fmt.tprintf("%ix%i", texture.width, texture.height))
     }
-    if count == 0 {
-        mu.layout_row(ctx, {-1, -1}, 50)
-        r := mu.layout_next(ctx)
-        mu.draw_rect(ctx, r, ctx.style.colors[.WINDOW_BG])
-        mu.draw_control_text(ctx, "No Items", r, .TEXT, {.ALIGN_CENTER})
-    }
+    mu.layout_end_column(ctx)
 }
 
 renderSidebar :: proc(ctx: ^mu.Context) {

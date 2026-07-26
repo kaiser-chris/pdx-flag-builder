@@ -48,6 +48,7 @@ loadSettings :: proc() {
             state.Databases[index].BufferPathLength = len(state.Databases[index].Settings.Path)
             copy(state.Databases[index].BufferPath[:], state.Databases[index].Settings.Path)
             loadNamedColors(&state.Databases[index])
+            loadDatabaseTextures(&state.Databases[index])
         }
     }
 
@@ -66,8 +67,8 @@ saveSettings :: proc() {
     state.Settings.Databases = make([dynamic]FlagDatabase, len(state.Databases))
     for _, index in state.Databases {
         state.Settings.Databases[index] = state.Databases[index].Settings
-        destroyNamedColors(&state.Databases[index])
         loadNamedColors(&state.Databases[index])
+        loadDatabaseTextures(&state.Databases[index])
     }
 
     json_bytes, err := json.marshal(state.Settings)

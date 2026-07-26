@@ -47,6 +47,31 @@ State :: struct {
     RecolorShader: texture.RecolorShader,
 }
 
+DatabaseState :: struct {
+    Settings: FlagDatabase,
+    BufferName: [128]byte,
+    BufferNameLength: int,
+    BufferPath: [512]byte,
+    BufferPathLength: int,
+    NamedColors: [dynamic]pdx.FlagColorVariant,
+    Patterns: [dynamic]pdx.FlagTexture,
+    ColoredEmblems: [dynamic]pdx.FlagTexture,
+    TexturedEmblems: [dynamic]pdx.FlagTexture,
+}
+
+ImageRequest :: struct {
+    Identifier: int,
+    Path: string,
+}
+
+TextureRequest :: struct {
+    Identifier: int,
+    Path: string,
+    Image: rl.Image,
+}
+
+state := State{}
+
 setupState :: proc() {
     state.Databases = make([dynamic]DatabaseState)
     state.RenderTextureCache = make(map[int]rl.Texture2D)
@@ -58,7 +83,7 @@ setupState :: proc() {
         fmt.eprintfln("Could not create ImageLoadChannel: %v", imErr)
     }
     state.ImageLoadChannel = imageChannel
-    textureChannel, txErr := chan.create(chan.Chan(TextureRequest), 64, context.allocator)
+    textureChannel, txErr := chan.create(chan.Chan(TextureRequest), 32, context.allocator)
     if txErr != nil {
         fmt.eprintfln("Could not create TextureLoadChannel: %v", txErr)
     }
@@ -75,7 +100,7 @@ destroyState :: proc() {
         time.sleep(10)
     }
     for _, index in state.Databases {
-        destroyNamedColors(&state.Databases[index])
+        DestroyDatabase(&state.Databases[index])
     }
     for key in state.RenderTextureCache {
         rl.UnloadTexture(state.RenderTextureCache[key])
@@ -129,28 +154,6 @@ createTextureLoadingThread :: proc() -> ^thread.Thread {
     }
 }
 
-state := State{}
-
-DatabaseState :: struct {
-    Settings: FlagDatabase,
-    BufferName: [128]byte,
-    BufferNameLength: int,
-    BufferPath: [512]byte,
-    BufferPathLength: int,
-    NamedColors: [dynamic]pdx.FlagColorVariant,
-}
-
-ImageRequest :: struct {
-    Identifier: int,
-    Path: string,
-}
-
-TextureRequest :: struct {
-    Identifier: int,
-    Path: string,
-    Image: rl.Image,
-}
-
 handleTextureRequests :: proc() {
     for {
         request, ok := chan.try_recv(state.TextureLoadChannel)
@@ -193,7 +196,8 @@ main :: proc() {
     loadSettings()
     defer destroySettings()
 
-    rl.SetConfigFlags({.WINDOW_RESIZABLE})
+    rl.SetTraceLogLevel(.WARNING)
+    rl.SetConfigFlags({ .WINDOW_RESIZABLE })
     rl.InitWindow(1280, 800, "PDX Flag Editor")
     defer rl.CloseWindow()
 
