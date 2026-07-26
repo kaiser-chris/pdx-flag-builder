@@ -68,8 +68,9 @@ loadNamedColors :: proc(database: ^DatabaseState) {
                     fmt.eprintfln("invalid named rgb color: %s = ( %s %s %s )", name, capture.groups[3], capture.groups[4], capture.groups[5])
                     continue
                 }
+                persistantName := strings.clone(name)
                 color := new_clone(pdx.FlagColorRgb{
-                    Name = strings.clone(name),
+                    Name = persistantName,
                     R = u8(red),
                     G = u8(green),
                     B = u8(blue),
@@ -83,6 +84,7 @@ loadNamedColors :: proc(database: ^DatabaseState) {
                 }
 
                 append(&database.NamedColors, color)
+                state.NamedColors[persistantName] = color
                 continue
             }
 
@@ -96,13 +98,15 @@ loadNamedColors :: proc(database: ^DatabaseState) {
                     continue
                 }
 
+                persistantName := strings.clone(name)
                 color := new_clone(pdx.FlagColorHsv{
-                    Name = strings.clone(name),
-                    H = hue,
-                    S = saturation,
-                    V = value,
+                    Name = persistantName,
+                    H = hue * 360,
+                    S = saturation * 100,
+                    V = value * 100,
                 })
                 append(&database.NamedColors, color)
+                state.NamedColors[persistantName] = color
                 continue
             }
 
@@ -116,13 +120,15 @@ loadNamedColors :: proc(database: ^DatabaseState) {
                     continue
                 }
 
+                persistantName := strings.clone(name)
                 color := new_clone(pdx.FlagColorHsv{
-                    Name = strings.clone(name),
-                    H = f32(hue) / 360,
-                    S = f32(saturation) / 360,
-                    V = f32(value) / 360,
+                    Name = persistantName,
+                    H = f32(hue),
+                    S = f32(saturation),
+                    V = f32(value),
                 })
                 append(&database.NamedColors, color)
+                state.NamedColors[persistantName] = color
                 continue
             }
 
@@ -136,7 +142,15 @@ destroyNamedColors :: proc(database: ^DatabaseState) {
     if database.NamedColors == nil {
         return
     }
-    for _, index in database.NamedColors {
+    for color, index in database.NamedColors {
+        switch type in color {
+        case ^pdx.FlagColorHsv:
+            delete_key(&state.NamedColors, type.Name)
+        case ^pdx.FlagColorRgb:
+            delete_key(&state.NamedColors, type.Name)
+        case ^pdx.FlagColorNamed:
+            delete_key(&state.NamedColors, type.Name)
+        }
         pdx.DestroyColor(database.NamedColors[index])
     }
     delete(database.NamedColors)

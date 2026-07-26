@@ -42,9 +42,11 @@ State :: struct {
     ButtonIdentifier: i32,
     NextTextureIdentifier: int,
     ColorPickerColor: pdx.FlagColorVariant,
+    InstanceEditorInstance: ^pdx.LayerInstance,
     SelectedFlagElement: SelectedFlagElement,
     Done: bool,
     RecolorShader: texture.RecolorShader,
+    NamedColors: map[string]pdx.FlagColorVariant,
 }
 
 DatabaseState :: struct {
@@ -77,6 +79,7 @@ setupState :: proc() {
     state.RenderTextureCache = make(map[int]rl.Texture2D)
     state.RenderTextureMap = make(map[string]rl.Texture2D)
     state.GuiTextureCache = make(map[string]rl.Texture2D)
+    state.NamedColors = make(map[string]pdx.FlagColorVariant)
     state.TextureMap = make(map[string]int)
     imageChannel, imErr := chan.create(chan.Chan(ImageRequest), 2048, context.allocator)
     if imErr != nil {
@@ -89,10 +92,11 @@ setupState :: proc() {
     }
     state.TextureLoadChannel = textureChannel
     state.SidebarOpen = true
-    state.SidebarWidth = 300
+    state.SidebarWidth = 350
     state.Flag = pdx.CreateFlag()
     state.NextTextureIdentifier = 1
     state.TextureLoadingThread = createTextureLoadingThread()
+    state.SelectedFlagElement = &state.Flag
 }
 destroyState :: proc() {
     state.Done = true
@@ -122,6 +126,7 @@ destroyState :: proc() {
     pdx.DestroyFlag(state.Flag)
     thread.destroy(state.TextureLoadingThread)
     rl.UnloadShader(state.RecolorShader.Shader)
+    delete(state.NamedColors)
 }
 
 createTextureLoadingThread :: proc() -> ^thread.Thread {
@@ -412,17 +417,22 @@ isFlagRect :: proc(textureId: mu.Color) -> bool {
 
 guranteeBounds :: proc(ctx: ^mu.Context) {
     window := mu.get_current_container(ctx)
+    sidebarWidth := state.SidebarWidth + SIDEBAR_HANDLE_WIDTH
+
     if (window.rect.h + TOOLBAR_HEIGHT) > rl.GetScreenHeight() {
         window.rect.h = rl.GetScreenHeight() - TOOLBAR_HEIGHT
     }
-    if window.rect.w > rl.GetScreenWidth() {
-        window.rect.w = rl.GetScreenWidth()
+    if (window.rect.w + sidebarWidth) > rl.GetScreenWidth() {
+        window.rect.w = rl.GetScreenWidth() - sidebarWidth
     }
     if (window.rect.x + window.rect.w) > rl.GetScreenWidth() {
         window.rect.x = rl.GetScreenWidth() - window.rect.w
     }
     if (window.rect.y + window.rect.h) > rl.GetScreenHeight() {
         window.rect.y = rl.GetScreenHeight() - window.rect.h
+    }
+    if window.rect.x > (rl.GetScreenWidth() - sidebarWidth - window.rect.w - 2) {
+        window.rect.x = rl.GetScreenWidth() - sidebarWidth - window.rect.w - 2
     }
     if window.rect.x < 0 {
         window.rect.x = 0
@@ -504,6 +514,8 @@ drawFlagTexture :: proc(ctx: ^mu.Context, width: i32 = 0, height: i32 = 0) {
     }
 
     rect := mu.layout_next(ctx)
+    rect.x = rect.x - ctx.style.padding
+    rect.y = rect.y - ctx.style.padding
     if width != 0 {
         rect.w = width
     }

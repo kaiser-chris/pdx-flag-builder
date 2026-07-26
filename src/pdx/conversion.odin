@@ -56,13 +56,14 @@ hsvToRgb :: proc(
 ToRenderColor :: proc{
     RgbToRenderColor,
     HsvToRenderColor,
+    VariantToRenderColor,
 }
 
 HsvToRenderColor :: proc(color: ^FlagColorHsv) -> rl.Color {
     return hsvToRgb(
-        color.H * 360,
-        color.S,
-        color.V,
+        color.H,
+        color.S / 100,
+        color.V / 100,
     )
 }
 
@@ -73,4 +74,16 @@ RgbToRenderColor :: proc(color: ^FlagColorRgb) -> rl.Color {
         color.B,
         255,
     }
+}
+
+VariantToRenderColor :: proc(variant: FlagColorVariant) -> rl.Color {
+    switch color in variant {
+    case ^FlagColorRgb:
+        return RgbToRenderColor(color)
+    case ^FlagColorHsv:
+        return HsvToRenderColor(color)
+    case ^FlagColorNamed:
+        return rl.Color{}
+    }
+    return rl.Color{}
 }

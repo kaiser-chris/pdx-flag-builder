@@ -13,12 +13,13 @@ WINDOM_TOOLBAR: string: "Toolbar"
 WINDOM_SETTINGS: string: "Settings"
 WINDOM_DATABASE: string: "Database"
 WINDOM_FLAG: string: "Layers"
-WINDOM_SELECTED: string: "Selected Element"
+WINDOM_SELECTED: string: "Selected Layer"
 WINDOM_SIDEBAR: string: "Sidebar"
 WINDOM_COLOR_PICKER: string: "Color Picker"
+WINDOM_INSTANCE_EDITOR: string: "Instance Editor"
 
 SIDEBAR_HANDLE_WIDTH:i32: 10
-SIDEBAR_MIN_WIDTH: i32: 200
+SIDEBAR_MIN_WIDTH: i32: 350
 SIDEBAR_MAX_WIDTH: i32: 600
 TOOLBAR_HEIGHT: i32: 35
 FLAG_HEIGHT: i32: 512
@@ -65,41 +66,66 @@ renderGui :: proc(ctx: ^mu.Context) {
         if window != nil {
             window.open = true
         }
-        renderColorPicker(ctx)
+        switch color in state.ColorPickerColor {
+        case ^pdx.FlagColorRgb:
+            renderAbsoluteColorPicker(ctx)
+        case ^pdx.FlagColorHsv:
+            renderAbsoluteColorPicker(ctx)
+        case ^pdx.FlagColorNamed:
+            renderNamedColorPicker(ctx)
+        }
+    }
+
+    if state.InstanceEditorInstance != nil {
+        window := mu.get_container(ctx, WINDOM_INSTANCE_EDITOR)
+        if window != nil {
+            window.open = true
+        }
+        renderInstanceEditor(ctx)
     }
 
     rl.SetWindowMinSize(FLAG_WIDTH + state.SidebarWidth, FLAG_HEIGHT + TOOLBAR_HEIGHT)
 }
 
-renderColorPicker :: proc(ctx: ^mu.Context) {
+renderAbsoluteColorPicker :: proc(ctx: ^mu.Context) {
     @static red: u8
+    @static redBuf: [16]byte
+    @static redBufLen: int
     @static green: u8
+    @static greenBuf: [16]byte
+    @static greenBufLen: int
     @static blue: u8
+    @static blueBuf: [16]byte
+    @static blueBufLen: int
 
     color := mu.Color{ red, green, blue, 255 }
     width: i32 = 400
-    height: i32 = 200
-    x: i32 = (rl.GetScreenWidth() - width) / 2
+    height: i32 = 150
+    x: i32 = (rl.GetScreenWidth() - width - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH) / 2
     y: i32 = (rl.GetScreenHeight() - height) / 2
 
-    if mu.window(ctx, WINDOM_COLOR_PICKER, { x, y, width, height }) {
+    if mu.window(ctx, WINDOM_COLOR_PICKER, { x, y, width, height }, { .NO_RESIZE }) {
         guranteeBounds(ctx)
+        window := mu.get_current_container(ctx)
+        window.rect.w = width
+        window.rect.h = height
+
         mu.layout_row(ctx, {-78, -1}, 68)
         mu.layout_begin_column(ctx)
         {
             mu.layout_row(ctx, {80, -1}, 0)
             switch color in state.ColorPickerColor {
             case ^pdx.FlagColorRgb:
-                mu.label(ctx, "Red:");   ui.ColorSlider(ctx, &color.R, 0, 255)
-                mu.label(ctx, "Green:"); ui.ColorSlider(ctx, &color.G, 0, 255)
-                mu.label(ctx, "Blue:");  ui.ColorSlider(ctx, &color.B, 0, 255)
+                mu.label(ctx, "Red:"); ui.Slider(ctx, &color.R, 0, 255)
+                mu.label(ctx, "Green:"); ui.Slider(ctx, &color.G, 0, 255)
+                mu.label(ctx, "Blue:"); ui.Slider(ctx, &color.B, 0, 255)
                 red = color.R
                 green = color.G
                 blue = color.B
             case ^pdx.FlagColorHsv:
-                mu.label(ctx, "Hue:");   ui.ColorSlider(ctx, &color.H, 0, 1)
-                mu.label(ctx, "Saturation:"); ui.ColorSlider(ctx, &color.S, 0, 1)
-                mu.label(ctx, "Value:");  ui.ColorSlider(ctx, &color.V, 0, 1)
+                mu.label(ctx, "Hue:"); ui.Slider(ctx, &color.H, 0, 360)
+                mu.label(ctx, "Saturation:"); ui.Slider(ctx, &color.S, 0, 100)
+                mu.label(ctx, "Value:"); ui.Slider(ctx, &color.V, 0, 100)
                 rgb := pdx.ToRenderColor(color)
                 red = rgb[0]
                 green = rgb[1]
@@ -114,9 +140,35 @@ renderColorPicker :: proc(ctx: ^mu.Context) {
         mu.draw_box(ctx, mu.expand_rect(r, 1), ctx.style.colors[.BORDER])
         mu.draw_control_text(ctx, fmt.tprintf("#%02x%02x%02x", red, green, blue), r, .TEXT, {.ALIGN_CENTER})
 
-        mu.layout_row(ctx, {-1, -1}, 20)
-        if .SUBMIT in mu.button(ctx, "Select Color") {
 
+        switch color in state.ColorPickerColor {
+        case ^pdx.FlagColorRgb:
+            mu.layout_row(ctx, {80, -1}, 20)
+            mu.label(ctx, "Edit:")
+            mu.layout_begin_column(ctx)
+            {
+                mu.layout_row_items(ctx, 3, 20)
+                ui.NumberTextbox(ctx, &color.R, &redBuf, &redBufLen, 255, 0)
+                ui.NumberTextbox(ctx, &color.G, &greenBuf, &greenBufLen, 255, 0)
+                ui.NumberTextbox(ctx, &color.B, &blueBuf, &blueBufLen, 255, 0)
+            }
+            mu.layout_end_column(ctx)
+        case ^pdx.FlagColorHsv:
+            mu.layout_row(ctx, {80, -1}, 20)
+            mu.label(ctx, "Edit:")
+            mu.layout_begin_column(ctx)
+            {
+                mu.layout_row_items(ctx, 3, 20)
+                ui.NumberTextbox(ctx, &color.H, &redBuf, &redBufLen, 360, 0)
+                ui.NumberTextbox(ctx, &color.S, &greenBuf, &greenBufLen, 100, 0)
+                ui.NumberTextbox(ctx, &color.V, &blueBuf, &blueBufLen, 100, 0)
+                rgb := pdx.ToRenderColor(color)
+                red = rgb[0]
+                green = rgb[1]
+                blue = rgb[2]
+            }
+            mu.layout_end_column(ctx)
+        case ^pdx.FlagColorNamed:
         }
     }
 
@@ -125,6 +177,113 @@ renderColorPicker :: proc(ctx: ^mu.Context) {
 
     if state.ColorPickerColor != nil && !is_open {
         state.ColorPickerColor = nil
+    }
+}
+renderNamedColorPicker :: proc(ctx: ^mu.Context) {
+    width: i32 = 300
+    height: i32 = 500
+    x: i32 = (rl.GetScreenWidth() - width - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH) / 2
+    y: i32 = (rl.GetScreenHeight() - height) / 2
+
+    if mu.window(ctx, WINDOM_COLOR_PICKER, { x, y, width, height }, { .NO_RESIZE }) {
+        guranteeBounds(ctx)
+        window := mu.get_current_container(ctx)
+        window.rect.w = width
+        window.rect.h = height
+
+        for database in state.Databases {
+            ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+            if .ACTIVE in mu.header(ctx, database.Settings.Name) {
+                for variant in database.NamedColors {
+                    name: string
+                    rectColor: mu.Color
+                    switch color in variant {
+                    case ^pdx.FlagColorRgb:
+                        name = color.Name
+                        rectColor = mu.Color{ color.R, color.G, color.B, 255 }
+                    case ^pdx.FlagColorHsv:
+                        name = color.Name
+                        tmp := pdx.ToRenderColor(color)
+                        rectColor = mu.Color{ tmp[0], tmp[1], tmp[2], 255 }
+                    case ^pdx.FlagColorNamed:
+                        fmt.eprintfln("Named color is referencing another named color")
+                    }
+
+                    mu.layout_row(ctx, { -1, -1 }, 20)
+                    row := mu.layout_next(ctx)
+                    row.x = row.x + ctx.style.indent
+                    row.w = row.w - ctx.style.indent
+
+                    colorRect := mu.Rect{
+                        x = row.x,
+                        y = row.y,
+                        w = row.h,
+                        h = row.h,
+                    }
+                    mu.draw_rect(ctx, colorRect, rectColor)
+
+                    buttonWidth: i32 = 60
+                    buttonRect := mu.Rect{
+                        x = row.x + row.w - buttonWidth,
+                        y = row.y,
+                        w = buttonWidth,
+                        h = row.h,
+                    }
+
+                    mu.layout_set_next(ctx, buttonRect, false)
+                    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+                    if .SUBMIT in mu.button(ctx, "Select") {
+                        switch color in state.ColorPickerColor {
+                        case ^pdx.FlagColorRgb:
+                            fmt.eprintfln("RGB color does not support named color")
+                        case ^pdx.FlagColorHsv:
+                            fmt.eprintfln("HSV color does not support named color")
+                        case ^pdx.FlagColorNamed:
+                            delete(color.NamedColor)
+                            color.NamedColor = strings.clone(name)
+                        }
+                    }
+                    mu.pop_id(ctx)
+
+                    textRect := mu.Rect{
+                        x = row.x + colorRect.w + ctx.style.spacing,
+                        y = row.y,
+                        w = row.w - colorRect.w - ctx.style.spacing,
+                        h = row.h,
+                    }
+                    mu.draw_control_text(ctx, name, textRect, .TEXT)
+                }
+            }
+            mu.pop_id(ctx)
+        }
+    }
+
+    cnt := mu.get_container(ctx, WINDOM_COLOR_PICKER)
+    is_open := cnt != nil && cnt.open != false
+
+    if state.ColorPickerColor != nil && !is_open {
+        state.ColorPickerColor = nil
+    }
+}
+
+renderInstanceEditor :: proc(ctx: ^mu.Context) {
+    width: i32 = 200
+    height: i32 = 400
+    x: i32 = (rl.GetScreenWidth() - width - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH) / 2
+    y: i32 = (rl.GetScreenHeight() - height) / 2
+
+    if mu.window(ctx, WINDOM_INSTANCE_EDITOR, { x, y, width, height }) {
+        guranteeBounds(ctx)
+        window := mu.get_current_container(ctx)
+        window.rect.w = width
+        window.rect.h = height
+    }
+
+    cnt := mu.get_container(ctx, WINDOM_INSTANCE_EDITOR)
+    is_open := cnt != nil && cnt.open != false
+
+    if state.InstanceEditorInstance != nil && !is_open {
+        state.InstanceEditorInstance = nil
     }
 }
 
@@ -180,6 +339,8 @@ renderFlagPreview :: proc(ctx: ^mu.Context) {
         window := mu.get_current_container(ctx)
         window.rect = destination
         target := mu.Rect{x = 0, y = 0, w = FLAG_WIDTH, h = FLAG_HEIGHT}
+        mu.draw_rect(ctx, destination, mu.Color{100, 100, 100, 255})
+        mu.draw_box(ctx, destination, ctx.style.colors[.BORDER])
         mu.layout_set_next(ctx, target, true)
         drawFlagTexture(ctx)
     }
@@ -212,6 +373,7 @@ renderFlagPreviewTexture :: proc(cmd: ^mu.Command_Rect) {
         case ^pdx.FlagLayerColoredEmblem:
             renderColoredEmblemInstances(cmd, layer)
         case ^pdx.FlagLayerTexturedEmblem:
+            renderTexturedEmblemInstances(cmd, layer)
         }
     }
 }
@@ -287,7 +449,15 @@ fillColorMapping :: proc(mappings: ^[dynamic]texture.ColorRecolor, variant: pdx.
             append(mappings, mapping)
         }
     case ^pdx.FlagColorNamed:
-        //TODO
+        retrieve, exists := state.NamedColors[color.NamedColor]
+        if !exists {
+            return
+        }
+        targetColor := pdx.ToRenderColor(retrieve)
+        mapping, ok := checkColorMapping(color.Name, targetColor, sourceColors)
+        if ok {
+            append(mappings, mapping)
+        }
     }
 }
 
@@ -347,9 +517,9 @@ renderSettings :: proc(ctx: ^mu.Context) {
             mu.layout_begin_column(ctx)
             {
                 mu.layout_row(ctx, {46, -1}, 0)
-                mu.label(ctx, "Red:");   ui.ColorSlider(ctx, &state.Settings.BackgroundColor.r, 0, 255)
-                mu.label(ctx, "Green:"); ui.ColorSlider(ctx, &state.Settings.BackgroundColor.g, 0, 255)
-                mu.label(ctx, "Blue:");  ui.ColorSlider(ctx, &state.Settings.BackgroundColor.b, 0, 255)
+                mu.label(ctx, "Red:");   ui.Slider(ctx, &state.Settings.BackgroundColor.r, 0, 255)
+                mu.label(ctx, "Green:"); ui.Slider(ctx, &state.Settings.BackgroundColor.g, 0, 255)
+                mu.label(ctx, "Blue:");  ui.Slider(ctx, &state.Settings.BackgroundColor.b, 0, 255)
             }
             mu.layout_end_column(ctx)
 
@@ -376,17 +546,18 @@ renderDatabase :: proc(ctx: ^mu.Context) {
         mu.text(ctx, "Search:")
         @static searchBuffer: [128]byte
         @static searchBufferLength: int
+        @static search: string
         mu.layout_row(ctx, {-1, -1}, 20)
         if .CHANGE in mu.textbox(ctx, searchBuffer[:], &searchBufferLength) {
-            delete(state.DatabaseSearch)
-            state.DatabaseSearch = strings.to_lower(string(searchBuffer[:searchBufferLength]))
+            delete(search)
+            search = strings.to_lower(string(searchBuffer[:searchBufferLength]))
         }
         mu.layout_row(ctx, {-1, -1}, 5)
         r := mu.layout_next(ctx)
         mu.draw_rect(ctx, r, ctx.style.colors[.WINDOW_BG])
 
         options: mu.Options
-        if state.DatabaseSearch != "" {
+        if search != "" {
             options = { .EXPANDED }
         }
 
@@ -396,7 +567,11 @@ renderDatabase :: proc(ctx: ^mu.Context) {
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
                 if .ACTIVE in mu.treenode(ctx, "Patterns", options) {
                     for texture in database.Patterns {
-                        renderDatabaseItem(ctx, texture, pdx.FOLDER_PATTERNS)
+                        name := strings.to_lower(texture.Name)
+                        defer delete(name)
+                        if search == "" || strings.contains(name, search) {
+                            renderDatabaseItem(ctx, texture, pdx.FOLDER_PATTERNS)
+                        }
                     }
                     if len(database.Patterns) == 0 {
                         mu.layout_row(ctx, {-1, -1}, 50)
@@ -409,7 +584,11 @@ renderDatabase :: proc(ctx: ^mu.Context) {
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
                 if .ACTIVE in mu.treenode(ctx, "Colored Emblems", options) {
                     for texture in database.ColoredEmblems {
-                        renderDatabaseItem(ctx, texture, pdx.FOLDER_COLORED_EMBLEMS)
+                        name := strings.to_lower(texture.Name)
+                        defer delete(name)
+                        if search == "" || strings.contains(name, search) {
+                            renderDatabaseItem(ctx, texture, pdx.FOLDER_COLORED_EMBLEMS)
+                        }
                     }
                     if len(database.Patterns) == 0 {
                         mu.layout_row(ctx, {-1, -1}, 50)
@@ -422,7 +601,11 @@ renderDatabase :: proc(ctx: ^mu.Context) {
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
                 if .ACTIVE in mu.treenode(ctx, "Textured Emblems", options) {
                     for texture in database.TexturedEmblems {
-                        renderDatabaseItem(ctx, texture, pdx.FOLDER_TEXTURED_EMBLEMS)
+                        name := strings.to_lower(texture.Name)
+                        defer delete(name)
+                        if search == "" || strings.contains(name, search) {
+                            renderDatabaseItem(ctx, texture, pdx.FOLDER_TEXTURED_EMBLEMS)
+                        }
                     }
                     if len(database.Patterns) == 0 {
                         mu.layout_row(ctx, {-1, -1}, 50)
@@ -656,7 +839,8 @@ renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
     for variant, index in flag.Colors {
         switch color in variant {
         case ^pdx.FlagColorNamed:
-            ui.DrawAttributeRow(ctx, color.Name, color)
+            buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, color.Name, color, state.NamedColors)
+            renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
         case ^pdx.FlagColorRgb:
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, color.Name, color)
             renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
@@ -675,7 +859,8 @@ renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagL
     for variant, index in layer.Colors {
         switch color in variant {
         case ^pdx.FlagColorNamed:
-            ui.DrawAttributeRow(ctx, color.Name, color)
+            buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, color.Name, color, state.NamedColors)
+            renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
         case ^pdx.FlagColorRgb:
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, color.Name, color)
             renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
@@ -715,6 +900,12 @@ renderSelectedLayerInstance :: proc(ctx: ^mu.Context, instance: ^pdx.LayerInstan
     ui.DrawAttributeRow(ctx, "Scale Height", fmt.tprintf("%.2f", instance.Scale.Y))
     ui.DrawAttributeRow(ctx, "Position X", fmt.tprintf("%.2f", instance.Position.X))
     ui.DrawAttributeRow(ctx, "Position Y", fmt.tprintf("%.2f", instance.Position.Y))
+    mu.layout_row(ctx, { -1, -1 }, 20)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in mu.button(ctx, "Edit insance") {
+        state.InstanceEditorInstance = instance
+    }
+    mu.pop_id(ctx)
 }
 
 renderColorButtons :: proc(ctx: ^mu.Context, color: pdx.FlagColorVariant, index: int, edit, delete: mu.Rect) {
@@ -737,54 +928,36 @@ renderColorButtons :: proc(ctx: ^mu.Context, color: pdx.FlagColorVariant, index:
 }
 
 renderAddColorButtons :: proc(ctx: ^mu.Context, list: ^[dynamic]pdx.FlagColorVariant) {
-    mu.layout_row_items(ctx, 1, 20)
-    mu.layout_begin_column(ctx)
-    {
-        mu.layout_row_items(ctx, 3, 20)
-        mu.layout_begin_column(ctx)
-        {
-            mu.layout_row(ctx, {-1,-1}, 20)
-            ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-            if .SUBMIT in mu.button(ctx, "Add RGB color") {
-                colorName := pdx.GetNextFreeColor(list[:])
-                if colorName != "" {
-                    color := pdx.CreateColorRgb(colorName, 0, 0, 0)
-                    append(list, color)
-                }
-            }
-            mu.pop_id(ctx)
+    mu.layout_row(ctx, {-1,-1}, 20)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in mu.button(ctx, "Add RGB color") {
+        colorName := pdx.GetNextFreeColor(list[:])
+        if colorName != "" {
+            color := pdx.CreateColorRgb(colorName, 0, 0, 0)
+            append(list, color)
         }
-        mu.layout_end_column(ctx)
-        mu.layout_begin_column(ctx)
-        {
-            mu.layout_row(ctx, {-1,-1}, 20)
-            ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-            if .SUBMIT in mu.button(ctx, "Add HSV color") {
-                colorName := pdx.GetNextFreeColor(list[:])
-                if colorName != "" {
-                    color := pdx.CreateColorHsv(colorName, 0, 0, 0)
-                    append(list, color)
-                }
-            }
-            mu.pop_id(ctx)
-        }
-        mu.layout_end_column(ctx)
-        mu.layout_begin_column(ctx)
-        {
-            mu.layout_row(ctx, {-1,-1}, 20)
-            ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-            if .SUBMIT in mu.button(ctx, "Add Named color") {
-                colorName := pdx.GetNextFreeColor(list[:])
-                if colorName != "" {
-                    color := pdx.CreateColorNamed(colorName, "")
-                    append(list, color)
-                }
-            }
-            mu.pop_id(ctx)
-        }
-        mu.layout_end_column(ctx)
     }
-    mu.layout_end_column(ctx)
+    mu.pop_id(ctx)
+    mu.layout_row(ctx, {-1,-1}, 20)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in mu.button(ctx, "Add HSV color") {
+        colorName := pdx.GetNextFreeColor(list[:])
+        if colorName != "" {
+            color := pdx.CreateColorHsv(colorName, 0, 0, 0)
+            append(list, color)
+        }
+    }
+    mu.pop_id(ctx)
+    mu.layout_row(ctx, {-1,-1}, 20)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in mu.button(ctx, "Add Named color") {
+        colorName := pdx.GetNextFreeColor(list[:])
+        if colorName != "" {
+            color := pdx.CreateColorNamed(colorName, "")
+            append(list, color)
+        }
+    }
+    mu.pop_id(ctx)
 }
 
 removeLayer :: proc(index: int){

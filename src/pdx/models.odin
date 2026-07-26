@@ -17,8 +17,8 @@ CreateFlag :: proc() -> Flag {
     // TODO: Remove this
     testColor1 := CreateColorRgb(COLOR_NAMES[0], 165, 255, 177)
     testColor2 := CreateColorRgb(COLOR_NAMES[1], 255, 117, 255)
-    testColor3 := CreateColorRgb(COLOR_NAMES[2], 109, 172, 255)
-    testColor4 := CreateColorHsv(COLOR_NAMES[3], 1, 0.69, 1)
+    testColor3 := CreateColorNamed(COLOR_NAMES[2], "tokugawa_green")
+    testColor4 := CreateColorHsv(COLOR_NAMES[3], 360, 69, 100)
     append(&flag.Colors, testColor1)
     append(&flag.Colors, testColor2)
     append(&flag.Colors, testColor3)
