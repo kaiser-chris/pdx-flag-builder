@@ -9,7 +9,7 @@ import "pdx"
 
 destroyNamedColors :: proc(database: ^DatabaseState) {
     for _, index in database.NamedColors {
-        pdx.destroyColor(database.NamedColors[index])
+        pdx.DestroyColor(database.NamedColors[index])
     }
     delete(database.NamedColors)
 }

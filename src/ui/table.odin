@@ -1,10 +1,17 @@
 package ui
 
 import mu "vendor:microui"
-import fb "../pdx"
+import pdx "../pdx"
+import fmt "core:fmt"
 
+ButtonProc :: #type proc(index: int)
 
-drawTextAttributeRow :: proc(ctx: ^mu.Context, name, value: string, nameSize: f32 = 0.3) {
+DrawAttributeRow :: proc{
+    drawTextAttributeRow,
+    drawColorAttributeRow,
+}
+
+setupAttributeRow :: proc(ctx: ^mu.Context, nameSize: f32) -> mu.Rect {
     mu.layout_row(ctx, { -1, -1 }, 20)
     window := mu.get_current_container(ctx)
 
@@ -27,6 +34,12 @@ drawTextAttributeRow :: proc(ctx: ^mu.Context, name, value: string, nameSize: f3
         h = rowRect.h,
     }
     mu.draw_rect(ctx, dividerRect, ctx.style.colors[.BORDER])
+
+    return rowRect
+}
+
+drawTextAttributeRow :: proc(ctx: ^mu.Context, name, value: string, nameSize: f32 = 0.3) {
+    rowRect := setupAttributeRow(ctx, nameSize)
 
     nameRect := mu.Rect{
         x = rowRect.x + ctx.style.padding,
@@ -52,29 +65,13 @@ drawTextAttributeRow :: proc(ctx: ^mu.Context, name, value: string, nameSize: f3
     layout.next_row += ctx.style.spacing
 }
 
-drawNamedColorAttributeRow :: proc(ctx: ^mu.Context, name: string, color: ^fb.FlagColorNamed, nameSize: f32 = 0.3) {
-    mu.layout_row(ctx, { -1, -1 }, 20)
-    window := mu.get_current_container(ctx)
-
-    originalRect := mu.layout_next(ctx)
-    rowRect := mu.Rect{
-        x = window.rect.x,
-        y = originalRect.y - ctx.style.padding,
-        w = window.rect.w,
-        h = originalRect.h + (ctx.style.padding * 2),
-    }
-    mu.layout_set_next(ctx, rowRect, false)
-    mu.layout_begin_column(ctx)
-    mu.draw_rect(ctx, rowRect, ctx.style.colors[.SELECTION_BG])
-    mu.draw_box(ctx, rowRect, ctx.style.colors[.BORDER])
-
-    dividerRect := mu.Rect{
-        x = rowRect.x + i32(f32(rowRect.w) * nameSize),
-        y = rowRect.y,
-        w = 1,
-        h = rowRect.h,
-    }
-    mu.draw_rect(ctx, dividerRect, ctx.style.colors[.BORDER])
+drawColorAttributeRow :: proc(
+    ctx: ^mu.Context,
+    name: string,
+    variant: pdx.FlagColorVariant,
+    nameSize: f32 = 0.3
+) -> (mu.Rect, mu.Rect) {
+    rowRect := setupAttributeRow(ctx, nameSize)
 
     nameRect := mu.Rect{
         x = rowRect.x + ctx.style.padding,
@@ -92,10 +89,54 @@ drawNamedColorAttributeRow :: proc(ctx: ^mu.Context, name: string, color: ^fb.Fl
 
     mu.draw_control_text(ctx, name, nameRect, .TEXT, {})
 
-    mu.draw_control_text(ctx, color.NamedColor, valueRect, .TEXT, {})
+    rgbColor: mu.Color
+    colorText: string
+    switch color in variant {
+    case ^pdx.FlagColorRgb:
+        colorText = fmt.tprintf("RGB ( %i %i %i )", color.R, color.G, color.B)
+        rgbColor = mu.Color{ color.R, color.G, color.B, 255 }
+    case ^pdx.FlagColorHsv:
+        colorText = fmt.tprintf("HSV ( %.2f %.2f %.2f )", color.H, color.S, color.V)
+        tmp := pdx.ToRenderColor(color)
+        rgbColor = mu.Color{ tmp[0], tmp[1], tmp[2], 255 }
+    case ^pdx.FlagColorNamed:
+        colorText = fmt.tprintf("Named = %s", color.NamedColor)
+        //TODO: Implement color preview
+    }
+
+    colorPreviewRect := mu.Rect{
+        x = valueRect.x + ctx.style.spacing,
+        y = valueRect.y + ctx.style.spacing,
+        h = valueRect.h - (2 * ctx.style.spacing),
+        w = valueRect.h - (2 * ctx.style.spacing),
+    }
+
+    buttonEditRect := mu.Rect{
+        x = valueRect.x + valueRect.w - 25 - ctx.style.padding - ctx.style.spacing,
+        y = valueRect.y,
+        h = valueRect.h,
+        w = 25,
+    }
+    buttonDeleteRect := mu.Rect{
+        x = buttonEditRect.x - 25 - ctx.style.spacing,
+        y = valueRect.y,
+        h = valueRect.h,
+        w = 25,
+    }
+
+    colorTextRect := mu.Rect{
+        x = colorPreviewRect.x + colorPreviewRect.w + ctx.style.spacing,
+        y = valueRect.y,
+        h = valueRect.h,
+        w = buttonDeleteRect.x - ctx.style.spacing - (colorPreviewRect.x + colorPreviewRect.w + ctx.style.spacing),
+    }
+    mu.draw_control_text(ctx, colorText, colorTextRect, .TEXT, {.ALIGN_CENTER})
+    mu.draw_rect(ctx, colorPreviewRect, rgbColor)
     mu.layout_end_column(ctx)
 
     layout := mu.get_layout(ctx)
     layout.position.y += ctx.style.spacing
     layout.next_row += ctx.style.spacing
+
+    return buttonEditRect, buttonDeleteRect
 }

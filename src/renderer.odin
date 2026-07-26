@@ -19,10 +19,6 @@ TEXTURE_RECT_IDENTIFIER: u8: 1
 TEXTURE_RECT_IDENTIFIER_TRANSPARENCY: u8: 2
 TEXTURE_RECT_IDENTIFIER_FLAG: u8: 3
 
-PATTERN_COLOR_1 :: rl.Color{255, 0, 0, 255}
-PATTERN_COLOR_2 :: rl.Color{255, 255, 0, 255}
-PATTERN_COLOR_3 :: rl.Color{255, 255, 255, 255}
-
 State :: struct {
     Settings: Settings,
     Databases: [dynamic]DatabaseState,
@@ -45,6 +41,7 @@ State :: struct {
     Flag: pdx.Flag,
     ButtonIdentifier: i32,
     NextTextureIdentifier: int,
+    ColorPickerColor: pdx.FlagColorVariant,
     SelectedFlagElement: SelectedFlagElement,
     Done: bool,
     RecolorShader: texture.RecolorShader,
@@ -68,7 +65,7 @@ setupState :: proc() {
     state.TextureLoadChannel = textureChannel
     state.SidebarOpen = true
     state.SidebarWidth = 300
-    state.Flag = pdx.createFlag()
+    state.Flag = pdx.CreateFlag()
     state.NextTextureIdentifier = 1
     state.TextureLoadingThread = createTextureLoadingThread()
 }
@@ -97,7 +94,7 @@ destroyState :: proc() {
     delete(state.DatabaseSearch)
     chan.destroy(state.ImageLoadChannel)
     chan.destroy(state.TextureLoadChannel)
-    pdx.destroyFlag(state.Flag)
+    pdx.DestroyFlag(state.Flag)
     thread.destroy(state.TextureLoadingThread)
     rl.UnloadShader(state.RecolorShader.Shader)
 }
@@ -351,7 +348,7 @@ render :: proc(ctx: ^mu.Context) {
             case isTextureWithTransparencyRect(cmd.color):
                 renderTransparentTexture(cmd)
             case isFlagRect(cmd.color):
-                renderFlagTexture(cmd)
+                renderFlagPreviewTexture(cmd)
             case:
                 rl.DrawRectangle(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, transmute(rl.Color)cmd.color)
             }
@@ -429,17 +426,6 @@ guranteeBounds :: proc(ctx: ^mu.Context) {
     if window.rect.y < TOOLBAR_HEIGHT {
         window.rect.y = TOOLBAR_HEIGHT
     }
-}
-
-colorSlider :: proc(ctx: ^mu.Context, val: ^u8, lo, hi: u8) -> (res: mu.Result_Set) {
-    mu.push_id(ctx, uintptr(val))
-
-    @static tmp: mu.Real
-    tmp = mu.Real(val^)
-    res = mu.slider(ctx, &tmp, mu.Real(lo), mu.Real(hi), 0, "%.0f", {.ALIGN_CENTER})
-    val^ = u8(tmp)
-    mu.pop_id(ctx)
-    return
 }
 
 renderTexture :: proc(cmd: ^mu.Command_Rect) {
@@ -521,9 +507,4 @@ drawFlagTexture :: proc(ctx: ^mu.Context, width: i32 = 0, height: i32 = 0) {
         rect.h = height
     }
     mu.draw_rect(ctx, rect, magicColor)
-}
-
-setButtonIdentifier :: proc(ctx: ^mu.Context) {
-    mu.push_id(ctx, fmt.tprintf("%i", state.ButtonIdentifier))
-    state.ButtonIdentifier += 1
 }

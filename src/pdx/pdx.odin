@@ -3,6 +3,7 @@ package pdx
 import "core:text/regex"
 import "core:fmt"
 import "core:os"
+import rl "vendor:raylib"
 
 FOLDER_GFX: string: "gfx"
 FOLDER_COA: string: "coat_of_arms"
@@ -19,6 +20,24 @@ COLOR_TYPE_RGB: string: "rgb"
 COLOR_TYPE_HSV: string: "hsv"
 COLOR_TYPE_HSV360: string: "hsv360"
 
+PATTERN_REPLACE_COLORS: []rl.Color: {
+    rl.Color{255, 0, 0, 255},
+    rl.Color{255, 255, 0, 255},
+    rl.Color{255, 255, 255, 255},
+}
+
+COLOR_NAMES: []string: {
+    "color1",
+    "color2",
+    "color3",
+    "color4",
+    "color5",
+    "color6",
+    "color7",
+    "color8",
+    "color9",
+}
+
 regexNamedColor: regex.Regular_Expression
 
 setupParsing :: proc() {
@@ -33,130 +52,31 @@ destroyParsing :: proc() {
     regex.destroy(regexNamedColor)
 }
 
-Flag :: struct {
-    Pattern: FlagTexture,
-    Colors: [dynamic]FlagColorVariant,
-    Layers: [dynamic]FlagLayerVariant,
-}
-
-FlagTexture :: struct {
-    Name: string,
-    Path: string,
-}
-
-FlagColorVariant :: union {
-    ^FlagColorNamed,
-    ^FlagColorHsv,
-    ^FlagColorRgb,
-}
-
-FlagColor :: struct {
-    Variant: FlagColorVariant,
-    Name: string,
-}
-
-FlagColorNamed :: struct {
-    using color: FlagColor,
-    NamedColor: string,
-}
-
-FlagColorHsv :: struct {
-    using color: FlagColor,
-    H: f32,
-    S: f32,
-    V: f32,
-}
-
-FlagColorRgb :: struct {
-    using color: FlagColor,
-    R: u8,
-    G: u8,
-    B: u8,
-}
-
-FlagColorReference :: struct {
-    using Color: FlagColor,
-    Reference: FlagColor,
-}
-
-FlagLayerVariant :: union {
-    ^FlagLayerColoredEmblem,
-    ^FlagLayerTexturedEmblem,
-}
-
-FlagLayer :: struct {
-    Texture: FlagTexture,
-    Instances: [dynamic]LayerInstance,
-}
-
-FlagLayerColoredEmblem :: struct {
-    using Layer: FlagLayer,
-    Colors: [dynamic]FlagColorVariant,
-}
-
-FlagLayerTexturedEmblem :: struct {
-    using Layer: FlagLayer,
-}
-
-LayerVector :: struct {
-    X: f64,
-    Y: f64,
-}
-
-LayerInstance :: struct {
-    Rotation: i32,
-    Scale: LayerVector,
-    Position: LayerVector,
-}
-
-createFlag :: proc() -> Flag {
-    return Flag{
-        Colors = make([dynamic]FlagColorVariant),
-        Layers = make([dynamic]FlagLayerVariant),
-    }
-}
-destroyFlag :: proc(flag: Flag) {
-    destroyTexture(flag.Pattern)
-    for _, index in flag.Colors {
-        destroyColor(flag.Colors[index])
-    }
-    delete(flag.Colors)
-    for _, index in flag.Layers {
-        destroyLayer(flag.Layers[index])
-    }
-    delete(flag.Layers)
-}
-
-destroyColor :: proc(variant: FlagColorVariant) {
-    switch color in variant {
-    case ^FlagColorRgb:
-        delete(color.Name)
-        free(color)
-    case ^FlagColorHsv:
-        delete(color.Name)
-        free(color)
-    case ^FlagColorNamed:
-        delete(color.Name)
-        delete(color.NamedColor)
-        free(color)
-    }
-}
-
-destroyLayer :: proc(variant: FlagLayerVariant) {
-    switch layer in variant {
-    case ^FlagLayerColoredEmblem:
-        destroyTexture(layer.Texture)
-        for _, index in layer.Colors {
-            destroyColor(layer.Colors[index])
+GetNextFreeColor :: proc(colors: []FlagColorVariant) -> string {
+    for name in COLOR_NAMES {
+        found := false
+        for variant in colors {
+            switch color in variant {
+            case ^FlagColorNamed:
+                if color.Name == name {
+                    found = true
+                    break
+                }
+            case ^FlagColorRgb:
+                if color.Name == name {
+                    found = true
+                    break
+                }
+            case ^FlagColorHsv:
+                if color.Name == name {
+                    found = true
+                    break
+                }
+            }
         }
-        free(layer)
-    case ^FlagLayerTexturedEmblem:
-        destroyTexture(layer.Texture)
-        free(layer)
+        if !found {
+            return name
+        }
     }
-}
-
-destroyTexture :: proc(texture: FlagTexture) {
-    delete(texture.Name)
-    delete(texture.Path)
+    return ""
 }
