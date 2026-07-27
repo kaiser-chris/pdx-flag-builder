@@ -212,7 +212,7 @@ main :: proc() {
     }
     fmt.printfln("Loaded %i flags", len(flags))
     fmt.printfln("%v", flags)
-    state.Flag = flags[1]
+    state.Flag = flags[2]
     defer {
         for _, index in flags {
             if flags[index].Name != state.Flag.Name {

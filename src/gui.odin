@@ -76,7 +76,7 @@ renderGui :: proc(ctx: ^mu.Context) {
         case ^pdx.FlagColorNamed:
             renderNamedColorPicker(ctx)
         case ^pdx.FlagColorReference:
-            //TODO
+            renderReferenceColorPicker(ctx)
         }
     }
 
@@ -104,7 +104,7 @@ renderAbsoluteColorPicker :: proc(ctx: ^mu.Context) {
 
     color := mu.Color{ red, green, blue, 255 }
     width: i32 = 400
-    height: i32 = 150
+    height: i32 = 110
     x: i32 = (rl.GetScreenWidth() - width - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH) / 2
     y: i32 = (rl.GetScreenHeight() - height) / 2
 
@@ -117,19 +117,36 @@ renderAbsoluteColorPicker :: proc(ctx: ^mu.Context) {
         mu.layout_row(ctx, {-78, -1}, 68)
         mu.layout_begin_column(ctx)
         {
-            mu.layout_row(ctx, {80, -1}, 0)
+            mu.layout_row(ctx, {80, -68, 60}, 0)
             switch color in state.ColorPickerColor {
             case ^pdx.FlagColorRgb:
-                mu.label(ctx, "Red:"); ui.Slider(ctx, &color.R, 0, 255)
-                mu.label(ctx, "Green:"); ui.Slider(ctx, &color.G, 0, 255)
-                mu.label(ctx, "Blue:"); ui.Slider(ctx, &color.B, 0, 255)
+                mu.label(ctx, "Red:")
+                ui.Slider(ctx, &color.R, 0, 255)
+                ui.NumberTextbox(ctx, &color.R, &redBuf, &redBufLen, 255, 0)
+
+                mu.label(ctx, "Green:")
+                ui.Slider(ctx, &color.G, 0, 255)
+                ui.NumberTextbox(ctx, &color.G, &greenBuf, &greenBufLen, 255, 0)
+
+                mu.label(ctx, "Blue:")
+                ui.Slider(ctx, &color.B, 0, 255)
+                ui.NumberTextbox(ctx, &color.B, &blueBuf, &blueBufLen, 255, 0)
                 red = color.R
                 green = color.G
                 blue = color.B
             case ^pdx.FlagColorHsv:
-                mu.label(ctx, "Hue:"); ui.Slider(ctx, &color.H, 0, 360)
-                mu.label(ctx, "Saturation:"); ui.Slider(ctx, &color.S, 0, 100)
-                mu.label(ctx, "Value:"); ui.Slider(ctx, &color.V, 0, 100)
+                mu.label(ctx, "Hue:")
+                ui.Slider(ctx, &color.H, 0, 360, step = 1)
+                ui.NumberTextbox(ctx, &color.H, &redBuf, &redBufLen, 360, 0)
+
+                mu.label(ctx, "Saturation:")
+                ui.Slider(ctx, &color.S, 0, 100, step = 1)
+                ui.NumberTextbox(ctx, &color.S, &greenBuf, &greenBufLen, 100, 0)
+
+                mu.label(ctx, "Value:")
+                ui.Slider(ctx, &color.V, 0, 100, step = 1)
+                ui.NumberTextbox(ctx, &color.V, &blueBuf, &blueBufLen, 100, 0)
+
                 rgb := pdx.ToRenderColor(color)
                 red = rgb[0]
                 green = rgb[1]
@@ -144,38 +161,6 @@ renderAbsoluteColorPicker :: proc(ctx: ^mu.Context) {
         mu.draw_rect(ctx, r, color)
         mu.draw_box(ctx, mu.expand_rect(r, 1), ctx.style.colors[.BORDER])
         mu.draw_control_text(ctx, fmt.tprintf("#%02x%02x%02x", red, green, blue), r, .TEXT, {.ALIGN_CENTER})
-
-
-        switch color in state.ColorPickerColor {
-        case ^pdx.FlagColorRgb:
-            mu.layout_row(ctx, {80, -1}, 20)
-            mu.label(ctx, "Edit:")
-            mu.layout_begin_column(ctx)
-            {
-                mu.layout_row_items(ctx, 3, 20)
-                ui.NumberTextbox(ctx, &color.R, &redBuf, &redBufLen, 255, 0)
-                ui.NumberTextbox(ctx, &color.G, &greenBuf, &greenBufLen, 255, 0)
-                ui.NumberTextbox(ctx, &color.B, &blueBuf, &blueBufLen, 255, 0)
-            }
-            mu.layout_end_column(ctx)
-        case ^pdx.FlagColorHsv:
-            mu.layout_row(ctx, {80, -1}, 20)
-            mu.label(ctx, "Edit:")
-            mu.layout_begin_column(ctx)
-            {
-                mu.layout_row_items(ctx, 3, 20)
-                ui.NumberTextbox(ctx, &color.H, &redBuf, &redBufLen, 360, 0)
-                ui.NumberTextbox(ctx, &color.S, &greenBuf, &greenBufLen, 100, 0)
-                ui.NumberTextbox(ctx, &color.V, &blueBuf, &blueBufLen, 100, 0)
-                rgb := pdx.ToRenderColor(color)
-                red = rgb[0]
-                green = rgb[1]
-                blue = rgb[2]
-            }
-            mu.layout_end_column(ctx)
-        case ^pdx.FlagColorNamed:
-        case ^pdx.FlagColorReference:
-        }
     }
 
     cnt := mu.get_container(ctx, WINDOM_COLOR_PICKER)
@@ -185,6 +170,7 @@ renderAbsoluteColorPicker :: proc(ctx: ^mu.Context) {
         state.ColorPickerColor = nil
     }
 }
+
 renderNamedColorPicker :: proc(ctx: ^mu.Context) {
     width: i32 = 300
     height: i32 = 500
@@ -276,6 +262,91 @@ renderNamedColorPicker :: proc(ctx: ^mu.Context) {
     }
 }
 
+renderReferenceColorPicker :: proc(ctx: ^mu.Context) {
+    width: i32 = 300
+    height: i32 = 300
+    x: i32 = (rl.GetScreenWidth() - width - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH) / 2
+    y: i32 = (rl.GetScreenHeight() - height) / 2
+
+    if mu.window(ctx, WINDOM_COLOR_PICKER, { x, y, width, height }, { .NO_RESIZE }) {
+        guranteeBounds(ctx)
+        window := mu.get_current_container(ctx)
+        window.rect.w = width
+        window.rect.h = height
+
+        for variant in state.Flag.Colors {
+            name: string
+            rectColor: mu.Color
+
+            switch color in variant {
+            case ^pdx.FlagColorRgb:
+                name = color.Name
+                rectColor = mu.Color{ color.R, color.G, color.B, 255 }
+            case ^pdx.FlagColorHsv:
+                name = color.Name
+                tmp := pdx.ToRenderColor(color)
+                rectColor = mu.Color{ tmp[0], tmp[1], tmp[2], 255 }
+            case ^pdx.FlagColorNamed:
+                renderColor, _ := resolveNamedColor(color.NamedColor)
+                name = color.Name
+                rectColor = mu.Color{ renderColor[0], renderColor[1], renderColor[2], 255 }
+            case ^pdx.FlagColorReference:
+                fmt.eprintfln("Named color is referencing a reference color")
+            }
+
+            mu.layout_row(ctx, { -1, -1 }, 20)
+            row := mu.layout_next(ctx)
+
+            colorRect := mu.Rect{
+                x = row.x,
+                y = row.y,
+                w = row.h,
+                h = row.h,
+            }
+            mu.draw_rect(ctx, colorRect, rectColor)
+
+            buttonWidth: i32 = 60
+            buttonRect := mu.Rect{
+                x = row.x + row.w - buttonWidth,
+                y = row.y,
+                w = buttonWidth,
+                h = row.h,
+            }
+
+            mu.layout_set_next(ctx, buttonRect, false)
+            ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+            if .SUBMIT in mu.button(ctx, "Select") {
+                switch color in state.ColorPickerColor {
+                case ^pdx.FlagColorRgb:
+                    fmt.eprintfln("RGB color does not support reference color")
+                case ^pdx.FlagColorHsv:
+                    fmt.eprintfln("HSV color does not support reference color")
+                case ^pdx.FlagColorNamed:
+                    fmt.eprintfln("named color does not support reference color")
+                case ^pdx.FlagColorReference:
+                    color.Reference = name
+                }
+            }
+            mu.pop_id(ctx)
+
+            textRect := mu.Rect{
+                x = row.x + colorRect.w + ctx.style.spacing,
+                y = row.y,
+                w = row.w - colorRect.w - ctx.style.spacing,
+                h = row.h,
+            }
+            mu.draw_control_text(ctx, name, textRect, .TEXT)
+        }
+    }
+
+    cnt := mu.get_container(ctx, WINDOM_COLOR_PICKER)
+    is_open := cnt != nil && cnt.open != false
+
+    if state.ColorPickerColor != nil && !is_open {
+        state.ColorPickerColor = nil
+    }
+}
+
 renderInstanceEditor :: proc(ctx: ^mu.Context) {
     width: i32 = 400
     height: i32 = 160
@@ -302,23 +373,23 @@ renderInstanceEditor :: proc(ctx: ^mu.Context) {
 
         mu.layout_row(ctx, {80, -90, 80}, 0)
         mu.label(ctx, "Rotation:")
-        ui.Slider(ctx, &state.InstanceEditorInstance.Rotation, 0, 360)
+        ui.Slider(ctx, &state.InstanceEditorInstance.Rotation, 0, 360, step = 1)
         ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Rotation, &rotationBuf, &rotationBufLen, 360, 0)
 
         mu.label(ctx, "Scale - Width:")
-        ui.Slider(ctx, &state.InstanceEditorInstance.Scale.X, 0, 3, "%.2f")
+        ui.Slider(ctx, &state.InstanceEditorInstance.Scale.X, 0, 3, "%.2f", step = 0.05)
         ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Scale.X, &scaleXBuf, &scaleXBufLen, 3, 0, "%.3f")
 
         mu.label(ctx, "Scale - Height:")
-        ui.Slider(ctx, &state.InstanceEditorInstance.Scale.Y, 0, 3, "%.2f")
+        ui.Slider(ctx, &state.InstanceEditorInstance.Scale.Y, 0, 3, "%.2f", step = 0.05)
         ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Scale.Y, &scaleYBuf, &scaleYBufLen, 3, 0, "%.3f")
 
         mu.label(ctx, "Position - X:")
-        ui.Slider(ctx, &state.InstanceEditorInstance.Position.X, -2, 3, "%.2f")
+        ui.Slider(ctx, &state.InstanceEditorInstance.Position.X, -2, 3, "%.2f", step = 0.05)
         ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Position.X, &positionXBuf, &positionXBufLen, 3, -2, "%.3f")
 
         mu.label(ctx, "Position - Y:")
-        ui.Slider(ctx, &state.InstanceEditorInstance.Position.Y, -2, 3, "%.2f")
+        ui.Slider(ctx, &state.InstanceEditorInstance.Position.Y, -2, 3, "%.2f", step = 0.05)
         ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Position.Y, &positionYBuf, &positionYBufLen, 3, -2, "%.3f")
     }
 
@@ -965,13 +1036,13 @@ renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
         switch color in variant {
         case ^pdx.FlagColorNamed:
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, color.Name, color, state.NamedColors)
-            renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
+            renderColorButtons(ctx, variant, &state.Flag.Colors, index, buttonEditRect, buttonDelRect)
         case ^pdx.FlagColorRgb:
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, color.Name, color)
-            renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
+            renderColorButtons(ctx, variant, &state.Flag.Colors, index, buttonEditRect, buttonDelRect)
         case ^pdx.FlagColorHsv:
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, color.Name, color)
-            renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
+            renderColorButtons(ctx, variant, &state.Flag.Colors, index, buttonEditRect, buttonDelRect)
         case ^pdx.FlagColorReference:
             // Should not happen
         }
@@ -987,19 +1058,29 @@ renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagL
         switch color in variant {
         case ^pdx.FlagColorNamed:
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, color.Name, color, state.NamedColors)
-            renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
+            renderColorButtons(ctx, variant, &layer.Colors, index, buttonEditRect, buttonDelRect)
         case ^pdx.FlagColorRgb:
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, color.Name, color)
-            renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
+            renderColorButtons(ctx, variant, &layer.Colors, index, buttonEditRect, buttonDelRect)
         case ^pdx.FlagColorHsv:
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, color.Name, color)
-            renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
+            renderColorButtons(ctx, variant, &layer.Colors, index, buttonEditRect, buttonDelRect)
         case ^pdx.FlagColorReference:
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, color.Name, color, state.Flag.Colors[:], state.NamedColors)
-            renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
+            renderColorButtons(ctx, variant, &layer.Colors, index, buttonEditRect, buttonDelRect)
         }
     }
     renderAddColorButtons(ctx, &layer.Colors)
+    mu.layout_row(ctx, {-1,-1}, 20)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in mu.button(ctx, "Add reference color") {
+        colorName := pdx.GetNextFreeColor(layer.Colors[:])
+        if colorName != "" {
+            color := pdx.CreateColorReference(colorName, pdx.COLOR_NAMES[0])
+            append(&layer.Colors, color)
+        }
+    }
+    mu.pop_id(ctx)
 
     mu.layout_row(ctx, { -1, -1 }, 20)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
@@ -1024,7 +1105,7 @@ renderSelectedFlagLayerTexturedEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.Flag
 }
 
 renderSelectedLayerInstance :: proc(ctx: ^mu.Context, instance: ^pdx.LayerInstance) {
-    ui.DrawAttributeRow(ctx, "Type", "Textured Emblem")
+    ui.DrawAttributeRow(ctx, "Type", "Layer Instance")
     ui.DrawAttributeRow(ctx, "Rotation", fmt.tprintf("%i", instance.Rotation))
     ui.DrawAttributeRow(ctx, "Scale Width", fmt.tprintf("%.2f", instance.Scale.X))
     ui.DrawAttributeRow(ctx, "Scale Height", fmt.tprintf("%.2f", instance.Scale.Y))
@@ -1038,7 +1119,7 @@ renderSelectedLayerInstance :: proc(ctx: ^mu.Context, instance: ^pdx.LayerInstan
     mu.pop_id(ctx)
 }
 
-renderColorButtons :: proc(ctx: ^mu.Context, color: pdx.FlagColorVariant, index: int, edit, delete: mu.Rect) {
+renderColorButtons :: proc(ctx: ^mu.Context, color: pdx.FlagColorVariant, list: ^[dynamic]pdx.FlagColorVariant, index: int, edit, delete: mu.Rect) {
     mu.layout_set_next(ctx, edit, false)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
     if .SUBMIT in mu.button(ctx, "edit") {
@@ -1051,7 +1132,7 @@ renderColorButtons :: proc(ctx: ^mu.Context, color: pdx.FlagColorVariant, index:
         if color == state.ColorPickerColor {
             state.ColorPickerColor = nil
         }
-        ordered_remove(&state.Flag.Colors, index)
+        ordered_remove(list, index)
         pdx.DestroyColor(color)
     }
     mu.pop_id(ctx)

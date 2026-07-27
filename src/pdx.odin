@@ -6,6 +6,7 @@ import "core:os"
 import "core:strings"
 import "core:strconv"
 import "pdx"
+import rl "vendor:raylib"
 
 DestroyDatabase :: proc(database: ^DatabaseState) {
     destroyNamedColors(database)
@@ -314,4 +315,20 @@ findTexturedEmblemTexturePath :: proc(name: string, databases: []DatabaseState) 
         }
     }
     return "", false
+}
+
+resolveNamedColor :: proc(name: string) -> (rl.Color, pdx.FlagColorVariant) {
+    variant, exists := state.NamedColors[name]
+    if !exists {
+        return rl.Color{}, nil
+    }
+    switch color in variant {
+    case ^pdx.FlagColorRgb:
+        return pdx.ToRenderColor(variant), variant
+    case ^pdx.FlagColorHsv:
+        return pdx.ToRenderColor(variant), variant
+    case ^pdx.FlagColorNamed:
+    case ^pdx.FlagColorReference:
+    }
+    return rl.Color{}, nil
 }

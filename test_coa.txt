@@ -46,7 +46,7 @@ GATE_NS = {
 	pattern = "pattern_solid.tga"
 	color1 = rgb{ 197 190 144 }
 	color2 = rgb{ 171 126 41 }
-	color3 = { 19 48 26 }
+	color3 = green
 	color4 = rgb{ 136 94 11 }
 
 
