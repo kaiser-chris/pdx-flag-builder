@@ -490,133 +490,8 @@ renderFlagPreview :: proc(ctx: ^mu.Context) {
         mu.draw_rect(ctx, destination, mu.Color{100, 100, 100, 255})
         mu.draw_box(ctx, destination, ctx.style.colors[.BORDER])
         mu.layout_set_next(ctx, target, true)
-        drawFlagTexture(ctx)
+        drawFlagPreview(ctx)
     }
-}
-
-renderFlagPreviewTexture :: proc(cmd: ^mu.Command_Rect) {
-    destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
-    rl.BeginScissorMode(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h)
-
-    if state.Flag.Pattern.Name != "" {
-        pattern, ok := state.RenderTextureMap[state.Flag.Pattern.Path]
-
-        if ok {
-            source := rl.Rectangle{0, 0, f32(pattern.width), f32(pattern.height)}
-
-            colorMappings := make([dynamic]texture.ColorRecolor)
-            defer delete(colorMappings)
-            for color in state.Flag.Colors {
-                fillColorMapping(&colorMappings, color, pdx.PATTERN_REPLACE_COLORS)
-            }
-
-            texture.DrawRecoloredTexture(
-                pattern,
-                source,
-                destination,
-                colorMappings[:],
-                state.RecolorShader,
-            )
-        }
-    }
-
-    for variant in state.Flag.Layers {
-        switch layer in variant {
-        case ^pdx.FlagLayerColoredEmblem:
-            renderColoredEmblemInstances(cmd, layer)
-        case ^pdx.FlagLayerTexturedEmblem:
-            renderTexturedEmblemInstances(cmd, layer)
-        }
-    }
-    rl.EndScissorMode()
-}
-
-renderColoredEmblemInstances :: proc(cmd: ^mu.Command_Rect, layer: ^pdx.FlagLayerColoredEmblem) {
-    emblem, ok := state.RenderTextureMap[layer.Texture.Path]
-    if !ok {
-        return
-    }
-    source := rl.Rectangle{0, 0, f32(emblem.width), f32(emblem.height)}
-
-    colorMappings := make([dynamic]texture.ColorRecolor)
-    defer delete(colorMappings)
-    for color in layer.Colors {
-        fillColorMapping(&colorMappings, color, pdx.COLORED_EMBLEM_REPLACE_COLORS)
-    }
-
-    for instance in layer.Instances {
-        texture.DrawRecoloredTexture(
-            emblem,
-            source,
-            calculateInstanceDestination(emblem, instance, cmd.rect),
-            colorMappings[:],
-            state.RecolorShader,
-            rotation = f32(instance.Rotation)
-        )
-    }
-
-    if len(layer.Instances) == 0 {
-        instance := pdx.LayerInstance{
-            Rotation = 0,
-            Position = pdx.DEFAULT_POSITION,
-            Scale = pdx.DEFAULT_SCALE,
-        }
-        texture.DrawRecoloredTexture(
-            emblem,
-            source,
-            calculateInstanceDestination(emblem, &instance, cmd.rect),
-            colorMappings[:],
-            state.RecolorShader,
-            rotation = f32(instance.Rotation)
-        )
-    }
-}
-
-renderTexturedEmblemInstances :: proc(cmd: ^mu.Command_Rect, layer: ^pdx.FlagLayerTexturedEmblem) {
-    emblem, ok := state.RenderTextureMap[layer.Texture.Path]
-    if !ok {
-        return
-    }
-    source := rl.Rectangle{0, 0, f32(emblem.width), f32(emblem.height)}
-
-    for instance in layer.Instances {
-        rl.DrawTexturePro(
-            emblem,
-            source,
-            calculateInstanceDestination(emblem, instance, cmd.rect),
-            { 0, 0 },
-            f32(instance.Rotation),
-            rl.WHITE
-        )
-    }
-
-    if len(layer.Instances) == 0 {
-        instance := pdx.LayerInstance{
-            Rotation = 0,
-            Position = pdx.DEFAULT_POSITION,
-            Scale = pdx.DEFAULT_SCALE,
-        }
-        rl.DrawTexturePro(
-            emblem,
-            source,
-            calculateInstanceDestination(emblem, &instance, cmd.rect),
-            { 0, 0 },
-            f32(instance.Rotation),
-            rl.WHITE
-        )
-    }
-}
-
-calculateInstanceDestination :: proc(texture: rl.Texture2D, instance: ^pdx.LayerInstance, target: mu.Rect) -> rl.Rectangle {
-    width: f32 = f32(target.w) * instance.Scale.X
-    height: f32 = f32(target.h) * instance.Scale.Y
-
-    // Default position 0.5 is centered
-    // The position then moves the instance by the flag width/height
-    x := f32(target.x) + ((f32(target.w) - width) / 2) + (f32(target.w) * (instance.Position.X - 0.5))
-    y := f32(target.y) + ((f32(target.h) - height) / 2) + (f32(target.h) * (instance.Position.Y - 0.5))
-
-    return rl.Rectangle{ x, y, width, height }
 }
 
 fillColorMapping :: proc(mappings: ^[dynamic]texture.ColorRecolor, variant: pdx.FlagColorVariant, sourceColors: []rl.Color) {
@@ -794,9 +669,8 @@ renderFlagDatabase :: proc(ctx: ^mu.Context) {
                     if !strings.contains(searchName, search) {
                         continue
                     }
-                    mu.layout_row(ctx, {64, -68, 60}, 20)
-                    flagRect := mu.layout_next(ctx)
-                    mu.draw_rect(ctx, flagRect, ctx.style.colors[.BORDER])
+                    mu.layout_row(ctx, {40, -68, 60}, 24)
+                    drawFlag(ctx, flag.Name, 36, 24)
                     mu.text(ctx, flag.Name)
                     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
                     if .SUBMIT in mu.button(ctx, "Select") {
@@ -1121,7 +995,6 @@ renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
     ui.DrawAttributeRow(ctx, "Layer", "Pattern & Colors")
     if flag.Pattern.Name != "" {
         ui.DrawAttributeRow(ctx, "Pattern", flag.Pattern.Name)
-        ui.DrawAttributeRow(ctx, "Texture", flag.Pattern.Path)
     } else {
         ui.DrawAttributeRow(ctx, "Pattern", "None")
     }
@@ -1146,7 +1019,6 @@ renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
 renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagLayerColoredEmblem) {
     ui.DrawAttributeRow(ctx, "Type", "Colored Emblem")
     ui.DrawAttributeRow(ctx, "Texture", layer.Texture.Name)
-    ui.DrawAttributeRow(ctx, "Texture", layer.Texture.Path)
     ui.DrawAttributeRow(ctx, "Instances", fmt.tprintf("%i", len(layer.Instances)))
     for variant, index in layer.Colors {
         switch color in variant {
@@ -1188,7 +1060,6 @@ renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagL
 renderSelectedFlagLayerTexturedEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagLayerTexturedEmblem) {
     ui.DrawAttributeRow(ctx, "Type", "Textured Emblem")
     ui.DrawAttributeRow(ctx, "Texture", layer.Texture.Name)
-    ui.DrawAttributeRow(ctx, "Texture", layer.Texture.Path)
     ui.DrawAttributeRow(ctx, "Instances", fmt.tprintf("%i", len(layer.Instances)))
     mu.layout_row(ctx, { -1, -1 }, 20)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)

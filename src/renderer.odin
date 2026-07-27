@@ -21,7 +21,8 @@ TEXTURE_LOADING_THREAD_IDENTIFIER: int: 1
 
 TEXTURE_RECT_IDENTIFIER: u8: 1
 TEXTURE_RECT_IDENTIFIER_TRANSPARENCY: u8: 2
-TEXTURE_RECT_IDENTIFIER_FLAG: u8: 3
+TEXTURE_RECT_IDENTIFIER_FLAG_PREVIEW: u8: 3
+TEXTURE_RECT_IDENTIFIER_FLAG_DRAW: u8: 4
 
 State :: struct {
     Settings: Settings,
@@ -41,6 +42,7 @@ State :: struct {
     TextureMap: map[string]int,
     ImageLoadChannel: chan.Chan(ImageRequest),
     TextureLoadChannel: chan.Chan(TextureRequest),
+    FlagLoadChannel: chan.Chan(FlagRequest),
     TransparencyTexture: rl.Texture2D,
     InvalidTexture: rl.Texture2D,
     Flag: pdx.Flag,
@@ -53,6 +55,9 @@ State :: struct {
     RecolorShader: texture.RecolorShader,
     NamedColors: map[string]pdx.FlagColorVariant,
     Flags: map[string]pdx.Flag,
+    GuiFlagMap: map[string]int,
+    RenderFlagMap: map[int]pdx.Flag,
+    NextFlagIdentifier: int,
 }
 
 DatabaseState :: struct {
@@ -66,6 +71,11 @@ DatabaseState :: struct {
     ColoredEmblems: [dynamic]pdx.FlagTexture,
     TexturedEmblems: [dynamic]pdx.FlagTexture,
     Flags: [dynamic]pdx.Flag,
+}
+
+FlagRequest :: struct {
+    Identifier: int,
+    Name: string,
 }
 
 ImageRequest :: struct {
@@ -88,6 +98,8 @@ setupState :: proc() {
     state.GuiTextureCache = make(map[string]rl.Texture2D)
     state.NamedColors = make(map[string]pdx.FlagColorVariant)
     state.TextureMap = make(map[string]int)
+    state.GuiFlagMap = make(map[string]int)
+    state.RenderFlagMap = make(map[int]pdx.Flag)
     imageChannel, imErr := chan.create(chan.Chan(ImageRequest), 2048, context.allocator)
     if imErr != nil {
         fmt.eprintfln("Could not create ImageLoadChannel: %v", imErr)
@@ -98,12 +110,18 @@ setupState :: proc() {
         fmt.eprintfln("Could not create TextureLoadChannel: %v", txErr)
     }
     state.TextureLoadChannel = textureChannel
+    flagChannel, flgErr := chan.create(chan.Chan(FlagRequest), 2048, context.allocator)
+    if flgErr != nil {
+        fmt.eprintfln("Could not create FlagLoadChannel: %v", txErr)
+    }
+    state.FlagLoadChannel = flagChannel
     state.SidebarOpen = true
     state.SidebarWidth = 350
     flag := pdx.CreateFlag()
     state.Flags["init"] = flag
     state.Flag = flag
     state.NextTextureIdentifier = 1
+    state.NextFlagIdentifier = 1
     state.TextureLoadingThread = createTextureLoadingThread()
     state.SelectedFlagElement = &state.Flag
 }
@@ -126,6 +144,11 @@ destroyState :: proc() {
     for key in state.TextureMap {
         delete(key)
     }
+    for key in state.GuiFlagMap {
+        delete(key)
+    }
+    delete(state.GuiFlagMap)
+    delete(state.RenderFlagMap)
     delete(state.Flags)
     delete(state.TextureMap)
     delete(state.RenderTextureMap)
@@ -133,6 +156,7 @@ destroyState :: proc() {
     delete(state.DatabaseSearch)
     chan.destroy(state.ImageLoadChannel)
     chan.destroy(state.TextureLoadChannel)
+    chan.destroy(state.FlagLoadChannel)
     thread.destroy(state.TextureLoadingThread)
     rl.UnloadShader(state.RecolorShader.Shader)
     delete(state.NamedColors)
@@ -146,7 +170,7 @@ createTextureLoadingThread :: proc() -> ^thread.Thread {
                 continue
             }
             if _, exists := state.RenderTextureCache[request.Identifier]; exists {
-                fmt.eprintfln("duplicate request: %s", request.Identifier)
+                fmt.eprintfln("duplicate image request: %s", request.Identifier)
                 continue
             }
             image := texture.LoadImage(request.Path)
@@ -163,7 +187,7 @@ createTextureLoadingThread :: proc() -> ^thread.Thread {
         imageThread.user_index = TEXTURE_LOADING_THREAD_IDENTIFIER
         return imageThread
     } else {
-        fmt.eprintfln("Could not create texture loading thread")
+        fmt.eprintfln("Could not create image loading thread")
         os.exit(2)
     }
 }
@@ -175,7 +199,7 @@ handleTextureRequests :: proc() {
             break
         }
         if _, exists := state.RenderTextureCache[request.Identifier]; exists {
-            fmt.eprintfln("duplicate request: %s", request.Identifier)
+            fmt.eprintfln("duplicate texture request: %s", request.Identifier)
             continue
         }
         texture := rl.LoadTextureFromImage(request.Image)
@@ -183,6 +207,27 @@ handleTextureRequests :: proc() {
         state.RenderTextureMap[request.Path] = texture
         state.RenderTextureCache[request.Identifier] = texture
         rl.UnloadImage(request.Image)
+    }
+}
+
+handleFlagRequests :: proc() {
+    for {
+        request, ok := chan.try_recv(state.FlagLoadChannel)
+        if !ok {
+            break
+        }
+        if _, exists := state.RenderFlagMap[request.Identifier]; exists {
+            fmt.eprintfln("duplicate flag request: %s", request.Identifier)
+            continue
+        }
+        flag, exists := state.Flags[request.Name]
+        if !exists {
+            fmt.eprintfln("non existing flag requested: %s", request.Name)
+            delete(request.Name)
+            continue
+        }
+        state.RenderFlagMap[request.Identifier] = flag
+        delete(request.Name)
     }
 }
 
@@ -211,30 +256,6 @@ main :: proc() {
     defer destroyState()
     loadSettings()
     defer destroySettings()
-
-    // TODO: REMOVE
-//    when !RELEASE {
-//        pdx.DestroyFlag(state.Flag)
-//        flags := pdx.LoadCoaFile("test_coa.txt")
-//        for _, index in flags {
-//            ok := EnrichLoadedCoa(&flags[index], state.Databases[:])
-//            if !ok {
-//                fmt.printfln("Could not enrich flag: %s", flags[index].Name)
-//            }
-//        }
-//        fmt.printfln("Loaded %i flags", len(flags))
-//        fmt.printfln("%v", flags)
-//        state.Flag = flags[2]
-//        defer {
-//            for _, index in flags {
-//                if flags[index].Name != state.Flag.Name {
-//                    pdx.DestroyFlag(flags[index])
-//                }
-//            }
-//            delete(flags)
-//        }
-//    }
-
 
     rl.SetTraceLogLevel(.WARNING)
     rl.SetConfigFlags({ .WINDOW_RESIZABLE })
@@ -356,6 +377,7 @@ main :: proc() {
 
         state.ButtonIdentifier = 0
         handleTextureRequests()
+        handleFlagRequests()
     }
 }
 
@@ -397,6 +419,8 @@ render :: proc(ctx: ^mu.Context) {
             case isTextureWithTransparencyRect(cmd.color):
                 renderTransparentTexture(cmd)
             case isFlagRect(cmd.color):
+                renderFlagDraw(cmd)
+            case isFlagPreviewRect(cmd.color):
                 renderFlagPreviewTexture(cmd)
             case:
                 rl.DrawRectangle(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, transmute(rl.Color)cmd.color)
@@ -441,7 +465,43 @@ getTextureIdentifier :: proc(path: string) -> (int, bool) {
     if !ok {
         state.NextTextureIdentifier -= 1
     }
+    return identifier, !ok
+}
 
+getFlagIdentifier :: proc(name: string) -> (int, bool) {
+    if identifier, ok := state.GuiFlagMap[name]; ok {
+        return identifier, true
+    }
+    // Request Flag textures
+    flag, exists := state.Flags[name]
+    if exists {
+        if flag.Pattern.Path != "" {
+            getTextureIdentifier(flag.Pattern.Path)
+        }
+        for variant in flag.Layers {
+            switch layer in variant {
+            case ^pdx.FlagLayerTexturedEmblem:
+                if layer.Texture.Path != "" {
+                    getTextureIdentifier(layer.Texture.Path)
+                }
+            case ^pdx.FlagLayerColoredEmblem:
+                if layer.Texture.Path != "" {
+                    getTextureIdentifier(layer.Texture.Path)
+                }
+            }
+        }
+    }
+    identifier := state.NextFlagIdentifier
+    state.NextFlagIdentifier += 1
+    state.GuiFlagMap[strings.clone(name)] = identifier
+    request := FlagRequest{
+        Identifier = identifier,
+        Name = strings.clone(name),
+    }
+    ok := chan.try_send(state.FlagLoadChannel, request)
+    if !ok {
+        state.NextFlagIdentifier -= 1
+    }
     return identifier, !ok
 }
 
@@ -452,7 +512,10 @@ isTextureWithTransparencyRect :: proc(textureId: mu.Color) -> bool {
     return textureId.a == TEXTURE_RECT_IDENTIFIER_TRANSPARENCY
 }
 isFlagRect :: proc(textureId: mu.Color) -> bool {
-    return textureId.a == TEXTURE_RECT_IDENTIFIER_FLAG
+    return textureId.a == TEXTURE_RECT_IDENTIFIER_FLAG_DRAW
+}
+isFlagPreviewRect :: proc(textureId: mu.Color) -> bool {
+    return textureId.a == TEXTURE_RECT_IDENTIFIER_FLAG_PREVIEW
 }
 
 guranteeBounds :: proc(ctx: ^mu.Context) {
@@ -503,7 +566,147 @@ renderTransparentTexture :: proc(cmd: ^mu.Command_Rect) {
     }
 }
 
-drawTexture :: proc(ctx: ^mu.Context, texturePath: string, width, height: i32) {
+renderFlagDraw :: proc(cmd: ^mu.Command_Rect) {
+    index := (int(cmd.color.r) << 16) | (int(cmd.color.g) << 8) | int(cmd.color.b)
+    flag, exists := state.RenderFlagMap[index]
+    if !exists {
+        return
+    }
+    destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
+    renderFlag(&flag, destination)
+}
+
+renderFlagPreviewTexture :: proc(cmd: ^mu.Command_Rect) {
+    destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
+    renderFlag(&state.Flag, destination)
+}
+
+renderFlag :: proc(flag: ^pdx.Flag, destination: rl.Rectangle) {
+    rl.BeginScissorMode(i32(destination.x), i32(destination.y), i32(destination.width), i32(destination.height))
+
+    if flag.Pattern.Name != "" {
+        pattern, ok := state.RenderTextureMap[flag.Pattern.Path]
+
+        if ok {
+            source := rl.Rectangle{0, 0, f32(pattern.width), f32(pattern.height)}
+
+            colorMappings := make([dynamic]texture.ColorRecolor)
+            defer delete(colorMappings)
+            for color in flag.Colors {
+                fillColorMapping(&colorMappings, color, pdx.PATTERN_REPLACE_COLORS)
+            }
+
+            texture.DrawRecoloredTexture(
+                pattern,
+                source,
+                destination,
+                colorMappings[:],
+                state.RecolorShader,
+            )
+        }
+    }
+
+    for variant in flag.Layers {
+        switch layer in variant {
+        case ^pdx.FlagLayerColoredEmblem:
+            renderColoredEmblemInstances(layer, destination)
+        case ^pdx.FlagLayerTexturedEmblem:
+            renderTexturedEmblemInstances(layer, destination)
+        }
+    }
+
+    rl.EndScissorMode()
+}
+
+renderColoredEmblemInstances :: proc(layer: ^pdx.FlagLayerColoredEmblem, destination: rl.Rectangle) {
+    emblem, ok := state.RenderTextureMap[layer.Texture.Path]
+    if !ok {
+        return
+    }
+    source := rl.Rectangle{0, 0, f32(emblem.width), f32(emblem.height)}
+
+    colorMappings := make([dynamic]texture.ColorRecolor)
+    defer delete(colorMappings)
+    for color in layer.Colors {
+        fillColorMapping(&colorMappings, color, pdx.COLORED_EMBLEM_REPLACE_COLORS)
+    }
+
+    for instance in layer.Instances {
+        texture.DrawRecoloredTexture(
+            emblem,
+            source,
+            calculateInstanceDestination(emblem, instance, destination),
+            colorMappings[:],
+            state.RecolorShader,
+            rotation = f32(instance.Rotation)
+        )
+    }
+
+    if len(layer.Instances) == 0 {
+        instance := pdx.LayerInstance{
+            Rotation = 0,
+            Position = pdx.DEFAULT_POSITION,
+            Scale = pdx.DEFAULT_SCALE,
+        }
+        texture.DrawRecoloredTexture(
+            emblem,
+            source,
+            calculateInstanceDestination(emblem, &instance, destination),
+            colorMappings[:],
+            state.RecolorShader,
+            rotation = f32(instance.Rotation)
+        )
+    }
+}
+
+renderTexturedEmblemInstances :: proc(layer: ^pdx.FlagLayerTexturedEmblem, destination: rl.Rectangle) {
+    emblem, ok := state.RenderTextureMap[layer.Texture.Path]
+    if !ok {
+        return
+    }
+    source := rl.Rectangle{0, 0, f32(emblem.width), f32(emblem.height)}
+
+    for instance in layer.Instances {
+        rl.DrawTexturePro(
+            emblem,
+            source,
+            calculateInstanceDestination(emblem, instance, destination),
+            { 0, 0 },
+            f32(instance.Rotation),
+            rl.WHITE
+        )
+    }
+
+    if len(layer.Instances) == 0 {
+        instance := pdx.LayerInstance{
+            Rotation = 0,
+            Position = pdx.DEFAULT_POSITION,
+            Scale = pdx.DEFAULT_SCALE,
+        }
+        rl.DrawTexturePro(
+            emblem,
+            source,
+            calculateInstanceDestination(emblem, &instance, destination),
+            { 0, 0 },
+            f32(instance.Rotation),
+            rl.WHITE
+        )
+    }
+}
+
+calculateInstanceDestination :: proc(texture: rl.Texture2D, instance: ^pdx.LayerInstance, target: rl.Rectangle) -> rl.Rectangle {
+    width: f32 = target.width * instance.Scale.X
+    height: f32 = target.height * instance.Scale.Y
+
+    // Default position 0.5 is centered
+    // The position then moves the instance by the flag width/height
+    x := target.x + ((target.width - width) / 2) + (target.width * (instance.Position.X - 0.5))
+    y := target.y + ((target.height - height) / 2) + (target.height * (instance.Position.Y - 0.5))
+
+    return rl.Rectangle{ x, y, width, height }
+}
+
+drawTexture :: proc(ctx: ^mu.Context, texturePath: string, width: i32 = 0, height: i32 = 0) {
     index, ok := getTextureIdentifier(texturePath)
     if !ok {
         return
@@ -517,8 +720,12 @@ drawTexture :: proc(ctx: ^mu.Context, texturePath: string, width, height: i32) {
     }
 
     rect := mu.layout_next(ctx)
-    rect.w = width
-    rect.h = height
+    if width != 0 {
+        rect.w = width
+    }
+    if width != 0 {
+        rect.h = height
+    }
     mu.draw_rect(ctx, rect, magicColor)
 }
 
@@ -545,17 +752,40 @@ drawTransparentTexture :: proc(ctx: ^mu.Context, texturePath: string, width: i32
     mu.draw_rect(ctx, rect, magicColor)
 }
 
-drawFlagTexture :: proc(ctx: ^mu.Context, width: i32 = 0, height: i32 = 0) {
+drawFlagPreview :: proc(ctx: ^mu.Context, width: i32 = 0, height: i32 = 0) {
     magicColor := mu.Color{
         r = 0,
         g = 0,
         b = 0,
-        a = TEXTURE_RECT_IDENTIFIER_FLAG,
+        a = TEXTURE_RECT_IDENTIFIER_FLAG_PREVIEW,
     }
 
     rect := mu.layout_next(ctx)
     rect.x = rect.x - ctx.style.padding
     rect.y = rect.y - ctx.style.padding
+    if width != 0 {
+        rect.w = width
+    }
+    if width != 0 {
+        rect.h = height
+    }
+    mu.draw_rect(ctx, rect, magicColor)
+}
+
+drawFlag :: proc(ctx: ^mu.Context, flagName: string, width: i32 = 0, height: i32 = 0) {
+    index, ok := getFlagIdentifier(flagName)
+    if !ok {
+        return
+    }
+
+    magicColor := mu.Color{
+        r = u8((index >> 16) & 0xFF),
+        g = u8((index >> 8) & 0xFF),
+        b = u8(index & 0xFF),
+        a = TEXTURE_RECT_IDENTIFIER_FLAG_DRAW,
+    }
+
+    rect := mu.layout_next(ctx)
     if width != 0 {
         rect.w = width
     }
