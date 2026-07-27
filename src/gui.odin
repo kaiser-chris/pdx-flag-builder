@@ -500,21 +500,24 @@ renderFlagPreviewTexture :: proc(cmd: ^mu.Command_Rect) {
 
     if state.Flag.Pattern.Name != "" {
         pattern, ok := state.RenderTextureMap[state.Flag.Pattern.Path]
-        source := rl.Rectangle{0, 0, f32(pattern.width), f32(pattern.height)}
 
-        colorMappings := make([dynamic]texture.ColorRecolor)
-        defer delete(colorMappings)
-        for color in state.Flag.Colors {
-            fillColorMapping(&colorMappings, color, pdx.PATTERN_REPLACE_COLORS)
+        if ok {
+            source := rl.Rectangle{0, 0, f32(pattern.width), f32(pattern.height)}
+
+            colorMappings := make([dynamic]texture.ColorRecolor)
+            defer delete(colorMappings)
+            for color in state.Flag.Colors {
+                fillColorMapping(&colorMappings, color, pdx.PATTERN_REPLACE_COLORS)
+            }
+
+            texture.DrawRecoloredTexture(
+                pattern,
+                source,
+                destination,
+                colorMappings[:],
+                state.RecolorShader,
+            )
         }
-
-        texture.DrawRecoloredTexture(
-            pattern,
-            source,
-            destination,
-            colorMappings[:],
-            state.RecolorShader,
-        )
     }
 
     for variant in state.Flag.Layers {
@@ -785,7 +788,22 @@ renderFlagDatabase :: proc(ctx: ^mu.Context) {
         for database in state.Databases {
             ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
             if .ACTIVE in mu.header(ctx, database.Settings.Name, options) {
-
+                for flag in database.Flags {
+                    searchName := strings.to_lower(flag.Name)
+                    defer delete(searchName)
+                    if !strings.contains(searchName, search) {
+                        continue
+                    }
+                    mu.layout_row(ctx, {64, -68, 60}, 20)
+                    flagRect := mu.layout_next(ctx)
+                    mu.draw_rect(ctx, flagRect, ctx.style.colors[.BORDER])
+                    mu.text(ctx, flag.Name)
+                    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+                    if .SUBMIT in mu.button(ctx, "Select") {
+                        state.Flag = flag
+                    }
+                    mu.pop_id(ctx)
+                }
             }
             mu.pop_id(ctx)
         }
@@ -1103,6 +1121,7 @@ renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
     ui.DrawAttributeRow(ctx, "Layer", "Pattern & Colors")
     if flag.Pattern.Name != "" {
         ui.DrawAttributeRow(ctx, "Pattern", flag.Pattern.Name)
+        ui.DrawAttributeRow(ctx, "Texture", flag.Pattern.Path)
     } else {
         ui.DrawAttributeRow(ctx, "Pattern", "None")
     }
@@ -1127,6 +1146,7 @@ renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
 renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagLayerColoredEmblem) {
     ui.DrawAttributeRow(ctx, "Type", "Colored Emblem")
     ui.DrawAttributeRow(ctx, "Texture", layer.Texture.Name)
+    ui.DrawAttributeRow(ctx, "Texture", layer.Texture.Path)
     ui.DrawAttributeRow(ctx, "Instances", fmt.tprintf("%i", len(layer.Instances)))
     for variant, index in layer.Colors {
         switch color in variant {
@@ -1168,6 +1188,7 @@ renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagL
 renderSelectedFlagLayerTexturedEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagLayerTexturedEmblem) {
     ui.DrawAttributeRow(ctx, "Type", "Textured Emblem")
     ui.DrawAttributeRow(ctx, "Texture", layer.Texture.Name)
+    ui.DrawAttributeRow(ctx, "Texture", layer.Texture.Path)
     ui.DrawAttributeRow(ctx, "Instances", fmt.tprintf("%i", len(layer.Instances)))
     mu.layout_row(ctx, { -1, -1 }, 20)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)

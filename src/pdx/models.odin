@@ -12,8 +12,9 @@ Flag :: struct {
     Layers: [dynamic]FlagLayerVariant,
 }
 
-CreateFlag :: proc() -> Flag {
+CreateFlag :: proc(name: string = "") -> Flag {
     flag := Flag{
+        Name = strings.clone(name),
         Colors = make([dynamic]FlagColorVariant),
         Layers = make([dynamic]FlagLayerVariant),
     }
@@ -30,9 +31,7 @@ DestroyFlag :: proc(flag: Flag) {
         DestroyLayer(flag.Layers[index])
     }
     delete(flag.Layers)
-    if flag.Name != "" {
-        delete(flag.Name)
-    }
+    delete(flag.Name)
 }
 
 FlagTexture :: struct {
@@ -192,7 +191,9 @@ DestroyColor :: proc(variant: FlagColorVariant) {
         free(color)
     case ^FlagColorNamed:
         delete(color.Name)
-        delete(color.NamedColor)
+        if color.NamedColor != "" {
+            delete(color.NamedColor)
+        }
         free(color)
     case ^FlagColorReference:
         delete(color.Name)

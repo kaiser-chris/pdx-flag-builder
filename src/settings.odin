@@ -49,6 +49,7 @@ loadSettings :: proc() {
             copy(state.Databases[index].BufferPath[:], state.Databases[index].Settings.Path)
             loadNamedColors(&state.Databases[index])
             loadDatabaseTextures(&state.Databases[index])
+            loadExistingFlags(&state.Databases[index])
         }
     }
 
@@ -69,6 +70,7 @@ saveSettings :: proc() {
         state.Settings.Databases[index] = state.Databases[index].Settings
         loadNamedColors(&state.Databases[index])
         loadDatabaseTextures(&state.Databases[index])
+        loadExistingFlags(&state.Databases[index])
     }
 
     json_bytes, err := json.marshal(state.Settings)

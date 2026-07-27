@@ -60,6 +60,10 @@ Parse_Error :: struct {
     col:     int,
 }
 
+is_bom :: proc(a: byte, b: byte, c: byte) -> bool {
+    return a == 0xEF && b == 0xBB && c == 0xBF
+}
+
 is_space :: proc(c: byte) -> bool {
     return c == ' ' || c == '\t' || c == '\n' || c == '\r'
 }
@@ -156,6 +160,14 @@ lex :: proc(input: string, allocator := context.allocator) -> ([]Token, bool) {
     }
     for i < len(input) {
         c := input[i]
+
+        // Handle 3 character UTF-8 BOM
+        if (len(input) > i + 2) && is_bom(c, input[i + 1], input[i + 2]) {
+            advance(c, &i, &line, &col)
+            advance(c, &i, &line, &col)
+            advance(c, &i, &line, &col)
+            continue
+        }
 
         if is_space(c) {
             advance(c, &i, &line, &col)
@@ -459,25 +471,4 @@ parse_document :: proc(input: string, allocator := context.allocator) -> Parse_R
 
     root := Value{kind = .Object, data = items[:]}
     return Parse_Result{root = root, ok = true}
-}
-
-main :: proc() {
-    input := `@semy = 0.25
-@third = @[1/3]
-@fifth = @[1/5]
-@sixth = @[1/6]
-
-GBR2_communist_canton = {
-    pattern = "pattern_solid.tga"
-    color1 = rgb { 5 12 5 }
-}`
-
-    result := parse_document(input)
-
-    if !result.ok {
-        fmt.eprintln("Parse error:", result.err.message, "at", result.err.line, ":", result.err.col)
-        return
-    }
-
-    fmt.printfln("%v", result)
 }

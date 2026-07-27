@@ -13,9 +13,9 @@ import os "core:os"
 import time "core:time"
 import "pdx"
 
-ICON_APPLICATION :: "assets/icon.png"
-
 RELEASE :: #config(RELEASE, false)
+
+ICON_APPLICATION :: "assets/icon.png"
 
 TEXTURE_LOADING_THREAD_IDENTIFIER: int: 1
 
@@ -52,6 +52,7 @@ State :: struct {
     Done: bool,
     RecolorShader: texture.RecolorShader,
     NamedColors: map[string]pdx.FlagColorVariant,
+    Flags: map[string]pdx.Flag,
 }
 
 DatabaseState :: struct {
@@ -64,6 +65,7 @@ DatabaseState :: struct {
     Patterns: [dynamic]pdx.FlagTexture,
     ColoredEmblems: [dynamic]pdx.FlagTexture,
     TexturedEmblems: [dynamic]pdx.FlagTexture,
+    Flags: [dynamic]pdx.Flag,
 }
 
 ImageRequest :: struct {
@@ -98,7 +100,9 @@ setupState :: proc() {
     state.TextureLoadChannel = textureChannel
     state.SidebarOpen = true
     state.SidebarWidth = 350
-    state.Flag = pdx.CreateFlag()
+    flag := pdx.CreateFlag()
+    state.Flags["init"] = flag
+    state.Flag = flag
     state.NextTextureIdentifier = 1
     state.TextureLoadingThread = createTextureLoadingThread()
     state.SelectedFlagElement = &state.Flag
@@ -122,13 +126,13 @@ destroyState :: proc() {
     for key in state.TextureMap {
         delete(key)
     }
+    delete(state.Flags)
     delete(state.TextureMap)
     delete(state.RenderTextureMap)
     delete(state.Databases)
     delete(state.DatabaseSearch)
     chan.destroy(state.ImageLoadChannel)
     chan.destroy(state.TextureLoadChannel)
-    pdx.DestroyFlag(state.Flag)
     thread.destroy(state.TextureLoadingThread)
     rl.UnloadShader(state.RecolorShader.Shader)
     delete(state.NamedColors)
@@ -209,27 +213,27 @@ main :: proc() {
     defer destroySettings()
 
     // TODO: REMOVE
-    when !RELEASE {
-        pdx.DestroyFlag(state.Flag)
-        flags := pdx.LoadCoaFile("test_coa.txt")
-        for _, index in flags {
-            ok := EnrichLoadedCoa(&flags[index], state.Databases[:])
-            if !ok {
-                fmt.printfln("Could not enrich flag: %s", flags[index].Name)
-            }
-        }
-        fmt.printfln("Loaded %i flags", len(flags))
-        fmt.printfln("%v", flags)
-        state.Flag = flags[2]
-        defer {
-            for _, index in flags {
-                if flags[index].Name != state.Flag.Name {
-                    pdx.DestroyFlag(flags[index])
-                }
-            }
-            delete(flags)
-        }
-    }
+//    when !RELEASE {
+//        pdx.DestroyFlag(state.Flag)
+//        flags := pdx.LoadCoaFile("test_coa.txt")
+//        for _, index in flags {
+//            ok := EnrichLoadedCoa(&flags[index], state.Databases[:])
+//            if !ok {
+//                fmt.printfln("Could not enrich flag: %s", flags[index].Name)
+//            }
+//        }
+//        fmt.printfln("Loaded %i flags", len(flags))
+//        fmt.printfln("%v", flags)
+//        state.Flag = flags[2]
+//        defer {
+//            for _, index in flags {
+//                if flags[index].Name != state.Flag.Name {
+//                    pdx.DestroyFlag(flags[index])
+//                }
+//            }
+//            delete(flags)
+//        }
+//    }
 
 
     rl.SetTraceLogLevel(.WARNING)

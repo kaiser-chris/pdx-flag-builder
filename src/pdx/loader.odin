@@ -4,7 +4,8 @@ import "coa"
 import "core:slice"
 import os "core:os"
 import fmt "core:fmt"
-import strings "core:strings"
+
+RELEASE :: #config(RELEASE, false)
 
 ERROR_OBJECT_CAST: string: "Could not cast Object: %v"
 ATTRIBUTE_PATTERN: string: "pattern"
@@ -16,6 +17,8 @@ ATTRIBUTE_SCALE: string: "scale"
 ATTRIBUTE_POSITION: string: "position"
 ATTRIBUTE_ROTATION: string: "rotation"
 
+TYPE_TEMPLATE: string: "template"
+
 LoadCoaFile :: proc(path: string) -> []Flag {
     data, err := os.read_entire_file(path, context.allocator)
     if err != nil {
@@ -26,10 +29,11 @@ LoadCoaFile :: proc(path: string) -> []Flag {
     content := string(data)
     defer delete(data)
     result := coa.parse_document(content, context.temp_allocator)
-    fmt.printfln("%v", result)
     defer free_all(context.temp_allocator)
     if !result.ok {
-        fmt.eprintln("Parse error:", result.err.message, "at", result.err.line, ":", result.err.col)
+        when !RELEASE {
+            fmt.printfln("could not parse coa file %s: %s at %i:%i", path, result, result.err.message, result.err.line, result.err.col)
+        }
         return []Flag{}
     }
 
@@ -57,14 +61,13 @@ LoadCoaFile :: proc(path: string) -> []Flag {
 
 LoadCoa :: proc(root: coa.Pair) -> (Flag, bool) {
 
-    if root.value.kind != .Object {
+    if root.value.kind != .Object || root.key == TYPE_TEMPLATE {
         return Flag{}, false
     }
 
     attributes := root.value.data.([]coa.Pair)
 
-    flag := CreateFlag()
-    flag.Name = strings.clone(root.key)
+    flag := CreateFlag(root.key)
 
     for attribute in attributes {
         if attribute.key == ATTRIBUTE_PATTERN && attribute.value.kind == .String {
@@ -141,12 +144,12 @@ loadInstances :: proc(attributeInstances: []coa.Pair) -> []^LayerInstance {
                 values := attribute.value.data.([]coa.Value)
                 scale := LayerVector{}
                 if len(values) != 2 {
-                    fmt.eprintln("invalid number of values for instance scale")
+                    fmt.eprintfln("invalid number of values for instance scale: %v", values)
                     continue
                 }
                 for value, index in values {
                     if value.kind != .Number {
-                        fmt.eprintln("non numeric value for instance scale")
+                        fmt.eprintfln("non numeric value for instance scale: %v", value.data)
                         continue
                     }
                     number := value.data.(f64)
@@ -163,12 +166,12 @@ loadInstances :: proc(attributeInstances: []coa.Pair) -> []^LayerInstance {
                 values := attribute.value.data.([]coa.Value)
                 position := LayerVector{}
                 if len(values) != 2 {
-                    fmt.eprintln("invalid number of values for instance scale")
+                    fmt.eprintfln("invalid number of values for instance position: %v", values)
                     continue
                 }
                 for value, index in values {
                     if value.kind != .Number {
-                        fmt.eprintln("non numeric value for instance scale")
+                        fmt.eprintfln("non numeric value for instance position: %v", value.data)
                         continue
                     }
                     number := value.data.(f64)

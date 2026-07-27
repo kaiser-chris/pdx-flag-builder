@@ -10,6 +10,7 @@ import rl "vendor:raylib"
 
 DestroyDatabase :: proc(database: ^DatabaseState) {
     destroyNamedColors(database)
+    destroyDatabaseFlags(database)
     destroyLoadedTextures(database)
 }
 
@@ -18,6 +19,10 @@ loadNamedColors :: proc(database: ^DatabaseState) {
 
     database.NamedColors = make([dynamic]pdx.FlagColorVariant)
     path, err := os.join_path([]string{ database.Settings.Path, pdx.FOLDER_COMMON, pdx.FOLDER_NAMED_COLORS }, context.allocator)
+    if err != nil {
+        fmt.eprintfln("could not build named colors path for database %s: %v", database.Settings.Name, err)
+        return
+    }
     defer delete(path)
 
     walker := os.walker_create_path(path)
@@ -159,6 +164,63 @@ destroyNamedColors :: proc(database: ^DatabaseState) {
     delete(database.NamedColors)
 }
 
+loadExistingFlags :: proc(database: ^DatabaseState) {
+    destroyDatabaseFlags(database)
+
+    database.Flags = make([dynamic]pdx.Flag)
+    path, err := os.join_path([]string{ database.Settings.Path, pdx.FOLDER_COMMON, pdx.FOLDER_COA, pdx.FOLDER_COA }, context.allocator)
+    if err != nil {
+        fmt.eprintfln("could not build coat of arms path for database %s: %v", database.Settings.Name, err)
+        return
+    }
+    defer delete(path)
+
+    walker := os.walker_create_path(path)
+    defer os.walker_destroy(&walker)
+
+    for info in os.walker_walk(&walker) {
+        _ = os.walker_error(&walker) or_break
+
+        if path, err := os.walker_error(&walker); err != nil {
+            fmt.eprintfln("failed walking %s: %s", path, err)
+            continue
+        }
+
+        if info.type == .Directory && path != info.fullpath {
+            walker.skip_dir = true
+            continue
+        }
+
+        if !strings.has_suffix(info.fullpath, ".txt") {
+            continue
+        }
+
+        if info.type != .Regular {
+            continue
+        }
+
+        flags := pdx.LoadCoaFile(info.fullpath)
+        for flag, index in flags {
+            EnrichLoadedFlag(&flags[index], state.Databases[:])
+            append(&database.Flags, flags[index])
+            state.Flags[flags[index].Name] = flags[index]
+        }
+        delete(flags)
+    }
+
+    fmt.printfln("Loaded %i coat of arms from database: %s", len(database.Flags), database.Settings.Name)
+}
+destroyDatabaseFlags :: proc(database: ^DatabaseState) {
+    if database.Flags == nil {
+        return
+    }
+    for _, index in database.Flags {
+        pdx.DestroyFlag(database.Flags[index])
+    }
+    delete(database.Flags)
+}
+
+
 loadDatabaseTextures :: proc(database: ^DatabaseState) {
     destroyLoadedTextures(database)
 
@@ -246,37 +308,43 @@ loadDatabaseFolderTextures :: proc(database: ^DatabaseState, path, type: string)
     }
 }
 
-EnrichLoadedCoa  :: proc(flag: ^pdx.Flag, databases: []DatabaseState) -> bool {
+EnrichLoadedFlag  :: proc(flag: ^pdx.Flag, databases: []DatabaseState) -> bool {
     if flag.Pattern.Path == "" && flag.Pattern.Name != "" {
         path, found := findPatternTexturePath(flag.Pattern.Name, databases)
         if !found {
-            fmt.eprintfln("path: %s", flag.Pattern.Name)
+            fmt.eprintfln("could not find pattern texture path: %s", flag.Pattern.Name)
             return false
         }
+        name := strings.clone(flag.Pattern.Name)
+        defer delete(name)
         pdx.DestroyFlagTexture(flag.Pattern)
-        flag.Pattern = pdx.CreateFlagTexture(flag.Pattern.Name, path)
+        flag.Pattern = pdx.CreateFlagTexture(name, path)
     }
-    for variant in flag.Layers {
+    for variant, index in flag.Layers {
         switch layer in variant {
         case ^pdx.FlagLayerColoredEmblem:
             if layer.Texture.Path == "" && layer.Texture.Name != "" {
                 path, found := findColoredEmblemTexturePath(layer.Texture.Name, databases)
                 if !found {
-                    fmt.eprintfln("path: %s", layer.Texture.Name)
+                    fmt.eprintfln("could not find colored emblem texture path: %s", layer.Texture.Name)
                     return false
                 }
+                name := strings.clone(layer.Texture.Name)
+                defer delete(name)
                 pdx.DestroyFlagTexture(layer.Texture)
-                layer.Texture = pdx.CreateFlagTexture(layer.Texture.Name, path)
+                layer.Texture = pdx.CreateFlagTexture(name, path)
             }
         case ^pdx.FlagLayerTexturedEmblem:
             if layer.Texture.Path == "" && layer.Texture.Name != "" {
                 path, found := findTexturedEmblemTexturePath(layer.Texture.Name, databases)
                 if !found {
-                    fmt.eprintfln("path: %s", layer.Texture.Name)
+                    fmt.eprintfln("could not find textured emblem texture path: %s", layer.Texture.Name)
                     return false
                 }
+                name := strings.clone(layer.Texture.Name)
+                defer delete(name)
                 pdx.DestroyFlagTexture(layer.Texture)
-                layer.Texture = pdx.CreateFlagTexture(layer.Texture.Name, path)
+                layer.Texture = pdx.CreateFlagTexture(name, path)
             }
         }
     }
