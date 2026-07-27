@@ -11,7 +11,8 @@ import "pdx"
 WINDOM_PREVIEW: string: "Preview"
 WINDOM_TOOLBAR: string: "Toolbar"
 WINDOM_SETTINGS: string: "Settings"
-WINDOM_DATABASE: string: "Database"
+WINDOM_FLAG_DATABASE: string: "Flag Database"
+WINDOM_TEXTURE_DATABASE: string: "Texture Database"
 WINDOM_FLAG: string: "Layers"
 WINDOM_SELECTED: string: "Selected Layer"
 WINDOM_SIDEBAR: string: "Sidebar"
@@ -47,12 +48,20 @@ renderGui :: proc(ctx: ^mu.Context) {
         renderSettings(ctx)
     }
 
-    if state.DatabaseWindowOpen {
-        window := mu.get_container(ctx, WINDOM_DATABASE)
+    if state.TextureDatabaseWindowOpen {
+        window := mu.get_container(ctx, WINDOM_TEXTURE_DATABASE)
         if window != nil {
             window.open = true
         }
-        renderDatabase(ctx)
+        renderTextureDatabase(ctx)
+    }
+
+    if state.FlagDatabaseWindowOpen {
+        window := mu.get_container(ctx, WINDOM_FLAG_DATABASE)
+        if window != nil {
+            window.open = true
+        }
+        renderFlagDatabase(ctx)
     }
 
     if state.SidebarOpen {
@@ -408,7 +417,18 @@ renderToolbar :: proc(ctx: ^mu.Context) {
 
         mu.layout_begin_column(ctx)
         mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
-        if .SUBMIT in mu.button(ctx, "Sidebar") {
+        if .SUBMIT in mu.button(ctx, "Settings") {
+            if state.SettingsWindowOpen {
+                state.SettingsWindowOpen = false
+            } else {
+                state.SettingsWindowOpen = true
+            }
+        }
+        mu.layout_end_column(ctx)
+
+        mu.layout_begin_column(ctx)
+        mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
+        if .SUBMIT in mu.button(ctx, "Toggle Sidebar") {
             if state.SidebarOpen {
                 state.SidebarOpen = false
             } else {
@@ -419,22 +439,22 @@ renderToolbar :: proc(ctx: ^mu.Context) {
 
         mu.layout_begin_column(ctx)
         mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
-        if .SUBMIT in mu.button(ctx, "CoA Database") {
-            if state.DatabaseWindowOpen {
-                state.DatabaseWindowOpen = false
+        if .SUBMIT in mu.button(ctx, "Texture Database") {
+            if state.TextureDatabaseWindowOpen {
+                state.TextureDatabaseWindowOpen = false
             } else {
-                state.DatabaseWindowOpen = true
+                state.TextureDatabaseWindowOpen = true
             }
         }
         mu.layout_end_column(ctx)
 
         mu.layout_begin_column(ctx)
         mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
-        if .SUBMIT in mu.button(ctx, "Settings") {
-            if state.SettingsWindowOpen {
-                state.SettingsWindowOpen = false
+        if .SUBMIT in mu.button(ctx, "Flag Database") {
+            if state.FlagDatabaseWindowOpen {
+                state.FlagDatabaseWindowOpen = false
             } else {
-                state.SettingsWindowOpen = true
+                state.FlagDatabaseWindowOpen = true
             }
         }
         mu.layout_end_column(ctx)
@@ -442,11 +462,21 @@ renderToolbar :: proc(ctx: ^mu.Context) {
 }
 
 renderFlagPreview :: proc(ctx: ^mu.Context) {
-    destination := mu.Rect{
-        x = (rl.GetScreenWidth() - FLAG_WIDTH - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH - 10) / 2,
-        y = TOOLBAR_HEIGHT + ((rl.GetScreenHeight() - FLAG_HEIGHT - TOOLBAR_HEIGHT - 6) / 2),
-        w = FLAG_WIDTH,
-        h = FLAG_HEIGHT,
+    destination: mu.Rect
+    if state.SidebarOpen {
+        destination = mu.Rect{
+            x = (rl.GetScreenWidth() - FLAG_WIDTH - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH - 10) / 2,
+            y = TOOLBAR_HEIGHT + ((rl.GetScreenHeight() - FLAG_HEIGHT - TOOLBAR_HEIGHT - 6) / 2),
+            w = FLAG_WIDTH,
+            h = FLAG_HEIGHT,
+        }
+    } else {
+        destination = mu.Rect{
+            x = (rl.GetScreenWidth() - FLAG_WIDTH) / 2,
+            y = TOOLBAR_HEIGHT + ((rl.GetScreenHeight() - FLAG_HEIGHT - TOOLBAR_HEIGHT - 6) / 2),
+            w = FLAG_WIDTH,
+            h = FLAG_HEIGHT,
+        }
     }
 
     if mu.window(ctx, WINDOM_PREVIEW, destination, {.NO_CLOSE, .NO_TITLE, .NO_RESIZE, .NO_SCROLL, .NO_FRAME}) {
@@ -725,8 +755,48 @@ renderSettings :: proc(ctx: ^mu.Context) {
     }
 }
 
-renderDatabase :: proc(ctx: ^mu.Context) {
-    if mu.window(ctx, WINDOM_DATABASE, {10, 10 + TOOLBAR_HEIGHT, 500, rl.GetScreenHeight() - 20 - TOOLBAR_HEIGHT}, {}) {
+renderFlagDatabase :: proc(ctx: ^mu.Context) {
+    if mu.window(ctx, WINDOM_FLAG_DATABASE, {10, 10 + TOOLBAR_HEIGHT, 500, rl.GetScreenHeight() - 20 - TOOLBAR_HEIGHT}, {}) {
+        guranteeBounds(ctx)
+
+        mu.layout_row(ctx, {-1, -1}, 15)
+        mu.text(ctx, "Search:")
+        @static searchBuffer: [128]byte
+        @static searchBufferLength: int
+        @static search: string
+        mu.layout_row(ctx, {-1, -1}, 20)
+        if .CHANGE in mu.textbox(ctx, searchBuffer[:], &searchBufferLength) {
+            delete(search)
+            search = strings.to_lower(string(searchBuffer[:searchBufferLength]))
+        }
+        mu.layout_row(ctx, {-1, -1}, 5)
+        r := mu.layout_next(ctx)
+        mu.draw_rect(ctx, r, ctx.style.colors[.WINDOW_BG])
+
+        options: mu.Options
+        if search != "" {
+            options = { .EXPANDED }
+        }
+
+        for database in state.Databases {
+            ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+            if .ACTIVE in mu.header(ctx, database.Settings.Name, options) {
+
+            }
+            mu.pop_id(ctx)
+        }
+    }
+
+    cnt := mu.get_container(ctx, WINDOM_FLAG_DATABASE)
+    is_open := cnt != nil && cnt.open != false
+
+    if state.FlagDatabaseWindowOpen && !is_open {
+        state.FlagDatabaseWindowOpen = false
+    }
+}
+
+renderTextureDatabase :: proc(ctx: ^mu.Context) {
+    if mu.window(ctx, WINDOM_TEXTURE_DATABASE, {10, 10 + TOOLBAR_HEIGHT, 500, rl.GetScreenHeight() - 20 - TOOLBAR_HEIGHT}, {}) {
         guranteeBounds(ctx)
 
         mu.layout_row(ctx, {-1, -1}, 15)
@@ -757,7 +827,7 @@ renderDatabase :: proc(ctx: ^mu.Context) {
                         name := strings.to_lower(texture.Name)
                         defer delete(name)
                         if search == "" || strings.contains(name, search) {
-                            renderDatabaseItem(ctx, texture, pdx.FOLDER_PATTERNS)
+                            renderTextureDatabaseItem(ctx, texture, pdx.FOLDER_PATTERNS)
                         }
                     }
                     if len(database.Patterns) == 0 {
@@ -774,10 +844,10 @@ renderDatabase :: proc(ctx: ^mu.Context) {
                         name := strings.to_lower(texture.Name)
                         defer delete(name)
                         if search == "" || strings.contains(name, search) {
-                            renderDatabaseItem(ctx, texture, pdx.FOLDER_COLORED_EMBLEMS)
+                            renderTextureDatabaseItem(ctx, texture, pdx.FOLDER_COLORED_EMBLEMS)
                         }
                     }
-                    if len(database.Patterns) == 0 {
+                    if len(database.ColoredEmblems) == 0 {
                         mu.layout_row(ctx, {-1, -1}, 50)
                         r := mu.layout_next(ctx)
                         mu.draw_rect(ctx, r, ctx.style.colors[.WINDOW_BG])
@@ -791,10 +861,10 @@ renderDatabase :: proc(ctx: ^mu.Context) {
                         name := strings.to_lower(texture.Name)
                         defer delete(name)
                         if search == "" || strings.contains(name, search) {
-                            renderDatabaseItem(ctx, texture, pdx.FOLDER_TEXTURED_EMBLEMS)
+                            renderTextureDatabaseItem(ctx, texture, pdx.FOLDER_TEXTURED_EMBLEMS)
                         }
                     }
-                    if len(database.Patterns) == 0 {
+                    if len(database.TexturedEmblems) == 0 {
                         mu.layout_row(ctx, {-1, -1}, 50)
                         r := mu.layout_next(ctx)
                         mu.draw_rect(ctx, r, ctx.style.colors[.WINDOW_BG])
@@ -807,15 +877,15 @@ renderDatabase :: proc(ctx: ^mu.Context) {
         }
     }
 
-    cnt := mu.get_container(ctx, WINDOM_DATABASE)
+    cnt := mu.get_container(ctx, WINDOM_TEXTURE_DATABASE)
     is_open := cnt != nil && cnt.open != false
 
-    if state.DatabaseWindowOpen && !is_open {
-        state.DatabaseWindowOpen = false
+    if state.TextureDatabaseWindowOpen && !is_open {
+        state.TextureDatabaseWindowOpen = false
     }
 }
 
-renderDatabaseItem :: proc(ctx: ^mu.Context, item: pdx.FlagTexture, type: string) {
+renderTextureDatabaseItem :: proc(ctx: ^mu.Context, item: pdx.FlagTexture, type: string) {
     texture := state.GuiTextureCache[item.Path]
     width := i32((f32(texture.width) / f32(texture.height)) * 128)
 
