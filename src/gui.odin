@@ -19,7 +19,11 @@ WINDOM_SIDEBAR: string: "Sidebar"
 WINDOM_COLOR_PICKER: string: "Color Picker"
 WINDOM_INSTANCE_EDITOR: string: "Instance Editor"
 
-TEXTURE_SUB: string: "textures/sub.dds"
+TEXTURE_SUB: string: "assets/textures/sub.dds"
+TEXTURE_TRANSPARENCY: string: "assets/textures/transparency.dds"
+TEXTURE_INVALID: string: "assets/textures/invalid.dds"
+
+SHADER_RECOLOR: string: "assets/shaders/recolor.fs"
 
 SIDEBAR_HANDLE_WIDTH:i32: 10
 SIDEBAR_MIN_WIDTH: i32: 350

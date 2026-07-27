@@ -13,6 +13,8 @@ import os "core:os"
 import time "core:time"
 import "pdx"
 
+RELEASE :: #config(RELEASE, false)
+
 TEXTURE_LOADING_THREAD_IDENTIFIER: int: 1
 
 TEXTURE_RECT_IDENTIFIER: u8: 1
@@ -179,19 +181,21 @@ handleTextureRequests :: proc() {
 }
 
 main :: proc() {
-    track: mem.Tracking_Allocator
-    mem.tracking_allocator_init(&track, context.allocator)
-    context.allocator = mem.tracking_allocator(&track)
+    when !RELEASE {
+        track: mem.Tracking_Allocator
+        mem.tracking_allocator_init(&track, context.allocator)
+        context.allocator = mem.tracking_allocator(&track)
 
-    // Check for leaks
-    defer {
-        if len(track.allocation_map) > 0 {
-            fmt.printfln("Real Memory Leak! %v allocations not freed.", len(track.allocation_map))
-            for _, entry in track.allocation_map {
-                fmt.printfln("- %v bytes at %v", entry.size, entry.location)
+        // Check for leaks
+        defer {
+            if len(track.allocation_map) > 0 {
+                fmt.printfln("Real Memory Leak! %v allocations not freed.", len(track.allocation_map))
+                for _, entry in track.allocation_map {
+                    fmt.printfln("- %v bytes at %v", entry.size, entry.location)
+                }
+            } else {
+                fmt.println("No leaks detected! Memory is safely pooled by the allocator.")
             }
-        } else {
-            fmt.println("No leaks detected! Memory is safely pooled by the allocator.")
         }
     }
 
@@ -203,24 +207,26 @@ main :: proc() {
     defer destroySettings()
 
     // TODO: REMOVE
-    pdx.DestroyFlag(state.Flag)
-    flags := pdx.LoadCoaFile("test_coa.txt")
-    for _, index in flags {
-        ok := EnrichLoadedCoa(&flags[index], state.Databases[:])
-        if !ok {
-            fmt.printfln("Could not enrich flag: %s", flags[index].Name)
-        }
-    }
-    fmt.printfln("Loaded %i flags", len(flags))
-    fmt.printfln("%v", flags)
-    state.Flag = flags[2]
-    defer {
+    when !RELEASE {
+        pdx.DestroyFlag(state.Flag)
+        flags := pdx.LoadCoaFile("test_coa.txt")
         for _, index in flags {
-            if flags[index].Name != state.Flag.Name {
-                pdx.DestroyFlag(flags[index])
+            ok := EnrichLoadedCoa(&flags[index], state.Databases[:])
+            if !ok {
+                fmt.printfln("Could not enrich flag: %s", flags[index].Name)
             }
         }
-        delete(flags)
+        fmt.printfln("Loaded %i flags", len(flags))
+        fmt.printfln("%v", flags)
+        state.Flag = flags[2]
+        defer {
+            for _, index in flags {
+                if flags[index].Name != state.Flag.Name {
+                    pdx.DestroyFlag(flags[index])
+                }
+            }
+            delete(flags)
+        }
     }
 
     rl.SetTraceLogLevel(.WARNING)
@@ -228,7 +234,7 @@ main :: proc() {
     rl.InitWindow(1280, 800, "PDX Flag Editor")
     defer rl.CloseWindow()
 
-    state.RecolorShader = texture.LoadRecolorShader("shaders/recolor.fs")
+    state.RecolorShader = texture.LoadRecolorShader(SHADER_RECOLOR)
 
     pixels := make([][4]u8, mu.DEFAULT_ATLAS_WIDTH*mu.DEFAULT_ATLAS_HEIGHT)
     for alpha, i in mu.default_atlas_alpha {
@@ -246,10 +252,10 @@ main :: proc() {
     state.AtlasTexture = rl.LoadTextureFromImage(image)
     defer rl.UnloadTexture(state.AtlasTexture)
 
-    state.TransparencyTexture = texture.LoadTexture("textures/transparency.dds")
+    state.TransparencyTexture = texture.LoadTexture(TEXTURE_TRANSPARENCY)
     defer rl.UnloadTexture(state.TransparencyTexture)
 
-    state.InvalidTexture = texture.LoadTexture("textures/invalid.dds")
+    state.InvalidTexture = texture.LoadTexture(TEXTURE_INVALID)
     defer rl.UnloadTexture(state.InvalidTexture)
 
     ctx := &state.Context
