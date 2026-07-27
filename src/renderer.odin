@@ -13,6 +13,8 @@ import os "core:os"
 import time "core:time"
 import "pdx"
 
+ICON_APPLICATION :: "assets/icon.png"
+
 RELEASE :: #config(RELEASE, false)
 
 TEXTURE_LOADING_THREAD_IDENTIFIER: int: 1
@@ -229,10 +231,16 @@ main :: proc() {
         }
     }
 
+
     rl.SetTraceLogLevel(.WARNING)
     rl.SetConfigFlags({ .WINDOW_RESIZABLE })
     rl.InitWindow(1280, 800, "PDX Flag Editor")
     defer rl.CloseWindow()
+
+    icon := rl.LoadImage(ICON_APPLICATION)
+    rl.ImageFormat(&icon, .UNCOMPRESSED_R8G8B8A8)
+    rl.SetWindowIcon(icon)
+    rl.UnloadImage(icon)
 
     state.RecolorShader = texture.LoadRecolorShader(SHADER_RECOLOR)
 

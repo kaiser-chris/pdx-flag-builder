@@ -14,5 +14,6 @@
 /.run/
 
 # Application Specific
+*.res
 /bin
 /settings.json
