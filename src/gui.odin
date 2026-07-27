@@ -18,6 +18,8 @@ WINDOM_SIDEBAR: string: "Sidebar"
 WINDOM_COLOR_PICKER: string: "Color Picker"
 WINDOM_INSTANCE_EDITOR: string: "Instance Editor"
 
+TEXTURE_SUB: string: "textures/sub.dds"
+
 SIDEBAR_HANDLE_WIDTH:i32: 10
 SIDEBAR_MIN_WIDTH: i32: 350
 SIDEBAR_MAX_WIDTH: i32: 600
@@ -73,6 +75,8 @@ renderGui :: proc(ctx: ^mu.Context) {
             renderAbsoluteColorPicker(ctx)
         case ^pdx.FlagColorNamed:
             renderNamedColorPicker(ctx)
+        case ^pdx.FlagColorReference:
+            //TODO
         }
     }
 
@@ -131,6 +135,7 @@ renderAbsoluteColorPicker :: proc(ctx: ^mu.Context) {
                 green = rgb[1]
                 blue = rgb[2]
             case ^pdx.FlagColorNamed:
+            case ^pdx.FlagColorReference:
             }
         }
         mu.layout_end_column(ctx)
@@ -169,6 +174,7 @@ renderAbsoluteColorPicker :: proc(ctx: ^mu.Context) {
             }
             mu.layout_end_column(ctx)
         case ^pdx.FlagColorNamed:
+        case ^pdx.FlagColorReference:
         }
     }
 
@@ -207,6 +213,8 @@ renderNamedColorPicker :: proc(ctx: ^mu.Context) {
                         rectColor = mu.Color{ tmp[0], tmp[1], tmp[2], 255 }
                     case ^pdx.FlagColorNamed:
                         fmt.eprintfln("Named color is referencing another named color")
+                    case ^pdx.FlagColorReference:
+                        fmt.eprintfln("Named color is referencing a reference color")
                     }
 
                     mu.layout_row(ctx, { -1, -1 }, 20)
@@ -238,6 +246,8 @@ renderNamedColorPicker :: proc(ctx: ^mu.Context) {
                             fmt.eprintfln("RGB color does not support named color")
                         case ^pdx.FlagColorHsv:
                             fmt.eprintfln("HSV color does not support named color")
+                        case ^pdx.FlagColorReference:
+                            fmt.eprintfln("reference color does not support named color")
                         case ^pdx.FlagColorNamed:
                             delete(color.NamedColor)
                             color.NamedColor = strings.clone(name)
@@ -348,6 +358,7 @@ renderFlagPreview :: proc(ctx: ^mu.Context) {
 
 renderFlagPreviewTexture :: proc(cmd: ^mu.Command_Rect) {
     destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
+    rl.BeginScissorMode(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h)
 
     if state.Flag.Pattern.Name != "" {
         pattern, ok := state.RenderTextureMap[state.Flag.Pattern.Path]
@@ -376,12 +387,12 @@ renderFlagPreviewTexture :: proc(cmd: ^mu.Command_Rect) {
             renderTexturedEmblemInstances(cmd, layer)
         }
     }
+    rl.EndScissorMode()
 }
 
 renderColoredEmblemInstances :: proc(cmd: ^mu.Command_Rect, layer: ^pdx.FlagLayerColoredEmblem) {
     emblem, ok := state.RenderTextureMap[layer.Texture.Path]
     if !ok {
-        fmt.eprintfln("Could not find colored emblem texture: %s", layer.Texture.Path)
         return
     }
     source := rl.Rectangle{0, 0, f32(emblem.width), f32(emblem.height)}
@@ -396,7 +407,23 @@ renderColoredEmblemInstances :: proc(cmd: ^mu.Command_Rect, layer: ^pdx.FlagLaye
         texture.DrawRecoloredTexture(
             emblem,
             source,
-            calculateInstanceDestination(instance, cmd.rect),
+            calculateInstanceDestination(emblem, instance, cmd.rect),
+            colorMappings[:],
+            state.RecolorShader,
+            rotation = f32(instance.Rotation)
+        )
+    }
+
+    if len(layer.Instances) == 0 {
+        instance := pdx.LayerInstance{
+            Rotation = 0,
+            Position = pdx.DEFAULT_POSITION,
+            Scale = pdx.DEFAULT_SCALE,
+        }
+        texture.DrawRecoloredTexture(
+            emblem,
+            source,
+            calculateInstanceDestination(emblem, &instance, cmd.rect),
             colorMappings[:],
             state.RecolorShader,
             rotation = f32(instance.Rotation)
@@ -407,7 +434,6 @@ renderColoredEmblemInstances :: proc(cmd: ^mu.Command_Rect, layer: ^pdx.FlagLaye
 renderTexturedEmblemInstances :: proc(cmd: ^mu.Command_Rect, layer: ^pdx.FlagLayerTexturedEmblem) {
     emblem, ok := state.RenderTextureMap[layer.Texture.Path]
     if !ok {
-        fmt.eprintfln("Could not find textured emblem texture: %s", layer.Texture.Path)
         return
     }
     source := rl.Rectangle{0, 0, f32(emblem.width), f32(emblem.height)}
@@ -416,7 +442,23 @@ renderTexturedEmblemInstances :: proc(cmd: ^mu.Command_Rect, layer: ^pdx.FlagLay
         rl.DrawTexturePro(
             emblem,
             source,
-            calculateInstanceDestination(instance, cmd.rect),
+            calculateInstanceDestination(emblem, instance, cmd.rect),
+            { 0, 0 },
+            f32(instance.Rotation),
+            rl.WHITE
+        )
+    }
+
+    if len(layer.Instances) == 0 {
+        instance := pdx.LayerInstance{
+            Rotation = 0,
+            Position = pdx.DEFAULT_POSITION,
+            Scale = pdx.DEFAULT_SCALE,
+        }
+        rl.DrawTexturePro(
+            emblem,
+            source,
+            calculateInstanceDestination(emblem, &instance, cmd.rect),
             { 0, 0 },
             f32(instance.Rotation),
             rl.WHITE
@@ -424,13 +466,15 @@ renderTexturedEmblemInstances :: proc(cmd: ^mu.Command_Rect, layer: ^pdx.FlagLay
     }
 }
 
-calculateInstanceDestination :: proc(instance: ^pdx.LayerInstance, target: mu.Rect) -> rl.Rectangle {
-    x: f32 = f32(target.x) + (f32(target.w) * instance.Position.X)
-    y: f32 = f32(target.y) + (f32(target.h) * instance.Position.Y)
+calculateInstanceDestination :: proc(texture: rl.Texture2D, instance: ^pdx.LayerInstance, target: mu.Rect) -> rl.Rectangle {
     width: f32 = f32(target.w) * instance.Scale.X
     height: f32 = f32(target.h) * instance.Scale.Y
 
-    // TODO: Validate scaling and positioning
+    // Default position 0.5 is centered
+    // The position then moves the instance by the flag width/height
+    x := f32(target.x) + ((f32(target.w) - width) / 2) + (f32(target.w) * (instance.Position.X - 0.5))
+    y := f32(target.y) + ((f32(target.h) - height) / 2) + (f32(target.h) * (instance.Position.Y - 0.5))
+
     return rl.Rectangle{ x, y, width, height }
 }
 
@@ -457,6 +501,45 @@ fillColorMapping :: proc(mappings: ^[dynamic]texture.ColorRecolor, variant: pdx.
         mapping, ok := checkColorMapping(color.Name, targetColor, sourceColors)
         if ok {
             append(mappings, mapping)
+        }
+    case ^pdx.FlagColorReference:
+        for baseColorVariant in state.Flag.Colors {
+            baseColorName: string
+            switch baseColor in baseColorVariant {
+            case ^pdx.FlagColorRgb:
+                if baseColor.Name != color.Reference {
+                    continue
+                }
+                targetColor := pdx.ToRenderColor(baseColor)
+                mapping, ok := checkColorMapping(color.Name, targetColor, sourceColors)
+                if ok {
+                    append(mappings, mapping)
+                }
+            case ^pdx.FlagColorHsv:
+                if baseColor.Name != color.Reference {
+                    continue
+                }
+                targetColor := pdx.ToRenderColor(baseColor)
+                mapping, ok := checkColorMapping(color.Name, targetColor, sourceColors)
+                if ok {
+                    append(mappings, mapping)
+                }
+            case ^pdx.FlagColorNamed:
+                if baseColor.Name != color.Reference {
+                    continue
+                }
+                retrieve, exists := state.NamedColors[baseColor.NamedColor]
+                if !exists {
+                    return
+                }
+                targetColor := pdx.ToRenderColor(retrieve)
+                mapping, ok := checkColorMapping(color.Name, targetColor, sourceColors)
+                if ok {
+                    append(mappings, mapping)
+                }
+            case ^pdx.FlagColorReference:
+                // Should not happen
+            }
         }
     }
 }
@@ -784,8 +867,17 @@ renderLayerInstances :: proc(ctx: ^mu.Context, instances: [dynamic]^pdx.LayerIns
     for instance, index in instances {
         mu.layout_row(ctx, {-1, -1}, 20)
         buttonRect := mu.layout_next(ctx)
+
+        subRect := mu.Rect{
+            buttonRect.x, buttonRect.y, 20, 20
+        }
+
         buttonRect.w = buttonRect.w - ctx.style.indent
         buttonRect.x = buttonRect.x + ctx.style.indent
+
+        mu.layout_set_next(ctx, subRect, false)
+        drawTransparentTexture(ctx, TEXTURE_SUB, 20, 20)
+
         mu.layout_set_next(ctx, buttonRect, false)
         ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
         if .SUBMIT in mu.button(ctx, fmt.tprintf("Instance: %i", index + 1)) {
@@ -847,6 +939,8 @@ renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
         case ^pdx.FlagColorHsv:
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, color.Name, color)
             renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
+        case ^pdx.FlagColorReference:
+            // Should not happen
         }
     }
     renderAddColorButtons(ctx, &flag.Colors)
@@ -866,6 +960,9 @@ renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagL
             renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
         case ^pdx.FlagColorHsv:
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, color.Name, color)
+            renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
+        case ^pdx.FlagColorReference:
+            buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, color.Name, color, state.Flag.Colors[:], state.NamedColors)
             renderColorButtons(ctx, variant, index, buttonEditRect, buttonDelRect)
         }
     }

@@ -150,6 +150,8 @@ destroyNamedColors :: proc(database: ^DatabaseState) {
             delete_key(&state.NamedColors, type.Name)
         case ^pdx.FlagColorNamed:
             delete_key(&state.NamedColors, type.Name)
+        case ^pdx.FlagColorReference:
+            delete_key(&state.NamedColors, type.Name)
         }
         pdx.DestroyColor(database.NamedColors[index])
     }
@@ -241,4 +243,75 @@ loadDatabaseFolderTextures :: proc(database: ^DatabaseState, path, type: string)
             append(&database.TexturedEmblems, texture)
         }
     }
+}
+
+EnrichLoadedCoa  :: proc(flag: ^pdx.Flag, databases: []DatabaseState) -> bool {
+    if flag.Pattern.Path == "" && flag.Pattern.Name != "" {
+        path, found := findPatternTexturePath(flag.Pattern.Name, databases)
+        if !found {
+            fmt.eprintfln("path: %s", flag.Pattern.Name)
+            return false
+        }
+        pdx.DestroyFlagTexture(flag.Pattern)
+        flag.Pattern = pdx.CreateFlagTexture(flag.Pattern.Name, path)
+    }
+    for variant in flag.Layers {
+        switch layer in variant {
+        case ^pdx.FlagLayerColoredEmblem:
+            if layer.Texture.Path == "" && layer.Texture.Name != "" {
+                path, found := findColoredEmblemTexturePath(layer.Texture.Name, databases)
+                if !found {
+                    fmt.eprintfln("path: %s", layer.Texture.Name)
+                    return false
+                }
+                pdx.DestroyFlagTexture(layer.Texture)
+                layer.Texture = pdx.CreateFlagTexture(layer.Texture.Name, path)
+            }
+        case ^pdx.FlagLayerTexturedEmblem:
+            if layer.Texture.Path == "" && layer.Texture.Name != "" {
+                path, found := findTexturedEmblemTexturePath(layer.Texture.Name, databases)
+                if !found {
+                    fmt.eprintfln("path: %s", layer.Texture.Name)
+                    return false
+                }
+                pdx.DestroyFlagTexture(layer.Texture)
+                layer.Texture = pdx.CreateFlagTexture(layer.Texture.Name, path)
+            }
+        }
+    }
+
+    return true
+}
+
+findPatternTexturePath :: proc(name: string, databases: []DatabaseState) -> (string, bool) {
+    for database in databases {
+        for texture in database.Patterns {
+            if name == texture.Name {
+                return texture.Path, true
+            }
+        }
+    }
+    return "", false
+}
+
+findColoredEmblemTexturePath :: proc(name: string, databases: []DatabaseState) -> (string, bool) {
+    for database in databases {
+        for texture in database.ColoredEmblems {
+            if name == texture.Name {
+                return texture.Path, true
+            }
+        }
+    }
+    return "", false
+}
+
+findTexturedEmblemTexturePath :: proc(name: string, databases: []DatabaseState) -> (string, bool) {
+    for database in databases {
+        for texture in database.TexturedEmblems {
+            if name == texture.Name {
+                return texture.Path, true
+            }
+        }
+    }
+    return "", false
 }

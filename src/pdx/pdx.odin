@@ -28,8 +28,8 @@ PATTERN_REPLACE_COLORS: []rl.Color: {
 
 COLORED_EMBLEM_REPLACE_COLORS: []rl.Color: {
     rl.Color{0, 0, 123, 255},
-    rl.Color{255, 0, 123, 255},
     rl.Color{0, 255, 123, 255},
+    rl.Color{255, 0, 123, 255},
 }
 
 COLOR_NAMES: []string: {
@@ -74,6 +74,11 @@ GetNextFreeColor :: proc(colors: []FlagColorVariant) -> string {
                     break
                 }
             case ^FlagColorHsv:
+                if color.Name == name {
+                    found = true
+                    break
+                }
+            case ^FlagColorReference:
                 if color.Name == name {
                     found = true
                     break

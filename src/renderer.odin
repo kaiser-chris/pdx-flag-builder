@@ -201,6 +201,27 @@ main :: proc() {
     loadSettings()
     defer destroySettings()
 
+    // TODO: REMOVE
+    pdx.DestroyFlag(state.Flag)
+    flags := pdx.LoadCoaFile("test_coa.txt")
+    for _, index in flags {
+        ok := EnrichLoadedCoa(&flags[index], state.Databases[:])
+        if !ok {
+            fmt.printfln("Could not enrich flag: %s", flags[index].Name)
+        }
+    }
+    fmt.printfln("Loaded %i flags", len(flags))
+    fmt.printfln("%v", flags)
+    state.Flag = flags[1]
+    defer {
+        for _, index in flags {
+            if flags[index].Name != state.Flag.Name {
+                pdx.DestroyFlag(flags[index])
+            }
+        }
+        delete(flags)
+    }
+
     rl.SetTraceLogLevel(.WARNING)
     rl.SetConfigFlags({ .WINDOW_RESIZABLE })
     rl.InitWindow(1280, 800, "PDX Flag Editor")

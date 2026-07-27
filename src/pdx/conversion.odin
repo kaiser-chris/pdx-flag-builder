@@ -84,6 +84,8 @@ VariantToRenderColor :: proc(variant: FlagColorVariant) -> rl.Color {
         return HsvToRenderColor(color)
     case ^FlagColorNamed:
         return rl.Color{}
+    case ^FlagColorReference:
+        return rl.Color{}
     }
     return rl.Color{}
 }

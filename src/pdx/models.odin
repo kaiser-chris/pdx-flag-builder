@@ -2,7 +2,11 @@ package pdx
 
 import strings "core:strings"
 
+DEFAULT_SCALE: LayerVector: { 1, 1 }
+DEFAULT_POSITION: LayerVector: { 0.5, 0.5 }
+
 Flag :: struct {
+    Name: string,
     Pattern: FlagTexture,
     Colors: [dynamic]FlagColorVariant,
     Layers: [dynamic]FlagLayerVariant,
@@ -13,16 +17,6 @@ CreateFlag :: proc() -> Flag {
         Colors = make([dynamic]FlagColorVariant),
         Layers = make([dynamic]FlagLayerVariant),
     }
-
-    // TODO: Remove this
-    testColor1 := CreateColorRgb(COLOR_NAMES[0], 165, 255, 177)
-    testColor2 := CreateColorRgb(COLOR_NAMES[1], 255, 117, 255)
-    testColor3 := CreateColorNamed(COLOR_NAMES[2], "tokugawa_green")
-    testColor4 := CreateColorHsv(COLOR_NAMES[3], 360, 69, 100)
-    append(&flag.Colors, testColor1)
-    append(&flag.Colors, testColor2)
-    append(&flag.Colors, testColor3)
-    append(&flag.Colors, testColor4)
 
     return flag
 }
@@ -36,6 +30,9 @@ DestroyFlag :: proc(flag: Flag) {
         DestroyLayer(flag.Layers[index])
     }
     delete(flag.Layers)
+    if flag.Name != "" {
+        delete(flag.Name)
+    }
 }
 
 FlagTexture :: struct {
@@ -90,15 +87,18 @@ DestroyLayer :: proc(variant: FlagLayerVariant) {
         for _, index in layer.Colors {
             DestroyColor(layer.Colors[index])
         }
+        delete(layer.Colors)
         for _, index in layer.Instances {
             DestroyLayerInstance(layer.Instances[index])
         }
+        delete(layer.Instances)
         free(layer)
     case ^FlagLayerTexturedEmblem:
         DestroyFlagTexture(layer.Texture)
         for _, index in layer.Instances {
             DestroyLayerInstance(layer.Instances[index])
         }
+        delete(layer.Instances)
         free(layer)
     }
 }
@@ -112,7 +112,7 @@ LayerInstance :: struct {
     Scale: LayerVector,
     Position: LayerVector,
 }
-CreateLayerInstance :: proc(rotation: i32 = 0, scale: LayerVector = { 1, 1 }, position: LayerVector = { 0, 0 }) -> ^LayerInstance {
+CreateLayerInstance :: proc(rotation: i32 = 0, scale: LayerVector = { 1, 1 }, position: LayerVector = { 0.5, 0.5 }) -> ^LayerInstance {
     return new_clone(LayerInstance{
         Rotation = rotation,
         Scale = scale,
@@ -127,6 +127,7 @@ FlagColorVariant :: union {
     ^FlagColorNamed,
     ^FlagColorHsv,
     ^FlagColorRgb,
+    ^FlagColorReference,
 }
 FlagColor :: struct {
     Variant: FlagColorVariant,
@@ -150,7 +151,7 @@ FlagColorRgb :: struct {
 }
 FlagColorReference :: struct {
     using Color: FlagColor,
-    Reference: FlagColor,
+    Reference: string,
 }
 
 CreateColorRgb :: proc(name: string, r, g, b: u8) -> ^FlagColorRgb {
@@ -175,6 +176,12 @@ CreateColorNamed :: proc(name, namedColor: string) -> ^FlagColorNamed {
         NamedColor = strings.clone(namedColor),
     })
 }
+CreateColorReference :: proc(name, reference: string) -> ^FlagColorReference {
+    return new_clone(FlagColorReference{
+        Name = strings.clone(name),
+        Reference = strings.clone(reference),
+    })
+}
 DestroyColor :: proc(variant: FlagColorVariant) {
     switch color in variant {
     case ^FlagColorRgb:
@@ -186,6 +193,10 @@ DestroyColor :: proc(variant: FlagColorVariant) {
     case ^FlagColorNamed:
         delete(color.Name)
         delete(color.NamedColor)
+        free(color)
+    case ^FlagColorReference:
+        delete(color.Name)
+        delete(color.Reference)
         free(color)
     }
 }
