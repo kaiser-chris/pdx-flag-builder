@@ -277,16 +277,49 @@ renderNamedColorPicker :: proc(ctx: ^mu.Context) {
 }
 
 renderInstanceEditor :: proc(ctx: ^mu.Context) {
-    width: i32 = 200
-    height: i32 = 400
+    width: i32 = 400
+    height: i32 = 160
     x: i32 = (rl.GetScreenWidth() - width - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH) / 2
     y: i32 = (rl.GetScreenHeight() - height) / 2
 
-    if mu.window(ctx, WINDOM_INSTANCE_EDITOR, { x, y, width, height }) {
+    @static rotationBuf: [16]byte
+    @static rotationBufLen: int
+    @static scaleXBuf: [16]byte
+    @static scaleXBufLen: int
+    @static scaleYBuf: [16]byte
+    @static scaleYBufLen: int
+    @static positionXBuf: [16]byte
+    @static positionXBufLen: int
+    @static positionYBuf: [16]byte
+    @static positionYBufLen: int
+
+
+    if mu.window(ctx, WINDOM_INSTANCE_EDITOR, { x, y, width, height }, { .NO_RESIZE }) {
         guranteeBounds(ctx)
         window := mu.get_current_container(ctx)
         window.rect.w = width
         window.rect.h = height
+
+        mu.layout_row(ctx, {80, -90, 80}, 0)
+        mu.label(ctx, "Rotation:")
+        ui.Slider(ctx, &state.InstanceEditorInstance.Rotation, 0, 360)
+        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Rotation, &rotationBuf, &rotationBufLen, 360, 0)
+
+        mu.label(ctx, "Scale - Width:")
+        ui.Slider(ctx, &state.InstanceEditorInstance.Scale.X, 0, 3, "%.2f")
+        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Scale.X, &scaleXBuf, &scaleXBufLen, 3, 0, "%.3f")
+
+        mu.label(ctx, "Scale - Height:")
+        ui.Slider(ctx, &state.InstanceEditorInstance.Scale.Y, 0, 3, "%.2f")
+        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Scale.Y, &scaleYBuf, &scaleYBufLen, 3, 0, "%.3f")
+
+        mu.label(ctx, "Position - X:")
+        ui.Slider(ctx, &state.InstanceEditorInstance.Position.X, -2, 3, "%.2f")
+        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Position.X, &positionXBuf, &positionXBufLen, 3, -2, "%.3f")
+
+        mu.label(ctx, "Position - Y:")
+        ui.Slider(ctx, &state.InstanceEditorInstance.Position.Y, -2, 3, "%.2f")
+        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Position.Y, &positionYBuf, &positionYBufLen, 3, -2, "%.3f")
     }
 
     cnt := mu.get_container(ctx, WINDOM_INSTANCE_EDITOR)
