@@ -682,7 +682,10 @@ renderFlagDatabase :: proc(ctx: ^mu.Context) {
                     mu.text(ctx, flag.Name)
                     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
                     if .SUBMIT in mu.button(ctx, "Select") {
-                        state.Flag = flag
+                        pdx.DestroyFlag(state.Flag)
+                        clonedFlag := pdx.CloneFlag(flag)
+                        state.Flags["init"] = clonedFlag
+                        state.Flag = clonedFlag
                     }
                     mu.pop_id(ctx)
                 }
@@ -1139,7 +1142,7 @@ renderColorButtons :: proc(ctx: ^mu.Context, color: pdx.FlagColorVariant, list: 
             state.ColorPickerColor = nil
         }
         ordered_remove(list, index)
-        pdx.DestroyColor(color)
+        pdx.DestroyFlagColor(color)
     }
     mu.pop_id(ctx)
 }
@@ -1180,7 +1183,7 @@ renderAddColorButtons :: proc(ctx: ^mu.Context, list: ^[dynamic]pdx.FlagColorVar
 removeLayer :: proc(index: int){
     variant := state.Flag.Layers[index]
     ordered_remove(&state.Flag.Layers, index)
-    pdx.DestroyLayer(variant)
+    pdx.DestroyFlagLayer(variant)
 }
 
 removeInstance :: proc(instance: ^pdx.LayerInstance) {

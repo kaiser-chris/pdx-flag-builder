@@ -341,7 +341,7 @@ destroyNamedColors :: proc(database: ^Database) {
         case ^pdx.FlagColorReference:
             delete_key(&state.NamedColors, type.Name)
         }
-        pdx.DestroyColor(database.NamedColors[index])
+        pdx.DestroyFlagColor(database.NamedColors[index])
     }
     delete(database.NamedColors)
 }

@@ -30,14 +30,25 @@ CreateFlag :: proc(name: string = "") -> Flag {
 DestroyFlag :: proc(flag: Flag) {
     DestroyFlagTexture(flag.Pattern)
     for _, index in flag.Colors {
-        DestroyColor(flag.Colors[index])
+        DestroyFlagColor(flag.Colors[index])
     }
     delete(flag.Colors)
     for _, index in flag.Layers {
-        DestroyLayer(flag.Layers[index])
+        DestroyFlagLayer(flag.Layers[index])
     }
     delete(flag.Layers)
     delete(flag.Name)
+}
+CloneFlag :: proc(flag: Flag) -> Flag {
+    clonedflag := CreateFlag(flag.Name)
+    clonedflag.Pattern = CloneFlagTexture(flag.Pattern)
+    for variant in flag.Colors {
+        append(&clonedflag.Colors, CloneFlagColor(variant))
+    }
+    for variant in flag.Layers {
+        append(&clonedflag.Layers, CloneFlagLayer(variant))
+    }
+    return clonedflag
 }
 
 FlagTexture :: struct {
@@ -54,6 +65,12 @@ CreateFlagTexture :: proc(name, path: string) -> FlagTexture {
 DestroyFlagTexture :: proc(texture: FlagTexture) {
     delete(texture.Name)
     delete(texture.Path)
+}
+CloneFlagTexture :: proc(texture: FlagTexture) -> FlagTexture {
+    return FlagTexture{
+        Name = strings.clone(texture.Name),
+        Path = strings.clone(texture.Path),
+    }
 }
 
 FlagLayerVariant :: union {
@@ -85,12 +102,12 @@ CreateLayerColoredEmblem :: proc(name, path: string) -> ^FlagLayerColoredEmblem 
         Colors = make([dynamic]FlagColorVariant),
     })
 }
-DestroyLayer :: proc(variant: FlagLayerVariant) {
+DestroyFlagLayer :: proc(variant: FlagLayerVariant) {
     switch layer in variant {
     case ^FlagLayerColoredEmblem:
         DestroyFlagTexture(layer.Texture)
         for _, index in layer.Colors {
-            DestroyColor(layer.Colors[index])
+            DestroyFlagColor(layer.Colors[index])
         }
         delete(layer.Colors)
         for _, index in layer.Instances {
@@ -106,6 +123,26 @@ DestroyLayer :: proc(variant: FlagLayerVariant) {
         delete(layer.Instances)
         free(layer)
     }
+}
+CloneFlagLayer :: proc(variant: FlagLayerVariant) -> FlagLayerVariant {
+    switch layer in variant {
+    case ^FlagLayerColoredEmblem:
+        clonedLayer := CreateLayerColoredEmblem(layer.Texture.Name, layer.Texture.Path)
+        for instance in layer.Instances {
+            append(&clonedLayer.Instances, CloneLayerInstance(instance))
+        }
+        for color in layer.Colors {
+            append(&clonedLayer.Colors, CloneFlagColor(color))
+        }
+        return clonedLayer
+    case ^FlagLayerTexturedEmblem:
+        clonedLayer := CreateLayerTexturedEmblem(layer.Texture.Name, layer.Texture.Path)
+        for instance in layer.Instances {
+            append(&clonedLayer.Instances, CloneLayerInstance(instance))
+        }
+        return clonedLayer
+    }
+    return nil
 }
 
 LayerVector :: struct {
@@ -126,6 +163,9 @@ CreateLayerInstance :: proc(rotation: i32 = 0, scale: LayerVector = { 1, 1 }, po
 }
 DestroyLayerInstance :: proc(instance: ^LayerInstance) {
     free(instance)
+}
+CloneLayerInstance :: proc(instance: ^LayerInstance) -> ^LayerInstance {
+    return CreateLayerInstance(instance.Rotation, { instance.Scale.X, instance.Scale.Y }, { instance.Position.X, instance.Position.Y })
 }
 
 FlagColorVariant :: union {
@@ -187,7 +227,7 @@ CreateColorReference :: proc(name, reference: string) -> ^FlagColorReference {
         Reference = strings.clone(reference),
     })
 }
-DestroyColor :: proc(variant: FlagColorVariant) {
+DestroyFlagColor :: proc(variant: FlagColorVariant) {
     switch color in variant {
     case ^FlagColorRgb:
         delete(color.Name)
@@ -206,4 +246,17 @@ DestroyColor :: proc(variant: FlagColorVariant) {
         delete(color.Reference)
         free(color)
     }
+}
+CloneFlagColor :: proc(variant: FlagColorVariant) -> FlagColorVariant {
+    switch color in variant {
+    case ^FlagColorNamed:
+        return CreateColorNamed(color.Name, color.NamedColor)
+    case ^FlagColorReference:
+        return CreateColorReference(color.Name, color.Reference)
+    case ^FlagColorRgb:
+        return CreateColorRgb(color.Name, color.R, color.G, color.B)
+    case ^FlagColorHsv:
+        return CreateColorHsv(color.Name, color.H, color.S, color.V)
+    }
+    return nil
 }
