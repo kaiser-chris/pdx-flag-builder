@@ -40,6 +40,8 @@ SelectedFlagElement :: union {
 }
 
 renderGui :: proc(ctx: ^mu.Context) {
+    ui.InitDropdown(ctx, &state.Dropdown, &state.ButtonIdentifier)
+
     renderFlagPreview(ctx)
 
     renderToolbar(ctx)
@@ -418,7 +420,7 @@ renderInstanceEditor :: proc(ctx: ^mu.Context) {
 renderToolbar :: proc(ctx: ^mu.Context) {
     if mu.window(ctx, WINDOM_TOOLBAR, { 0, 0, rl.GetScreenWidth(), TOOLBAR_HEIGHT }, {.NO_CLOSE, .NO_TITLE, .NO_RESIZE, .NO_SCROLL}) {
         mu.get_current_container(ctx).rect.w = rl.GetScreenWidth()
-        mu.layout_row_items(ctx, 5, TOOLBAR_HEIGHT - 8)
+        mu.layout_row_items(ctx, 6, TOOLBAR_HEIGHT - 8)
 
         mu.layout_begin_column(ctx)
         mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
@@ -466,8 +468,15 @@ renderToolbar :: proc(ctx: ^mu.Context) {
 
         mu.layout_begin_column(ctx)
         mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
+        buttonRect := mu.layout_next(ctx)
+        mu.layout_set_next(ctx, buttonRect, false)
         if .SUBMIT in mu.button(ctx, "Export") {
-            exportFlagImage(ctx, state.Flag)
+            exportToImage :: proc(ctx: ^mu.Context) {
+                exportFlagImage(ctx, state.Flag)
+            }
+            ui.OpenDropdown(&state.Dropdown, { buttonRect.x, buttonRect.y + buttonRect.h + 1 }, {
+                ui.CreateDropdownElement("Export to Image", exportToImage)
+            }, buttonRect.w)
         }
         mu.layout_end_column(ctx)
     }
@@ -495,7 +504,7 @@ renderFlagPreview :: proc(ctx: ^mu.Context) {
         window := mu.get_current_container(ctx)
         window.rect = destination
         target := mu.Rect{x = 0, y = 0, w = FLAG_WIDTH, h = FLAG_HEIGHT}
-        mu.draw_rect(ctx, destination, mu.Color{100, 100, 100, 255})
+        mu.draw_rect(ctx, destination, mu.Color{200, 200, 200, 255})
         mu.draw_box(ctx, destination, ctx.style.colors[.BORDER])
         mu.layout_set_next(ctx, target, true)
         drawFlagPreview(ctx)
@@ -898,11 +907,12 @@ renderSidebarHandle :: proc(ctx: ^mu.Context) {
         }
 
         if mu.mouse_over(ctx, r) || ctx.focus_id == id {
-            mu.draw_rect(ctx, r, ctx.style.colors[.BUTTON_HOVER])
+            rl.SetMouseCursor(.RESIZE_EW)
         } else {
-            mu.draw_rect(ctx, r, ctx.style.colors[.BORDER])
+            rl.SetMouseCursor(.DEFAULT)
         }
 
+        mu.draw_rect(ctx, r, ctx.style.colors[.BORDER])
         mu.draw_control_text(ctx, "||", r, .TEXT, {.ALIGN_CENTER})
     }
 }

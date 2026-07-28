@@ -13,6 +13,7 @@ import "core:sync/chan"
 import "texture"
 import "core:thread"
 import "settings"
+import "ui"
 
 State :: struct {
     Settings: ^settings.Settings,
@@ -48,7 +49,8 @@ State :: struct {
     GuiFlagMap: map[string]int,
     RenderFlagMap: map[int]pdx.Flag,
     NextFlagIdentifier: int,
-    FlagExportChannel: chan.Chan(FlagExportRequest)
+    FlagExportChannel: chan.Chan(FlagExportRequest),
+    Dropdown: ui.Dropdown,
 }
 
 Database :: struct {
@@ -94,6 +96,7 @@ FlagExportRequest :: struct {
 state := State{}
 
 CreateState :: proc() {
+    state.Dropdown = ui.CreateDropdown()
     state.Databases = make([dynamic]Database)
     state.RenderTextureCache = make(map[int]rl.Texture2D)
     state.RenderTextureMap = make(map[string]rl.Texture2D)

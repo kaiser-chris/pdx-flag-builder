@@ -12,13 +12,18 @@ import "core:thread"
 import "core:os"
 import "pdx"
 import nfd "nativefiledialog"
+import time "core:time"
 
 RELEASE :: #config(RELEASE, false)
 
 APPLICATION_NAME :: "PDX Flag Builder"
 APPLICATION_ICON :: "assets/icon.png"
+APPLICATION_SPLASH_SCREEN :: "assets/textures/splash.dds"
+APPLICATION_SPLASH_LOGO :: "assets/textures/logo.dds"
+APPLICATION_SPLASH_SPINNER :: "assets/textures/spinner.dds"
 
-TEXTURE_LOADING_THREAD_IDENTIFIER: int: 1
+THREAD_IDENTIFIER_TEXTURE_LOADING: int: 1
+THREAD_IDENTIFIER_SPLASHSCREEN: int: 2
 
 TEXTURE_RECT_IDENTIFIER: u8: 1
 TEXTURE_RECT_IDENTIFIER_TRANSPARENCY: u8: 2
@@ -49,7 +54,7 @@ createTextureLoadingThread :: proc() -> ^thread.Thread {
     }
     if imageThread := thread.create(imageLoader); imageThread != nil {
         imageThread.init_context = context
-        imageThread.user_index = TEXTURE_LOADING_THREAD_IDENTIFIER
+        imageThread.user_index = THREAD_IDENTIFIER_TEXTURE_LOADING
         return imageThread
     } else {
         fmt.eprintfln("Could not create image loading thread")
@@ -149,6 +154,83 @@ executeExportFlagImage :: proc(request: FlagExportRequest) {
     nfd.FreePathU8(path)
 }
 
+createSplashScreenThread :: proc() -> ^thread.Thread {
+    loader :: proc(t: ^thread.Thread) {
+        pdx.setupParsing()
+        CreateState()
+        time.sleep(time.Millisecond * 500)
+    }
+    if loaderThread := thread.create(loader); loaderThread != nil {
+        loaderThread.init_context = context
+        loaderThread.user_index = THREAD_IDENTIFIER_SPLASHSCREEN
+        return loaderThread
+    } else {
+        fmt.eprintfln("Could not create init thread")
+        os.exit(2)
+    }
+}
+
+showSplashScreen :: proc() {
+    rl.SetConfigFlags({ .WINDOW_UNDECORATED, .WINDOW_TOPMOST, .WINDOW_TRANSPARENT })
+    rl.InitWindow(212, 212, APPLICATION_NAME)
+    icon := rl.LoadImage(APPLICATION_ICON)
+    rl.ImageFormat(&icon, .UNCOMPRESSED_R8G8B8A8)
+    rl.SetWindowIcon(icon)
+    rl.UnloadImage(icon)
+    splash := rl.LoadTexture(APPLICATION_SPLASH_SCREEN)
+    logo := rl.LoadTexture(APPLICATION_SPLASH_LOGO)
+    spinner := rl.LoadTexture(APPLICATION_SPLASH_SPINNER)
+
+    loaderThread := createSplashScreenThread()
+    thread.start(loaderThread)
+
+    rl.SetTargetFPS(60)
+    rotation: f32
+    splashLoop: for !rl.WindowShouldClose() {
+        if thread.is_done(loaderThread) {
+            break
+        }
+        rl.BeginDrawing()
+        rl.ClearBackground(rl.BLANK)
+        rl.BeginScissorMode(0, 0, rl.GetScreenWidth(), rl.GetScreenHeight())
+
+        //rl.DrawTexture(splash, 0, 0, rl.WHITE)
+
+        source := rl.Rectangle{
+            x = 0,
+            y = 0,
+            width = f32(logo.width),
+            height = f32(logo.height),
+        }
+        destination := rl.Rectangle{
+            x = f32(rl.GetScreenWidth() / 2),
+            y = f32(rl.GetScreenHeight() / 2),
+            width = f32(logo.width),
+            height = f32(logo.height),
+        }
+        origin := rl.Vector2{
+            destination.width * 0.5,
+            destination.height * 0.5,
+        }
+
+        rl.DrawTexturePro(logo, source, destination, origin, 0, rl.WHITE)
+        rl.DrawTexturePro(spinner, source, destination, origin, rotation, rl.WHITE)
+
+
+        rl.EndScissorMode()
+        rl.EndDrawing()
+        rotation += 1
+        if rotation > 360 {
+            rotation = 0
+        }
+    }
+
+    state.Done = false
+    thread.destroy(loaderThread)
+
+    rl.CloseWindow()
+}
+
 main :: proc() {
     when !RELEASE {
         track: mem.Tracking_Allocator
@@ -167,18 +249,18 @@ main :: proc() {
             }
         }
     }
+    rl.SetTraceLogLevel(.WARNING)
 
     nfd.Init()
     defer nfd.Quit()
 
-    pdx.setupParsing()
+    showSplashScreen()
     defer pdx.destroyParsing()
-    CreateState()
     defer DestroyState()
 
-    rl.SetTraceLogLevel(.WARNING)
     rl.SetConfigFlags({ .WINDOW_RESIZABLE })
     rl.InitWindow(1280, 800, APPLICATION_NAME)
+    rl.ClearWindowState({ .WINDOW_UNDECORATED, .WINDOW_TOPMOST })
     defer rl.CloseWindow()
 
     icon := rl.LoadImage(APPLICATION_ICON)
@@ -189,7 +271,7 @@ main :: proc() {
     state.RecolorShader = texture.LoadRecolorShader(SHADER_RECOLOR)
     defer rl.UnloadShader(state.RecolorShader.Shader)
 
-    pixels := make([][4]u8, mu.DEFAULT_ATLAS_WIDTH*mu.DEFAULT_ATLAS_HEIGHT)
+    pixels := make([][4]u8, mu.DEFAULT_ATLAS_WIDTH * mu.DEFAULT_ATLAS_HEIGHT)
     for alpha, i in mu.default_atlas_alpha {
         pixels[i] = {0xff, 0xff, 0xff, alpha}
     }
