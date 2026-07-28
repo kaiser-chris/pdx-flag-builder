@@ -48,6 +48,7 @@ State :: struct {
     GuiFlagMap: map[string]int,
     RenderFlagMap: map[int]pdx.Flag,
     NextFlagIdentifier: int,
+    FlagExportChannel: chan.Chan(FlagExportRequest)
 }
 
 Database :: struct {
@@ -79,6 +80,17 @@ TextureRequest :: struct {
     Image: rl.Image,
 }
 
+ExportRequestType :: enum {
+    Script,
+    Image,
+}
+
+FlagExportRequest :: struct {
+    Flag: pdx.Flag,
+    Type: ExportRequestType,
+    Size: [2]i32,
+}
+
 state := State{}
 
 CreateState :: proc() {
@@ -105,6 +117,11 @@ CreateState :: proc() {
         fmt.eprintfln("Could not create FlagLoadChannel: %v", txErr)
     }
     state.FlagLoadChannel = flagChannel
+    exportChannel, expErr := chan.create(chan.Chan(FlagExportRequest), 32, context.allocator)
+    if expErr != nil {
+        fmt.eprintfln("Could not create FlagExportChannel: %v", txErr)
+    }
+    state.FlagExportChannel = exportChannel
     state.SidebarOpen = true
     state.SidebarWidth = 350
     flag := pdx.CreateFlag()
@@ -161,6 +178,7 @@ DestroyState :: proc() {
     chan.destroy(state.ImageLoadChannel)
     chan.destroy(state.TextureLoadChannel)
     chan.destroy(state.FlagLoadChannel)
+    chan.destroy(state.FlagExportChannel)
     thread.destroy(state.TextureLoadingThread)
     rl.UnloadShader(state.RecolorShader.Shader)
     delete(state.NamedColors)

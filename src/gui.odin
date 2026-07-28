@@ -418,7 +418,7 @@ renderInstanceEditor :: proc(ctx: ^mu.Context) {
 renderToolbar :: proc(ctx: ^mu.Context) {
     if mu.window(ctx, WINDOM_TOOLBAR, { 0, 0, rl.GetScreenWidth(), TOOLBAR_HEIGHT }, {.NO_CLOSE, .NO_TITLE, .NO_RESIZE, .NO_SCROLL}) {
         mu.get_current_container(ctx).rect.w = rl.GetScreenWidth()
-        mu.layout_row_items(ctx, 4, TOOLBAR_HEIGHT - 8)
+        mu.layout_row_items(ctx, 5, TOOLBAR_HEIGHT - 8)
 
         mu.layout_begin_column(ctx)
         mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
@@ -463,6 +463,13 @@ renderToolbar :: proc(ctx: ^mu.Context) {
             }
         }
         mu.layout_end_column(ctx)
+
+        mu.layout_begin_column(ctx)
+        mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
+        if .SUBMIT in mu.button(ctx, "Export") {
+            exportFlagImage(ctx, state.Flag)
+        }
+        mu.layout_end_column(ctx)
     }
 }
 
@@ -495,7 +502,7 @@ renderFlagPreview :: proc(ctx: ^mu.Context) {
     }
 }
 
-fillColorMapping :: proc(mappings: ^[dynamic]texture.ColorRecolor, variant: pdx.FlagColorVariant, flag: ^pdx.Flag, sourceColors: []rl.Color) {
+fillColorMapping :: proc(mappings: ^[dynamic]texture.ColorRecolor, variant: pdx.FlagColorVariant, flag: pdx.Flag, sourceColors: []rl.Color) {
     switch color in variant {
     case ^pdx.FlagColorRgb:
         targetColor := pdx.ToRenderColor(color)

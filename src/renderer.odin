@@ -11,10 +11,11 @@ import "texture"
 import "core:thread"
 import "core:os"
 import "pdx"
+import nfd "nativefiledialog"
 
 RELEASE :: #config(RELEASE, false)
 
-APPLICATION_NAME :: "PDX Flag Editor"
+APPLICATION_NAME :: "PDX Flag Builder"
 APPLICATION_ICON :: "assets/icon.png"
 
 TEXTURE_LOADING_THREAD_IDENTIFIER: int: 1
@@ -97,6 +98,57 @@ handleFlagRequests :: proc() {
     }
 }
 
+handleFlagExportRequests :: proc() {
+    for {
+    request, ok := chan.try_recv(state.FlagExportChannel)
+        if !ok {
+            break
+        }
+        switch request.Type {
+        case .Image:
+            executeExportFlagImage(request)
+        case .Script:
+            fmt.eprintln("Not Supported Yet")
+        }
+    }
+}
+
+executeExportFlagImage :: proc(request: FlagExportRequest) {
+    path: cstring
+    filters := [1]nfd.Filter_Item { { "Image", "png" } }
+    args := nfd.Save_Dialog_Args {
+        filter_list = raw_data(filters[:]),
+        filter_count = len(filters)
+    }
+
+    result := nfd.SaveDialogU8_With(&path, &args)
+    if result == .Cancel {
+        return
+    }
+    if result == .Error {
+        fmt.eprintln("Export dialog error:", nfd.GetError())
+        return
+    }
+
+    target := rl.LoadRenderTexture(request.Size[0], request.Size[1]);
+    destination := rl.Rectangle{0, 0, f32(request.Size[0]), f32(request.Size[1])}
+    rl.BeginTextureMode(target);
+    rl.ClearBackground(rl.WHITE);
+    renderFlag(request.Flag, destination)
+    rl.EndTextureMode();
+
+    image := rl.LoadImageFromTexture(target.texture);
+    success := rl.ExportImage(image, path);
+    rl.UnloadImage(image);
+    rl.UnloadRenderTexture(target);
+    if !success {
+        fmt.eprintfln("Could not export image")
+    } else {
+        fmt.printfln("Successfully exported")
+    }
+    nfd.FreePathU8(path)
+}
+
 main :: proc() {
     when !RELEASE {
         track: mem.Tracking_Allocator
@@ -115,6 +167,9 @@ main :: proc() {
             }
         }
     }
+
+    nfd.Init()
+    defer nfd.Quit()
 
     pdx.setupParsing()
     defer pdx.destroyParsing()
@@ -244,6 +299,7 @@ main :: proc() {
         state.ButtonIdentifier = 0
         handleTextureRequests()
         handleFlagRequests()
+        handleFlagExportRequests()
     }
 }
 
@@ -441,15 +497,15 @@ renderFlagDraw :: proc(cmd: ^mu.Command_Rect) {
         return
     }
     destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
-    renderFlag(&flag, destination)
+    renderFlag(flag, destination)
 }
 
 renderFlagPreviewTexture :: proc(cmd: ^mu.Command_Rect) {
     destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
-    renderFlag(&state.Flag, destination)
+    renderFlag(state.Flag, destination)
 }
 
-renderFlag :: proc(flag: ^pdx.Flag, destination: rl.Rectangle) {
+renderFlag :: proc(flag: pdx.Flag, destination: rl.Rectangle) {
     rl.BeginScissorMode(i32(destination.x), i32(destination.y), i32(destination.width), i32(destination.height))
 
     if flag.Pattern.Name != "" {
@@ -486,7 +542,7 @@ renderFlag :: proc(flag: ^pdx.Flag, destination: rl.Rectangle) {
     rl.EndScissorMode()
 }
 
-renderColoredEmblemInstances :: proc(layer: ^pdx.FlagLayerColoredEmblem, flag: ^pdx.Flag, destination: rl.Rectangle) {
+renderColoredEmblemInstances :: proc(layer: ^pdx.FlagLayerColoredEmblem, flag: pdx.Flag, destination: rl.Rectangle) {
     emblem, ok := state.RenderTextureMap[layer.Texture.Path]
     if !ok {
         return
@@ -661,4 +717,22 @@ drawFlag :: proc(ctx: ^mu.Context, flagName: string, width: i32 = 0, height: i32
         rect.h = height
     }
     mu.draw_rect(ctx, rect, magicColor)
+}
+
+exportFlagImage :: proc(ctx: ^mu.Context, flag: pdx.Flag, width: i32 = 0, height: i32 = 0) {
+    request := FlagExportRequest{
+        Flag = flag,
+        Size = { FLAG_WIDTH, FLAG_HEIGHT },
+        Type = .Image
+    }
+    if width != 0 {
+        request.Size[0] = width
+    }
+    if height != 0 {
+        request.Size[1] = height
+    }
+    ok := chan.try_send(state.FlagExportChannel, request)
+    if !ok {
+        fmt.eprintfln("Could not export flag: %s", flag.Name)
+    }
 }
