@@ -224,6 +224,8 @@ main :: proc() {
             {.DELETE,        .DELETE},
             {.KP_ENTER,      .RETURN},
             {.BACKSPACE,     .BACKSPACE},
+            {.LEFT,          .LEFT},
+            {.RIGHT,         .RIGHT},
         }
         for key in keys_to_check {
             if rl.IsKeyPressed(key.rl_key) {
