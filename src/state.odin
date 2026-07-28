@@ -5,16 +5,198 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 import "core:strconv"
+import "core:time"
 import "pdx"
 import rl "vendor:raylib"
+import mu "vendor:microui"
+import "core:sync/chan"
+import "texture"
+import "core:thread"
+import "settings"
 
-DestroyDatabase :: proc(database: ^DatabaseState) {
+State :: struct {
+    Settings: ^settings.Settings,
+    Databases: [dynamic]Database,
+    Context: mu.Context,
+    SettingsWindowOpen: bool,
+    FlagDatabaseWindowOpen: bool,
+    TextureDatabaseWindowOpen: bool,
+    DatabaseSearch: string,
+    SidebarOpen: bool,
+    SidebarWidth: i32,
+    AtlasTexture: rl.Texture2D,
+    TextureLoadingThread: ^thread.Thread,
+    RenderTextureCache: map[int]rl.Texture2D,
+    RenderTextureMap: map[string]rl.Texture2D,
+    GuiTextureCache: map[string]rl.Texture2D,
+    TextureMap: map[string]int,
+    ImageLoadChannel: chan.Chan(ImageRequest),
+    TextureLoadChannel: chan.Chan(TextureRequest),
+    FlagLoadChannel: chan.Chan(FlagRequest),
+    TransparencyTexture: rl.Texture2D,
+    InvalidTexture: rl.Texture2D,
+    Flag: pdx.Flag,
+    ButtonIdentifier: i32,
+    NextTextureIdentifier: int,
+    ColorPickerColor: pdx.FlagColorVariant,
+    InstanceEditorInstance: ^pdx.LayerInstance,
+    SelectedFlagElement: SelectedFlagElement,
+    Done: bool,
+    RecolorShader: texture.RecolorShader,
+    NamedColors: map[string]pdx.FlagColorVariant,
+    Flags: map[string]pdx.Flag,
+    GuiFlagMap: map[string]int,
+    RenderFlagMap: map[int]pdx.Flag,
+    NextFlagIdentifier: int,
+}
+
+Database :: struct {
+    Settings: settings.Database,
+    BufferName: [128]byte,
+    BufferNameLength: int,
+    BufferPath: [512]byte,
+    BufferPathLength: int,
+    NamedColors: [dynamic]pdx.FlagColorVariant,
+    Patterns: [dynamic]pdx.FlagTexture,
+    ColoredEmblems: [dynamic]pdx.FlagTexture,
+    TexturedEmblems: [dynamic]pdx.FlagTexture,
+    Flags: [dynamic]pdx.Flag,
+}
+
+FlagRequest :: struct {
+    Identifier: int,
+    Name: string,
+}
+
+ImageRequest :: struct {
+    Identifier: int,
+    Path: string,
+}
+
+TextureRequest :: struct {
+    Identifier: int,
+    Path: string,
+    Image: rl.Image,
+}
+
+state := State{}
+
+CreateState :: proc() {
+    state.Databases = make([dynamic]Database)
+    state.RenderTextureCache = make(map[int]rl.Texture2D)
+    state.RenderTextureMap = make(map[string]rl.Texture2D)
+    state.GuiTextureCache = make(map[string]rl.Texture2D)
+    state.NamedColors = make(map[string]pdx.FlagColorVariant)
+    state.TextureMap = make(map[string]int)
+    state.GuiFlagMap = make(map[string]int)
+    state.RenderFlagMap = make(map[int]pdx.Flag)
+    imageChannel, imErr := chan.create(chan.Chan(ImageRequest), 2048, context.allocator)
+    if imErr != nil {
+        fmt.eprintfln("Could not create ImageLoadChannel: %v", imErr)
+    }
+    state.ImageLoadChannel = imageChannel
+    textureChannel, txErr := chan.create(chan.Chan(TextureRequest), 32, context.allocator)
+    if txErr != nil {
+        fmt.eprintfln("Could not create TextureLoadChannel: %v", txErr)
+    }
+    state.TextureLoadChannel = textureChannel
+    flagChannel, flgErr := chan.create(chan.Chan(FlagRequest), 2048, context.allocator)
+    if flgErr != nil {
+        fmt.eprintfln("Could not create FlagLoadChannel: %v", txErr)
+    }
+    state.FlagLoadChannel = flagChannel
+    state.SidebarOpen = true
+    state.SidebarWidth = 350
+    flag := pdx.CreateFlag()
+    state.Flags["init"] = flag
+    state.Flag = flag
+    state.NextTextureIdentifier = 1
+    state.NextFlagIdentifier = 1
+    state.TextureLoadingThread = createTextureLoadingThread()
+    state.SelectedFlagElement = &state.Flag
+    state.Settings = settings.LoadSettings(settings.FILE_NAME_SETTINGS)
+    for database in state.Settings.Databases {
+        append(&state.Databases, CreateDatabase(database.Name, database.Path))
+    }
+    for _, i in state.Databases {
+        for _, j in state.Databases[i].Flags {
+            EnrichLoadedFlag(&state.Databases[i].Flags[j], &state.Databases)
+            state.Flags[state.Databases[i].Flags[j].Name] = state.Databases[i].Flags[j]
+        }
+    }
+}
+DestroyState :: proc() {
+    state.Done = true
+    for !thread.is_done(state.TextureLoadingThread) {
+        time.sleep(10)
+    }
+    for _, index in state.Databases {
+        DestroyDatabase(&state.Databases[index])
+    }
+    for key in state.RenderTextureCache {
+        rl.UnloadTexture(state.RenderTextureCache[key])
+    }
+    delete(state.RenderTextureCache)
+    for key in state.GuiTextureCache {
+        delete(key)
+    }
+    delete(state.GuiTextureCache)
+    for key in state.TextureMap {
+        delete(key)
+    }
+    for key in state.GuiFlagMap {
+        delete(key)
+    }
+    flag, exists := state.Flags["init"]
+    if exists {
+        pdx.DestroyFlag(flag)
+    }
+    delete(state.GuiFlagMap)
+    delete(state.RenderFlagMap)
+    delete(state.Flags)
+    delete(state.TextureMap)
+    delete(state.RenderTextureMap)
+    delete(state.Databases)
+    delete(state.DatabaseSearch)
+    chan.destroy(state.ImageLoadChannel)
+    chan.destroy(state.TextureLoadChannel)
+    chan.destroy(state.FlagLoadChannel)
+    thread.destroy(state.TextureLoadingThread)
+    rl.UnloadShader(state.RecolorShader.Shader)
+    delete(state.NamedColors)
+    settings.DestroySettings(state.Settings)
+}
+
+CreateDatabase :: proc(name, path: string) -> Database {
+    database := Database{
+        Settings = settings.CreateDatabase(name, path),
+        NamedColors = make([dynamic]pdx.FlagColorVariant),
+        Patterns = make([dynamic]pdx.FlagTexture),
+        TexturedEmblems = make([dynamic]pdx.FlagTexture),
+        ColoredEmblems = make([dynamic]pdx.FlagTexture),
+        Flags = make([dynamic]pdx.Flag),
+    }
+    if name != "" {
+        database.BufferNameLength = len(name)
+        copy(database.BufferName[:], name)
+    }
+    if path != "" {
+        database.BufferPathLength = len(path)
+        copy(database.BufferPath[:], path)
+    }
+    loadNamedColors(&database)
+    loadDatabaseTextures(&database)
+    loadExistingFlags(&database)
+    return database
+}
+DestroyDatabase :: proc(database: ^Database) {
+    settings.DestroyDatabase(&database.Settings)
     destroyNamedColors(database)
     destroyDatabaseFlags(database)
     destroyLoadedTextures(database)
 }
 
-loadNamedColors :: proc(database: ^DatabaseState) {
+loadNamedColors :: proc(database: ^Database) {
     destroyNamedColors(database)
 
     database.NamedColors = make([dynamic]pdx.FlagColorVariant)
@@ -144,7 +326,7 @@ loadNamedColors :: proc(database: ^DatabaseState) {
 
     fmt.printfln("Loaded %i named colors from database: %s", len(database.NamedColors), database.Settings.Name)
 }
-destroyNamedColors :: proc(database: ^DatabaseState) {
+destroyNamedColors :: proc(database: ^Database) {
     if database.NamedColors == nil {
         return
     }
@@ -164,7 +346,7 @@ destroyNamedColors :: proc(database: ^DatabaseState) {
     delete(database.NamedColors)
 }
 
-loadExistingFlags :: proc(database: ^DatabaseState) {
+loadExistingFlags :: proc(database: ^Database) {
     destroyDatabaseFlags(database)
 
     database.Flags = make([dynamic]pdx.Flag)
@@ -174,6 +356,10 @@ loadExistingFlags :: proc(database: ^DatabaseState) {
         return
     }
     defer delete(path)
+
+    if !os.exists(path) {
+        return
+    }
 
     walker := os.walker_create_path(path)
     defer os.walker_destroy(&walker)
@@ -201,16 +387,14 @@ loadExistingFlags :: proc(database: ^DatabaseState) {
 
         flags := pdx.LoadCoaFile(info.fullpath)
         for flag, index in flags {
-            EnrichLoadedFlag(&flags[index], state.Databases[:])
             append(&database.Flags, flags[index])
-            state.Flags[flags[index].Name] = flags[index]
         }
         delete(flags)
     }
 
     fmt.printfln("Loaded %i coat of arms from database: %s", len(database.Flags), database.Settings.Name)
 }
-destroyDatabaseFlags :: proc(database: ^DatabaseState) {
+destroyDatabaseFlags :: proc(database: ^Database) {
     if database.Flags == nil {
         return
     }
@@ -220,8 +404,7 @@ destroyDatabaseFlags :: proc(database: ^DatabaseState) {
     delete(database.Flags)
 }
 
-
-loadDatabaseTextures :: proc(database: ^DatabaseState) {
+loadDatabaseTextures :: proc(database: ^Database) {
     destroyLoadedTextures(database)
 
     database.Patterns = make([dynamic]pdx.FlagTexture)
@@ -255,7 +438,7 @@ loadDatabaseTextures :: proc(database: ^DatabaseState) {
         loadDatabaseFolderTextures(database, path, pdx.FOLDER_TEXTURED_EMBLEMS)
     }
 }
-destroyLoadedTextures :: proc(database: ^DatabaseState) {
+destroyLoadedTextures :: proc(database: ^Database) {
     if database.Patterns != nil {
         for _, index in database.Patterns {
             pdx.DestroyFlagTexture(database.Patterns[index])
@@ -276,7 +459,7 @@ destroyLoadedTextures :: proc(database: ^DatabaseState) {
     }
 }
 
-loadDatabaseFolderTextures :: proc(database: ^DatabaseState, path, type: string) {
+loadDatabaseFolderTextures :: proc(database: ^Database, path, type: string) {
     walker := os.walker_create_path(path)
     defer os.walker_destroy(&walker)
 
@@ -308,7 +491,7 @@ loadDatabaseFolderTextures :: proc(database: ^DatabaseState, path, type: string)
     }
 }
 
-EnrichLoadedFlag  :: proc(flag: ^pdx.Flag, databases: []DatabaseState) -> bool {
+EnrichLoadedFlag  :: proc(flag: ^pdx.Flag, databases: ^[dynamic]Database) -> bool {
     if flag.Pattern.Path == "" && flag.Pattern.Name != "" {
         path, found := findPatternTexturePath(flag.Pattern.Name, databases)
         if !found {
@@ -352,7 +535,7 @@ EnrichLoadedFlag  :: proc(flag: ^pdx.Flag, databases: []DatabaseState) -> bool {
     return true
 }
 
-findPatternTexturePath :: proc(name: string, databases: []DatabaseState) -> (string, bool) {
+findPatternTexturePath :: proc(name: string, databases: ^[dynamic]Database) -> (string, bool) {
     for database in databases {
         for texture in database.Patterns {
             if name == texture.Name {
@@ -362,8 +545,7 @@ findPatternTexturePath :: proc(name: string, databases: []DatabaseState) -> (str
     }
     return "", false
 }
-
-findColoredEmblemTexturePath :: proc(name: string, databases: []DatabaseState) -> (string, bool) {
+findColoredEmblemTexturePath :: proc(name: string, databases: ^[dynamic]Database) -> (string, bool) {
     for database in databases {
         for texture in database.ColoredEmblems {
             if name == texture.Name {
@@ -373,8 +555,7 @@ findColoredEmblemTexturePath :: proc(name: string, databases: []DatabaseState) -
     }
     return "", false
 }
-
-findTexturedEmblemTexturePath :: proc(name: string, databases: []DatabaseState) -> (string, bool) {
+findTexturedEmblemTexturePath :: proc(name: string, databases: ^[dynamic]Database) -> (string, bool) {
     for database in databases {
         for texture in database.TexturedEmblems {
             if name == texture.Name {
@@ -384,7 +565,6 @@ findTexturedEmblemTexturePath :: proc(name: string, databases: []DatabaseState) 
     }
     return "", false
 }
-
 resolveNamedColor :: proc(name: string) -> (rl.Color, pdx.FlagColorVariant) {
     variant, exists := state.NamedColors[name]
     if !exists {
@@ -399,4 +579,20 @@ resolveNamedColor :: proc(name: string) -> (rl.Color, pdx.FlagColorVariant) {
     case ^pdx.FlagColorReference:
     }
     return rl.Color{}, nil
+}
+
+SaveSettings :: proc() {
+    for _, index in state.Settings.Databases {
+        settings.DestroyDatabase(&state.Settings.Databases[index])
+    }
+    delete(state.Settings.Databases)
+    state.Settings.Databases = make([dynamic]settings.Database, len(state.Databases))
+    for _, index in state.Databases {
+        database := state.Databases[index]
+        state.Settings.Databases[index] = settings.CreateDatabase(database.Settings.Name, database.Settings.Path)
+        loadNamedColors(&database)
+        loadDatabaseTextures(&database)
+        loadExistingFlags(&database)
+    }
+    settings.SaveSettings(settings.FILE_NAME_SETTINGS, state.Settings)
 }

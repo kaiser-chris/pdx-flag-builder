@@ -9,13 +9,13 @@ import "core:mem"
 import "core:sync/chan"
 import "texture"
 import "core:thread"
-import os "core:os"
-import time "core:time"
+import "core:os"
 import "pdx"
 
 RELEASE :: #config(RELEASE, false)
 
-ICON_APPLICATION :: "assets/icon.png"
+APPLICATION_NAME :: "PDX Flag Editor"
+APPLICATION_ICON :: "assets/icon.png"
 
 TEXTURE_LOADING_THREAD_IDENTIFIER: int: 1
 
@@ -23,144 +23,6 @@ TEXTURE_RECT_IDENTIFIER: u8: 1
 TEXTURE_RECT_IDENTIFIER_TRANSPARENCY: u8: 2
 TEXTURE_RECT_IDENTIFIER_FLAG_PREVIEW: u8: 3
 TEXTURE_RECT_IDENTIFIER_FLAG_DRAW: u8: 4
-
-State :: struct {
-    Settings: Settings,
-    Databases: [dynamic]DatabaseState,
-    Context: mu.Context,
-    SettingsWindowOpen: bool,
-    FlagDatabaseWindowOpen: bool,
-    TextureDatabaseWindowOpen: bool,
-    DatabaseSearch: string,
-    SidebarOpen: bool,
-    SidebarWidth: i32,
-    AtlasTexture: rl.Texture2D,
-    TextureLoadingThread: ^thread.Thread,
-    RenderTextureCache: map[int]rl.Texture2D,
-    RenderTextureMap: map[string]rl.Texture2D,
-    GuiTextureCache: map[string]rl.Texture2D,
-    TextureMap: map[string]int,
-    ImageLoadChannel: chan.Chan(ImageRequest),
-    TextureLoadChannel: chan.Chan(TextureRequest),
-    FlagLoadChannel: chan.Chan(FlagRequest),
-    TransparencyTexture: rl.Texture2D,
-    InvalidTexture: rl.Texture2D,
-    Flag: pdx.Flag,
-    ButtonIdentifier: i32,
-    NextTextureIdentifier: int,
-    ColorPickerColor: pdx.FlagColorVariant,
-    InstanceEditorInstance: ^pdx.LayerInstance,
-    SelectedFlagElement: SelectedFlagElement,
-    Done: bool,
-    RecolorShader: texture.RecolorShader,
-    NamedColors: map[string]pdx.FlagColorVariant,
-    Flags: map[string]pdx.Flag,
-    GuiFlagMap: map[string]int,
-    RenderFlagMap: map[int]pdx.Flag,
-    NextFlagIdentifier: int,
-}
-
-DatabaseState :: struct {
-    Settings: FlagDatabase,
-    BufferName: [128]byte,
-    BufferNameLength: int,
-    BufferPath: [512]byte,
-    BufferPathLength: int,
-    NamedColors: [dynamic]pdx.FlagColorVariant,
-    Patterns: [dynamic]pdx.FlagTexture,
-    ColoredEmblems: [dynamic]pdx.FlagTexture,
-    TexturedEmblems: [dynamic]pdx.FlagTexture,
-    Flags: [dynamic]pdx.Flag,
-}
-
-FlagRequest :: struct {
-    Identifier: int,
-    Name: string,
-}
-
-ImageRequest :: struct {
-    Identifier: int,
-    Path: string,
-}
-
-TextureRequest :: struct {
-    Identifier: int,
-    Path: string,
-    Image: rl.Image,
-}
-
-state := State{}
-
-setupState :: proc() {
-    state.Databases = make([dynamic]DatabaseState)
-    state.RenderTextureCache = make(map[int]rl.Texture2D)
-    state.RenderTextureMap = make(map[string]rl.Texture2D)
-    state.GuiTextureCache = make(map[string]rl.Texture2D)
-    state.NamedColors = make(map[string]pdx.FlagColorVariant)
-    state.TextureMap = make(map[string]int)
-    state.GuiFlagMap = make(map[string]int)
-    state.RenderFlagMap = make(map[int]pdx.Flag)
-    imageChannel, imErr := chan.create(chan.Chan(ImageRequest), 2048, context.allocator)
-    if imErr != nil {
-        fmt.eprintfln("Could not create ImageLoadChannel: %v", imErr)
-    }
-    state.ImageLoadChannel = imageChannel
-    textureChannel, txErr := chan.create(chan.Chan(TextureRequest), 32, context.allocator)
-    if txErr != nil {
-        fmt.eprintfln("Could not create TextureLoadChannel: %v", txErr)
-    }
-    state.TextureLoadChannel = textureChannel
-    flagChannel, flgErr := chan.create(chan.Chan(FlagRequest), 2048, context.allocator)
-    if flgErr != nil {
-        fmt.eprintfln("Could not create FlagLoadChannel: %v", txErr)
-    }
-    state.FlagLoadChannel = flagChannel
-    state.SidebarOpen = true
-    state.SidebarWidth = 350
-    flag := pdx.CreateFlag()
-    state.Flags["init"] = flag
-    state.Flag = flag
-    state.NextTextureIdentifier = 1
-    state.NextFlagIdentifier = 1
-    state.TextureLoadingThread = createTextureLoadingThread()
-    state.SelectedFlagElement = &state.Flag
-}
-destroyState :: proc() {
-    state.Done = true
-    for !thread.is_done(state.TextureLoadingThread) {
-        time.sleep(10)
-    }
-    for _, index in state.Databases {
-        DestroyDatabase(&state.Databases[index])
-    }
-    for key in state.RenderTextureCache {
-        rl.UnloadTexture(state.RenderTextureCache[key])
-    }
-    delete(state.RenderTextureCache)
-    for key in state.GuiTextureCache {
-        delete(key)
-    }
-    delete(state.GuiTextureCache)
-    for key in state.TextureMap {
-        delete(key)
-    }
-    for key in state.GuiFlagMap {
-        delete(key)
-    }
-    delete(state.GuiFlagMap)
-    delete(state.RenderFlagMap)
-    delete(state.Flags)
-    delete(state.TextureMap)
-    delete(state.RenderTextureMap)
-    delete(state.Databases)
-    delete(state.DatabaseSearch)
-    chan.destroy(state.ImageLoadChannel)
-    chan.destroy(state.TextureLoadChannel)
-    chan.destroy(state.FlagLoadChannel)
-    thread.destroy(state.TextureLoadingThread)
-    rl.UnloadShader(state.RecolorShader.Shader)
-    delete(state.NamedColors)
-}
 
 createTextureLoadingThread :: proc() -> ^thread.Thread {
     imageLoader :: proc(t: ^thread.Thread) {
@@ -173,12 +35,14 @@ createTextureLoadingThread :: proc() -> ^thread.Thread {
                 fmt.eprintfln("duplicate image request: %s", request.Identifier)
                 continue
             }
+            path := strings.clone(request.Path)
             image := texture.LoadImage(request.Path)
             textureRequest := TextureRequest{
                 Identifier = request.Identifier,
-                Path = request.Path,
+                Path = path,
                 Image = image
             }
+            delete(request.Path)
             chan.send(state.TextureLoadChannel, textureRequest)
         }
     }
@@ -203,10 +67,12 @@ handleTextureRequests :: proc() {
             continue
         }
         texture := rl.LoadTextureFromImage(request.Image)
-        state.GuiTextureCache[request.Path] = texture
-        state.RenderTextureMap[request.Path] = texture
+        path := strings.clone(request.Path)
+        state.GuiTextureCache[path] = texture
+        state.RenderTextureMap[path] = texture
         state.RenderTextureCache[request.Identifier] = texture
         rl.UnloadImage(request.Image)
+        delete(request.Path)
     }
 }
 
@@ -252,17 +118,15 @@ main :: proc() {
 
     pdx.setupParsing()
     defer pdx.destroyParsing()
-    setupState()
-    defer destroyState()
-    loadSettings()
-    defer destroySettings()
+    CreateState()
+    defer DestroyState()
 
     rl.SetTraceLogLevel(.WARNING)
     rl.SetConfigFlags({ .WINDOW_RESIZABLE })
-    rl.InitWindow(1280, 800, "PDX Flag Editor")
+    rl.InitWindow(1280, 800, APPLICATION_NAME)
     defer rl.CloseWindow()
 
-    icon := rl.LoadImage(ICON_APPLICATION)
+    icon := rl.LoadImage(APPLICATION_ICON)
     rl.ImageFormat(&icon, .UNCOMPRESSED_R8G8B8A8)
     rl.SetWindowIcon(icon)
     rl.UnloadImage(icon)
@@ -464,6 +328,7 @@ getTextureIdentifier :: proc(path: string) -> (int, bool) {
     ok := chan.try_send(state.ImageLoadChannel, request)
     if !ok {
         state.NextTextureIdentifier -= 1
+        delete(request.Path)
     }
     return identifier, !ok
 }
@@ -501,6 +366,7 @@ getFlagIdentifier :: proc(name: string) -> (int, bool) {
     ok := chan.try_send(state.FlagLoadChannel, request)
     if !ok {
         state.NextFlagIdentifier -= 1
+        delete(request.Name)
     }
     return identifier, !ok
 }
@@ -593,7 +459,7 @@ renderFlag :: proc(flag: ^pdx.Flag, destination: rl.Rectangle) {
             colorMappings := make([dynamic]texture.ColorRecolor)
             defer delete(colorMappings)
             for color in flag.Colors {
-                fillColorMapping(&colorMappings, color, pdx.PATTERN_REPLACE_COLORS)
+                fillColorMapping(&colorMappings, color, flag, pdx.PATTERN_REPLACE_COLORS)
             }
 
             texture.DrawRecoloredTexture(
@@ -609,7 +475,7 @@ renderFlag :: proc(flag: ^pdx.Flag, destination: rl.Rectangle) {
     for variant in flag.Layers {
         switch layer in variant {
         case ^pdx.FlagLayerColoredEmblem:
-            renderColoredEmblemInstances(layer, destination)
+            renderColoredEmblemInstances(layer, flag, destination)
         case ^pdx.FlagLayerTexturedEmblem:
             renderTexturedEmblemInstances(layer, destination)
         }
@@ -618,7 +484,7 @@ renderFlag :: proc(flag: ^pdx.Flag, destination: rl.Rectangle) {
     rl.EndScissorMode()
 }
 
-renderColoredEmblemInstances :: proc(layer: ^pdx.FlagLayerColoredEmblem, destination: rl.Rectangle) {
+renderColoredEmblemInstances :: proc(layer: ^pdx.FlagLayerColoredEmblem, flag: ^pdx.Flag, destination: rl.Rectangle) {
     emblem, ok := state.RenderTextureMap[layer.Texture.Path]
     if !ok {
         return
@@ -628,7 +494,7 @@ renderColoredEmblemInstances :: proc(layer: ^pdx.FlagLayerColoredEmblem, destina
     colorMappings := make([dynamic]texture.ColorRecolor)
     defer delete(colorMappings)
     for color in layer.Colors {
-        fillColorMapping(&colorMappings, color, pdx.COLORED_EMBLEM_REPLACE_COLORS)
+        fillColorMapping(&colorMappings, color, flag, pdx.COLORED_EMBLEM_REPLACE_COLORS)
     }
 
     for instance in layer.Instances {

@@ -337,7 +337,8 @@ renderReferenceColorPicker :: proc(ctx: ^mu.Context) {
                 case ^pdx.FlagColorNamed:
                     fmt.eprintfln("named color does not support reference color")
                 case ^pdx.FlagColorReference:
-                    color.Reference = name
+                    delete(color.Reference)
+                    color.Reference = strings.clone(name)
                 }
             }
             mu.pop_id(ctx)
@@ -494,7 +495,7 @@ renderFlagPreview :: proc(ctx: ^mu.Context) {
     }
 }
 
-fillColorMapping :: proc(mappings: ^[dynamic]texture.ColorRecolor, variant: pdx.FlagColorVariant, sourceColors: []rl.Color) {
+fillColorMapping :: proc(mappings: ^[dynamic]texture.ColorRecolor, variant: pdx.FlagColorVariant, flag: ^pdx.Flag, sourceColors: []rl.Color) {
     switch color in variant {
     case ^pdx.FlagColorRgb:
         targetColor := pdx.ToRenderColor(color)
@@ -519,7 +520,7 @@ fillColorMapping :: proc(mappings: ^[dynamic]texture.ColorRecolor, variant: pdx.
             append(mappings, mapping)
         }
     case ^pdx.FlagColorReference:
-        for baseColorVariant in state.Flag.Colors {
+        for baseColorVariant in flag.Colors {
             baseColorName: string
             switch baseColor in baseColorVariant {
             case ^pdx.FlagColorRgb:
@@ -583,30 +584,37 @@ checkColorMapping :: proc(name: string, targetColor: rl.Color, sourceColors: []r
 }
 
 renderSettings :: proc(ctx: ^mu.Context) {
-    if mu.window(ctx, WINDOM_SETTINGS, {10, 10 + TOOLBAR_HEIGHT, 500, 400}, {}) {
+    if mu.window(ctx, WINDOM_SETTINGS, {10, 10 + TOOLBAR_HEIGHT, 700, 400}, {}) {
         guranteeBounds(ctx)
         mu.layout_row(ctx, {-1, -1}, 0)
         if .SUBMIT in mu.button(ctx, "Save Settings") {
-            saveSettings()
+            SaveSettings()
         }
 
         if .ACTIVE in mu.header(ctx, "Paths", {.EXPANDED}) {
             mu.text(ctx, "These are paths to the root of your mod or the \"game\" folder for the base game.")
-            mu.layout_row(ctx, {100, -1}, 0)
+            mu.layout_row(ctx, {100, -106, 100}, 0)
             for _, index in state.Databases {
                 if .CHANGE in mu.textbox(ctx, state.Databases[index].BufferName[:], &state.Databases[index].BufferNameLength) {
-                    state.Databases[index].Settings.Name = string(state.Databases[index].BufferName[:state.Databases[index].BufferNameLength])
+                    name := strings.clone(string(state.Databases[index].BufferName[:state.Databases[index].BufferNameLength]))
+                    delete(state.Databases[index].Settings.Name)
+                    state.Databases[index].Settings.Name = name
                 }
                 if .CHANGE in mu.textbox(ctx, state.Databases[index].BufferPath[:], &state.Databases[index].BufferPathLength) {
-                    state.Databases[index].Settings.Path = string(state.Databases[index].BufferPath[:state.Databases[index].BufferPathLength])
+                    path := strings.clone(string(state.Databases[index].BufferPath[:state.Databases[index].BufferPathLength]))
+                    delete(state.Databases[index].Settings.Path)
+                    state.Databases[index].Settings.Path = path
                 }
+                ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+                if .SUBMIT in mu.button(ctx, "Delete") {
+                    DestroyDatabase(&state.Databases[index])
+                    ordered_remove(&state.Databases, index)
+                }
+                mu.pop_id(ctx)
             }
             mu.layout_row(ctx, {-1, -1}, 0)
             if .SUBMIT in mu.button(ctx, "Add new path") {
-                element := DatabaseState{
-                    Settings = FlagDatabase{"", ""},
-                    NamedColors = make([dynamic]pdx.FlagColorVariant)
-                }
+                element := CreateDatabase("", "")
                 append(&state.Databases, element)
             }
         }
@@ -993,6 +1001,11 @@ renderSelectedElementMenu :: proc(ctx: ^mu.Context) {
 
 renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
     ui.DrawAttributeRow(ctx, "Layer", "Pattern & Colors")
+    if flag.Name != "" {
+        ui.DrawAttributeRow(ctx, "Name", flag.Name)
+    } else {
+        ui.DrawAttributeRow(ctx, "Name", "None")
+    }
     if flag.Pattern.Name != "" {
         ui.DrawAttributeRow(ctx, "Pattern", flag.Pattern.Name)
     } else {
