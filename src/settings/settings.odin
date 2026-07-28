@@ -63,7 +63,7 @@ LoadSettings :: proc(path: string) -> ^Settings {
 }
 
 SaveSettings :: proc(path: string, settings: ^Settings) {
-    json_bytes, err := json.marshal(settings)
+    json_bytes, err := json.marshal(settings^)
     if err != nil {
         fmt.eprintf("Failed to parse settings into JSON: %v\n", err)
         return
