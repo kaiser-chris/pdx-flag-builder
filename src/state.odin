@@ -180,7 +180,6 @@ DestroyState :: proc() {
     chan.destroy(state.FlagLoadChannel)
     chan.destroy(state.FlagExportChannel)
     thread.destroy(state.TextureLoadingThread)
-    rl.UnloadShader(state.RecolorShader.Shader)
     delete(state.NamedColors)
     settings.DestroySettings(state.Settings)
 }

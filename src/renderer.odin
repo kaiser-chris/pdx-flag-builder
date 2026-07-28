@@ -187,6 +187,7 @@ main :: proc() {
     rl.UnloadImage(icon)
 
     state.RecolorShader = texture.LoadRecolorShader(SHADER_RECOLOR)
+    defer rl.UnloadShader(state.RecolorShader.Shader)
 
     pixels := make([][4]u8, mu.DEFAULT_ATLAS_WIDTH*mu.DEFAULT_ATLAS_HEIGHT)
     for alpha, i in mu.default_atlas_alpha {
