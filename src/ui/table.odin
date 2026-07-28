@@ -1,5 +1,6 @@
 package ui
 
+import "core:strconv"
 import mu "vendor:microui"
 import pdx "../pdx"
 import fmt "core:fmt"
@@ -13,7 +14,7 @@ DrawAttributeRow :: proc{
     drawReferenceColorAttributeRow,
 }
 
-setupAttributeRow :: proc(ctx: ^mu.Context, nameSize: f32) -> mu.Rect {
+setupAttributeRow :: proc(ctx: ^mu.Context, label: string, labelSize: f32) -> mu.Rect {
     mu.layout_row(ctx, { -1, -1 }, 20)
     window := mu.get_current_container(ctx)
 
@@ -30,34 +31,34 @@ setupAttributeRow :: proc(ctx: ^mu.Context, nameSize: f32) -> mu.Rect {
     mu.draw_box(ctx, rowRect, ctx.style.colors[.BORDER])
 
     dividerRect := mu.Rect{
-        x = rowRect.x + i32(f32(rowRect.w) * nameSize),
+        x = rowRect.x + i32(f32(rowRect.w) * labelSize),
         y = rowRect.y,
         w = 1,
         h = rowRect.h,
     }
     mu.draw_rect(ctx, dividerRect, ctx.style.colors[.BORDER])
 
-    return rowRect
-}
-
-drawTextAttributeRow :: proc(ctx: ^mu.Context, name, value: string, nameSize: f32 = 0.3) {
-    rowRect := setupAttributeRow(ctx, nameSize)
-
-    nameRect := mu.Rect{
+    labelRect := mu.Rect{
         x = rowRect.x + ctx.style.padding,
         y = rowRect.y + ctx.style.padding,
-        w = i32(f32(rowRect.w) * nameSize) - (ctx.style.padding * 2),
+        w = i32(f32(rowRect.w) * labelSize) - (ctx.style.padding * 2),
         h = rowRect.h - (ctx.style.padding * 2),
     }
 
     valueRect := mu.Rect{
-        x = rowRect.x + nameRect.w + ctx.style.padding + ctx.style.padding + ctx.style.padding,
+        x = rowRect.x + labelRect.w + ctx.style.padding + ctx.style.padding + ctx.style.padding,
         y = rowRect.y + ctx.style.padding,
-        w = rowRect.w - nameRect.w - (ctx.style.padding * 2),
+        w = rowRect.w - labelRect.w - (ctx.style.padding * 2),
         h = rowRect.h - (ctx.style.padding * 2),
     }
 
-    mu.draw_control_text(ctx, name, nameRect, .TEXT, {})
+    mu.draw_control_text(ctx, label, labelRect, .TEXT, {})
+
+    return valueRect
+}
+
+drawTextAttributeRow :: proc(ctx: ^mu.Context, label, value: string, labelSize: f32 = 0.3) {
+    valueRect := setupAttributeRow(ctx, label, labelSize)
 
     mu.draw_control_text(ctx, value, valueRect, .TEXT, {})
     mu.layout_end_column(ctx)
@@ -69,27 +70,11 @@ drawTextAttributeRow :: proc(ctx: ^mu.Context, name, value: string, nameSize: f3
 
 drawColorAttributeRow :: proc(
     ctx: ^mu.Context,
-    name: string,
+    label: string,
     variant: pdx.FlagColorVariant,
-    nameSize: f32 = 0.3
+    labelSize: f32 = 0.3
 ) -> (mu.Rect, mu.Rect) {
-    rowRect := setupAttributeRow(ctx, nameSize)
-
-    nameRect := mu.Rect{
-        x = rowRect.x + ctx.style.padding,
-        y = rowRect.y + ctx.style.padding,
-        w = i32(f32(rowRect.w) * nameSize) - (ctx.style.padding * 2),
-        h = rowRect.h - (ctx.style.padding * 2),
-    }
-
-    valueRect := mu.Rect{
-        x = rowRect.x + nameRect.w + ctx.style.padding + ctx.style.padding + ctx.style.padding,
-        y = rowRect.y + ctx.style.padding,
-        w = rowRect.w - nameRect.w - (ctx.style.padding * 2),
-        h = rowRect.h - (ctx.style.padding * 2),
-    }
-
-    mu.draw_control_text(ctx, name, nameRect, .TEXT, {})
+    valueRect := setupAttributeRow(ctx, label, labelSize)
 
     rgbColor: mu.Color
     colorText: string
@@ -146,28 +131,12 @@ drawColorAttributeRow :: proc(
 
 drawNamedColorAttributeRow :: proc(
     ctx: ^mu.Context,
-    name: string,
+    label: string,
     color: ^pdx.FlagColorNamed,
     namedColors: map[string]pdx.FlagColorVariant,
-    nameSize: f32 = 0.3
+    labelSize: f32 = 0.3
 ) -> (mu.Rect, mu.Rect) {
-    rowRect := setupAttributeRow(ctx, nameSize)
-
-    nameRect := mu.Rect{
-        x = rowRect.x + ctx.style.padding,
-        y = rowRect.y + ctx.style.padding,
-        w = i32(f32(rowRect.w) * nameSize) - (ctx.style.padding * 2),
-        h = rowRect.h - (ctx.style.padding * 2),
-    }
-
-    valueRect := mu.Rect{
-        x = rowRect.x + nameRect.w + ctx.style.padding + ctx.style.padding + ctx.style.padding,
-        y = rowRect.y + ctx.style.padding,
-        w = rowRect.w - nameRect.w - (ctx.style.padding * 2),
-        h = rowRect.h - (ctx.style.padding * 2),
-    }
-
-    mu.draw_control_text(ctx, name, nameRect, .TEXT, {})
+    valueRect := setupAttributeRow(ctx, label, labelSize)
 
     rgbColor: mu.Color
     colorText: string
@@ -228,29 +197,13 @@ drawNamedColorAttributeRow :: proc(
 
 drawReferenceColorAttributeRow :: proc(
     ctx: ^mu.Context,
-    name: string,
+    label: string,
     color: ^pdx.FlagColorReference,
     baseColors: []pdx.FlagColorVariant,
     namedColors: map[string]pdx.FlagColorVariant,
-    nameSize: f32 = 0.3
+    labelSize: f32 = 0.3
 ) -> (mu.Rect, mu.Rect) {
-    rowRect := setupAttributeRow(ctx, nameSize)
-
-    nameRect := mu.Rect{
-        x = rowRect.x + ctx.style.padding,
-        y = rowRect.y + ctx.style.padding,
-        w = i32(f32(rowRect.w) * nameSize) - (ctx.style.padding * 2),
-        h = rowRect.h - (ctx.style.padding * 2),
-    }
-
-    valueRect := mu.Rect{
-        x = rowRect.x + nameRect.w + ctx.style.padding + ctx.style.padding + ctx.style.padding,
-        y = rowRect.y + ctx.style.padding,
-        w = rowRect.w - nameRect.w - (ctx.style.padding * 2),
-        h = rowRect.h - (ctx.style.padding * 2),
-    }
-
-    mu.draw_control_text(ctx, name, nameRect, .TEXT, {})
+    valueRect := setupAttributeRow(ctx, label, labelSize)
 
     colorValue: mu.Color
     for baseColor in baseColors {
@@ -328,4 +281,120 @@ drawReferenceColorAttributeRow :: proc(
     layout.next_row += ctx.style.spacing
 
     return buttonEditRect, buttonDeleteRect
+}
+
+DrawAttributeRowTextbox :: proc(
+    ctx: ^mu.Context,
+    label: string,
+    buf: []byte,
+    bufLen: ^int,
+    labelSize: f32 = 0.3
+) -> mu.Result_Set {
+    valueRect := setupAttributeRow(ctx, label, labelSize)
+    valueRect.w = valueRect.w - (2 * ctx.style.padding)
+
+    id := mu.get_id(ctx, uintptr(&buf[0]))
+    result := mu.textbox_raw(ctx, buf, bufLen, id, valueRect)
+    mu.layout_end_column(ctx)
+
+    layout := mu.get_layout(ctx)
+    layout.position.y += ctx.style.spacing
+    layout.next_row += ctx.style.spacing
+
+    return result
+}
+
+DrawAttributeRowNumberTextbox :: proc{
+    drawAttributeRowNumberTextbox_f32,
+    drawAttributeRowNumberTextbox_i32,
+}
+
+drawAttributeRowNumberTextbox_f32 :: proc(
+    ctx: ^mu.Context,
+    label: string,
+    val: ^f32,
+    buf: []byte,
+    bufLen: ^int,
+    hi, lo: f32,
+    fmtString := "%.0f",
+    labelSize: f32 = 0.3
+) {
+    org := fmt.tprintf(fmtString, val^)
+    bufLen^ = len(org)
+    copy(buf[:], org)
+
+    valueRect := setupAttributeRow(ctx, label, labelSize)
+    mu.layout_end_column(ctx)
+    valueRect.w = valueRect.w - (2 * ctx.style.padding)
+
+    id := mu.get_id(ctx, uintptr(&buf[0]))
+    if .CHANGE in mu.textbox_raw(ctx, buf, bufLen, id, valueRect) {
+        text := string(buf[:bufLen^])
+        if text == "" {
+            val^ = 0
+            return
+        }
+        tmp, ok := strconv.parse_f32(string(buf[:bufLen^]))
+        if !ok {
+            return
+        }
+        if tmp > hi {
+            val^ = hi
+            return
+        }
+        if tmp < lo {
+            val^ = lo
+            return
+        }
+        val^ = tmp
+    }
+
+    layout := mu.get_layout(ctx)
+    layout.position.y += ctx.style.spacing
+    layout.next_row += ctx.style.spacing
+}
+
+drawAttributeRowNumberTextbox_i32 :: proc(
+    ctx: ^mu.Context,
+    label: string,
+    val: ^i32,
+    buf: []byte,
+    bufLen: ^int,
+    hi, lo: i32,
+    fmtString := "%i",
+    labelSize: f32 = 0.3
+) {
+    org := fmt.tprintf(fmtString, val^)
+    bufLen^ = len(org)
+    copy(buf[:], org)
+
+    valueRect := setupAttributeRow(ctx, label, labelSize)
+    mu.layout_end_column(ctx)
+    valueRect.w = valueRect.w - (2 * ctx.style.padding)
+
+    id := mu.get_id(ctx, uintptr(&buf[0]))
+    if .CHANGE in mu.textbox_raw(ctx, buf, bufLen, id, valueRect) {
+        text := string(buf[:bufLen^])
+        if text == "" {
+            val^ = 0
+            return
+        }
+        tmp, ok := strconv.parse_i64(string(buf[:bufLen^]))
+        if !ok {
+            return
+        }
+        if i32(tmp) > hi {
+            val^ = hi
+            return
+        }
+        if i32(tmp) < lo {
+            val^ = lo
+            return
+        }
+        val^ = i32(tmp)
+    }
+
+    layout := mu.get_layout(ctx)
+    layout.position.y += ctx.style.spacing
+    layout.next_row += ctx.style.spacing
 }

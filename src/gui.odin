@@ -135,30 +135,30 @@ renderAbsoluteColorPicker :: proc(ctx: ^mu.Context) {
             case ^pdx.FlagColorRgb:
                 mu.label(ctx, "Red:")
                 ui.Slider(ctx, &color.R, 0, 255)
-                ui.NumberTextbox(ctx, &color.R, &redBuf, &redBufLen, 255, 0)
+                ui.NumberTextbox(ctx, &color.R, redBuf[:], &redBufLen, 255, 0)
 
                 mu.label(ctx, "Green:")
                 ui.Slider(ctx, &color.G, 0, 255)
-                ui.NumberTextbox(ctx, &color.G, &greenBuf, &greenBufLen, 255, 0)
+                ui.NumberTextbox(ctx, &color.G, greenBuf[:], &greenBufLen, 255, 0)
 
                 mu.label(ctx, "Blue:")
                 ui.Slider(ctx, &color.B, 0, 255)
-                ui.NumberTextbox(ctx, &color.B, &blueBuf, &blueBufLen, 255, 0)
+                ui.NumberTextbox(ctx, &color.B, blueBuf[:], &blueBufLen, 255, 0)
                 red = color.R
                 green = color.G
                 blue = color.B
             case ^pdx.FlagColorHsv:
                 mu.label(ctx, "Hue:")
                 ui.Slider(ctx, &color.H, 0, 360, step = 1)
-                ui.NumberTextbox(ctx, &color.H, &redBuf, &redBufLen, 360, 0)
+                ui.NumberTextbox(ctx, &color.H, redBuf[:], &redBufLen, 360, 0)
 
                 mu.label(ctx, "Saturation:")
                 ui.Slider(ctx, &color.S, 0, 100, step = 1)
-                ui.NumberTextbox(ctx, &color.S, &greenBuf, &greenBufLen, 100, 0)
+                ui.NumberTextbox(ctx, &color.S, greenBuf[:], &greenBufLen, 100, 0)
 
                 mu.label(ctx, "Value:")
                 ui.Slider(ctx, &color.V, 0, 100, step = 1)
-                ui.NumberTextbox(ctx, &color.V, &blueBuf, &blueBufLen, 100, 0)
+                ui.NumberTextbox(ctx, &color.V, blueBuf[:], &blueBufLen, 100, 0)
 
                 rgb := pdx.ToRenderColor(color)
                 red = rgb[0]
@@ -388,23 +388,23 @@ renderInstanceEditor :: proc(ctx: ^mu.Context) {
         mu.layout_row(ctx, {80, -90, 80}, 0)
         mu.label(ctx, "Rotation:")
         ui.Slider(ctx, &state.InstanceEditorInstance.Rotation, 0, 360, step = 1)
-        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Rotation, &rotationBuf, &rotationBufLen, 360, 0)
+        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Rotation, rotationBuf[:], &rotationBufLen, 360, 0)
 
         mu.label(ctx, "Scale - Width:")
         ui.Slider(ctx, &state.InstanceEditorInstance.Scale.X, 0, 3, "%.2f", step = 0.05)
-        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Scale.X, &scaleXBuf, &scaleXBufLen, 3, 0, "%.3f")
+        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Scale.X, scaleXBuf[:], &scaleXBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
 
         mu.label(ctx, "Scale - Height:")
         ui.Slider(ctx, &state.InstanceEditorInstance.Scale.Y, 0, 3, "%.2f", step = 0.05)
-        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Scale.Y, &scaleYBuf, &scaleYBufLen, 3, 0, "%.3f")
+        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Scale.Y, scaleYBuf[:], &scaleYBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
 
         mu.label(ctx, "Position - X:")
         ui.Slider(ctx, &state.InstanceEditorInstance.Position.X, -2, 3, "%.2f", step = 0.05)
-        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Position.X, &positionXBuf, &positionXBufLen, 3, -2, "%.3f")
+        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Position.X, positionXBuf[:], &positionXBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f")
 
         mu.label(ctx, "Position - Y:")
         ui.Slider(ctx, &state.InstanceEditorInstance.Position.Y, -2, 3, "%.2f", step = 0.05)
-        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Position.Y, &positionYBuf, &positionYBufLen, 3, -2, "%.3f")
+        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Position.Y, positionYBuf[:], &positionYBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f")
     }
 
     cnt := mu.get_container(ctx, WINDOM_INSTANCE_EDITOR)
@@ -912,7 +912,7 @@ renderFlagMenu :: proc(ctx: ^mu.Context) {
 
         mu.layout_row(ctx, {-1, -1}, 20)
         ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-        if .SUBMIT in mu.button(ctx, "Pattern & Colors") {
+        if .SUBMIT in mu.button(ctx, "Coat of Arms") {
             state.SelectedFlagElement = &state.Flag
         }
         mu.pop_id(ctx)
@@ -920,45 +920,49 @@ renderFlagMenu :: proc(ctx: ^mu.Context) {
         for variant, index in state.Flag.Layers {
             switch layer in variant {
             case ^pdx.FlagLayerColoredEmblem:
-                mu.layout_row(ctx, {-1, -1}, 20)
+                mu.layout_row(ctx, {15, -1}, 20)
+                drawTransparentTexture(ctx, TEXTURE_SUB, 15, 20)
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
                 if .SUBMIT in mu.button(ctx, fmt.tprintf("Colored Emblem: %s", layer.Texture.Name)) {
                     state.SelectedFlagElement = layer
                 }
                 mu.pop_id(ctx)
-                renderLayerInstances(ctx, layer.Instances)
+                renderLayerInstances(ctx, layer.Instances, true)
             case ^pdx.FlagLayerTexturedEmblem:
-                mu.layout_row(ctx, {-1, -1}, 20)
+                mu.layout_row(ctx, {15, -1}, 20)
+                drawTransparentTexture(ctx, TEXTURE_SUB, 15, 20)
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
                 if .SUBMIT in mu.button(ctx, fmt.tprintf("Textured Emblem: %s", layer.Texture.Name)) {
                     state.SelectedFlagElement = layer
                 }
                 mu.pop_id(ctx)
-                renderLayerInstances(ctx, layer.Instances)
+                renderLayerInstances(ctx, layer.Instances, true)
             }
         }
         mu.layout_row(ctx, { -1, -1 }, 20)
     }
 }
 
-renderLayerInstances :: proc(ctx: ^mu.Context, instances: [dynamic]^pdx.LayerInstance) {
+renderLayerInstances :: proc(ctx: ^mu.Context, instances: [dynamic]^pdx.LayerInstance, hasNext: bool) {
     for instance, index in instances {
         mu.layout_row(ctx, {-1, -1}, 20)
         buttonRect := mu.layout_next(ctx)
+        buttonRect.w = buttonRect.w - 19
+        buttonRect.x = buttonRect.x + 19
 
         subRect := mu.Rect{
-            buttonRect.x, buttonRect.y, 20, 20
+            buttonRect.x, buttonRect.y, 15, 20
         }
 
-        buttonRect.w = buttonRect.w - ctx.style.indent
-        buttonRect.x = buttonRect.x + ctx.style.indent
+        buttonRect.w = buttonRect.w - 19
+        buttonRect.x = buttonRect.x + 19
 
         mu.layout_set_next(ctx, subRect, false)
-        drawTransparentTexture(ctx, TEXTURE_SUB, 20, 20)
+        drawTransparentTexture(ctx, TEXTURE_SUB, 15, 20)
 
         mu.layout_set_next(ctx, buttonRect, false)
         ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-        if .SUBMIT in mu.button(ctx, fmt.tprintf("Instance: %i", index + 1)) {
+        if .SUBMIT in mu.button(ctx, "Instance") {
             state.SelectedFlagElement = instance
         }
         mu.pop_id(ctx)
@@ -1000,11 +1004,17 @@ renderSelectedElementMenu :: proc(ctx: ^mu.Context) {
 }
 
 renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
-    ui.DrawAttributeRow(ctx, "Layer", "Pattern & Colors")
+    ui.DrawAttributeRow(ctx, "Layer", "Coat of Arms")
+    @static buf: [128]byte
+    @static bufLen: int
     if flag.Name != "" {
-        ui.DrawAttributeRow(ctx, "Name", flag.Name)
-    } else {
-        ui.DrawAttributeRow(ctx, "Name", "None")
+        bufLen = len(flag.Name)
+        copy(buf[:], flag.Name)
+    }
+    if .CHANGE in ui.DrawAttributeRowTextbox(ctx, "Name", buf[:], &bufLen) {
+        name := strings.clone(string(buf[:bufLen]))
+        delete(flag.Name)
+        flag.Name = name
     }
     if flag.Pattern.Name != "" {
         ui.DrawAttributeRow(ctx, "Pattern", flag.Pattern.Name)
@@ -1084,16 +1094,33 @@ renderSelectedFlagLayerTexturedEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.Flag
 }
 
 renderSelectedLayerInstance :: proc(ctx: ^mu.Context, instance: ^pdx.LayerInstance) {
+    @static rotationBuf: [16]byte
+    @static rotationBufLen: int
+    @static scaleXBuf: [16]byte
+    @static scaleXBufLen: int
+    @static scaleYBuf: [16]byte
+    @static scaleYBufLen: int
+    @static positionXBuf: [16]byte
+    @static positionXBufLen: int
+    @static positionYBuf: [16]byte
+    @static positionYBufLen: int
+
     ui.DrawAttributeRow(ctx, "Type", "Layer Instance")
-    ui.DrawAttributeRow(ctx, "Rotation", fmt.tprintf("%i", instance.Rotation))
-    ui.DrawAttributeRow(ctx, "Scale Width", fmt.tprintf("%.2f", instance.Scale.X))
-    ui.DrawAttributeRow(ctx, "Scale Height", fmt.tprintf("%.2f", instance.Scale.Y))
-    ui.DrawAttributeRow(ctx, "Position X", fmt.tprintf("%.2f", instance.Position.X))
-    ui.DrawAttributeRow(ctx, "Position Y", fmt.tprintf("%.2f", instance.Position.Y))
-    mu.layout_row(ctx, { -1, -1 }, 20)
+    ui.DrawAttributeRowNumberTextbox(ctx, "Rotation", &instance.Rotation, rotationBuf[:], &rotationBufLen, 360, 0)
+    ui.DrawAttributeRowNumberTextbox(ctx, "Scale Width", &instance.Scale.X, scaleXBuf[:], &scaleXBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
+    ui.DrawAttributeRowNumberTextbox(ctx, "Scale Height", &instance.Scale.Y, scaleYBuf[:], &scaleYBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
+    ui.DrawAttributeRowNumberTextbox(ctx, "Position X", &instance.Position.X, positionXBuf[:], &positionXBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f")
+    ui.DrawAttributeRowNumberTextbox(ctx, "Position Y", &instance.Position.Y, positionYBuf[:], &positionYBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f")
+    mu.layout_row(ctx, { -1 }, 20)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in mu.button(ctx, "Edit insance") {
+    if .SUBMIT in mu.button(ctx, "Edit instance") {
         state.InstanceEditorInstance = instance
+    }
+    mu.pop_id(ctx)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in mu.button(ctx, "Delete instance") {
+        removeInstance(instance)
+        state.SelectedFlagElement = nil
     }
     mu.pop_id(ctx)
 }
@@ -1154,4 +1181,28 @@ removeLayer :: proc(index: int){
     variant := state.Flag.Layers[index]
     ordered_remove(&state.Flag.Layers, index)
     pdx.DestroyLayer(variant)
+}
+
+removeInstance :: proc(instance: ^pdx.LayerInstance) {
+    for layer in state.Flag.Layers {
+        removeLayerInstance(layer, instance)
+    }
+    pdx.DestroyLayerInstance(instance)
+}
+
+removeLayerInstance :: proc(layerVariant: pdx.FlagLayerVariant, instance: ^pdx.LayerInstance) {
+    switch layer in layerVariant {
+    case ^pdx.FlagLayerColoredEmblem:
+        for _, index in layer.Instances {
+            if layer.Instances[index] == instance {
+                ordered_remove(&layer.Instances, index)
+            }
+        }
+    case ^pdx.FlagLayerTexturedEmblem:
+        for _, index in layer.Instances {
+            if layer.Instances[index] == instance {
+                ordered_remove(&layer.Instances, index)
+            }
+        }
+    }
 }

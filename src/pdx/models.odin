@@ -5,6 +5,12 @@ import strings "core:strings"
 DEFAULT_SCALE: LayerVector: { 1, 1 }
 DEFAULT_POSITION: LayerVector: { 0.5, 0.5 }
 
+MIN_SCALE: f32: 0
+MAX_SCALE: f32: 10
+
+MIN_POSITION: f32: -4
+MAX_POSITION: f32: 5
+
 Flag :: struct {
     Name: string,
     Pattern: FlagTexture,
