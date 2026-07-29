@@ -392,7 +392,7 @@ parse_braced :: proc(p: ^Parser, allocator := context.allocator) -> (Value, bool
         return Value{kind = .Object, data = empty}, true
     }
 
-    if current(p).kind == .Identifier && peek(p, 1).kind == .Equals {
+    if (current(p).kind == .Identifier || current(p).kind == .AtExpr) && peek(p, 1).kind == .Equals {
         items := make([dynamic]Pair, 0, 0, allocator)
         for current(p).kind != .RBrace && current(p).kind != .EOF {
             key_tok, ok := expect_one_of(p, {.Identifier, .AtExpr})
