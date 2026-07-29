@@ -13,12 +13,12 @@ import "core:os"
 import "pdx"
 import nfd "nativefiledialog"
 import time "core:time"
+import "core:math"
 
 RELEASE :: #config(RELEASE, false)
 
 APPLICATION_NAME :: "PDX Flag Builder"
 APPLICATION_ICON :: "assets/icon.png"
-APPLICATION_SPLASH_SCREEN :: "assets/textures/splash.dds"
 APPLICATION_SPLASH_LOGO :: "assets/textures/logo.dds"
 APPLICATION_SPLASH_SPINNER :: "assets/textures/spinner.dds"
 
@@ -173,11 +173,11 @@ createSplashScreenThread :: proc() -> ^thread.Thread {
 showSplashScreen :: proc() {
     rl.SetConfigFlags({ .WINDOW_UNDECORATED, .WINDOW_TOPMOST, .WINDOW_TRANSPARENT })
     rl.InitWindow(212, 212, APPLICATION_NAME)
+
     icon := rl.LoadImage(APPLICATION_ICON)
     rl.ImageFormat(&icon, .UNCOMPRESSED_R8G8B8A8)
     rl.SetWindowIcon(icon)
     rl.UnloadImage(icon)
-    splash := rl.LoadTexture(APPLICATION_SPLASH_SCREEN)
     logo := rl.LoadTexture(APPLICATION_SPLASH_LOGO)
     spinner := rl.LoadTexture(APPLICATION_SPLASH_SPINNER)
 
@@ -193,8 +193,6 @@ showSplashScreen :: proc() {
         rl.BeginDrawing()
         rl.ClearBackground(rl.BLANK)
         rl.BeginScissorMode(0, 0, rl.GetScreenWidth(), rl.GetScreenHeight())
-
-        //rl.DrawTexture(splash, 0, 0, rl.WHITE)
 
         source := rl.Rectangle{
             x = 0,
@@ -639,13 +637,15 @@ renderColoredEmblemInstances :: proc(layer: ^pdx.FlagLayerColoredEmblem, flag: p
     }
 
     for instance in layer.Instances {
+        target := calculateInstanceDestination(emblem, instance, destination)
         texture.DrawRecoloredTexture(
             emblem,
             source,
-            calculateInstanceDestination(emblem, instance, destination),
+        target,
             colorMappings[:],
             state.RecolorShader,
-            rotation = f32(instance.Rotation)
+            calculateInstanceOrigin(emblem, instance, target),
+            f32(instance.Rotation),
         )
     }
 
@@ -655,13 +655,15 @@ renderColoredEmblemInstances :: proc(layer: ^pdx.FlagLayerColoredEmblem, flag: p
             Position = pdx.DEFAULT_POSITION,
             Scale = pdx.DEFAULT_SCALE,
         }
+        target := calculateInstanceDestination(emblem, &instance, destination)
         texture.DrawRecoloredTexture(
             emblem,
             source,
-            calculateInstanceDestination(emblem, &instance, destination),
+            target,
             colorMappings[:],
             state.RecolorShader,
-            rotation = f32(instance.Rotation)
+            calculateInstanceOrigin(emblem, &instance, target),
+            f32(instance.Rotation),
         )
     }
 }
@@ -674,11 +676,12 @@ renderTexturedEmblemInstances :: proc(layer: ^pdx.FlagLayerTexturedEmblem, desti
     source := rl.Rectangle{0, 0, f32(emblem.width), f32(emblem.height)}
 
     for instance in layer.Instances {
+        target := calculateInstanceDestination(emblem, instance, destination)
         rl.DrawTexturePro(
             emblem,
             source,
-            calculateInstanceDestination(emblem, instance, destination),
-            { 0, 0 },
+            target,
+            calculateInstanceOrigin(emblem, instance, target),
             f32(instance.Rotation),
             rl.WHITE
         )
@@ -690,25 +693,42 @@ renderTexturedEmblemInstances :: proc(layer: ^pdx.FlagLayerTexturedEmblem, desti
             Position = pdx.DEFAULT_POSITION,
             Scale = pdx.DEFAULT_SCALE,
         }
+        target := calculateInstanceDestination(emblem, &instance, destination)
         rl.DrawTexturePro(
             emblem,
             source,
-            calculateInstanceDestination(emblem, &instance, destination),
-            { 0, 0 },
+            target,
+            calculateInstanceOrigin(emblem, &instance, target),
             f32(instance.Rotation),
             rl.WHITE
         )
     }
 }
 
+calculateInstanceOrigin :: proc(texture: rl.Texture2D, instance: ^pdx.LayerInstance, target: rl.Rectangle) -> rl.Vector2 {
+    return rl.Vector2{
+        target.width * 0.5,
+        target.height * 0.5,
+    }
+}
+
 calculateInstanceDestination :: proc(texture: rl.Texture2D, instance: ^pdx.LayerInstance, target: rl.Rectangle) -> rl.Rectangle {
-    width: f32 = target.width * instance.Scale.X
-    height: f32 = target.height * instance.Scale.Y
+    // handle buggy stretching/squishing
+    // seems slightly off, may need future adjustment
+    angle := math.mod(f32(instance.Rotation), 180.0)
+    if angle < 0 {
+        angle += 180.0
+    }
+    stretch := 1.0 + 0.5 * (1.0 - math.abs((angle - 90.0) / 90.0))
+    squish := 1.0 - 0.25 * (1.0 - math.abs((angle - 90.0) / 90.0))
+
+    width: f32 = target.width * instance.Scale.X * squish
+    height: f32 = target.height * instance.Scale.Y * stretch
 
     // Default position 0.5 is centered
     // The position then moves the instance by the flag width/height
-    x := target.x + ((target.width - width) / 2) + (target.width * (instance.Position.X - 0.5))
-    y := target.y + ((target.height - height) / 2) + (target.height * (instance.Position.Y - 0.5))
+    x := target.x + ((target.width - width) / 2) + (target.width * (instance.Position.X - 0.5)) + (width * 0.5)
+    y := target.y + ((target.height - height) / 2) + (target.height * (instance.Position.Y - 0.5)) + (height * 0.5)
 
     return rl.Rectangle{ x, y, width, height }
 }
