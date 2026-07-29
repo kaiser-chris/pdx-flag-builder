@@ -549,6 +549,8 @@ EnrichLoadedFlag  :: proc(flag: ^pdx.Flag, databases: ^[dynamic]Database) -> boo
                 pdx.DestroyFlagTexture(layer.Texture)
                 layer.Texture = pdx.CreateFlagTexture(name, path)
             }
+        case ^pdx.FlagLayerSub:
+            // Nothing to do
         }
     }
 

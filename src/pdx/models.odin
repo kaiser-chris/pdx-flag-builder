@@ -76,17 +76,23 @@ CloneFlagTexture :: proc(texture: FlagTexture) -> FlagTexture {
 FlagLayerVariant :: union {
     ^FlagLayerColoredEmblem,
     ^FlagLayerTexturedEmblem,
+    ^FlagLayerSub,
 }
 FlagLayer :: struct {
-    Texture: FlagTexture,
     Instances: [dynamic]^LayerInstance,
 }
 FlagLayerColoredEmblem :: struct {
     using Layer: FlagLayer,
+    Texture: FlagTexture,
     Colors: [dynamic]FlagColorVariant,
 }
 FlagLayerTexturedEmblem :: struct {
     using Layer: FlagLayer,
+    Texture: FlagTexture,
+}
+FlagLayerSub :: struct {
+    using Layer: FlagLayer,
+    Parent: string,
 }
 
 CreateLayerTexturedEmblem :: proc(name, path: string) -> ^FlagLayerTexturedEmblem {
@@ -100,6 +106,12 @@ CreateLayerColoredEmblem :: proc(name, path: string) -> ^FlagLayerColoredEmblem 
         Texture = CreateFlagTexture(name, path),
         Instances = make([dynamic]^LayerInstance),
         Colors = make([dynamic]FlagColorVariant),
+    })
+}
+CreateLayerSub :: proc(parent: string) -> ^FlagLayerSub {
+    return new_clone(FlagLayerSub{
+        Instances = make([dynamic]^LayerInstance),
+        Parent = strings.clone(parent)
     })
 }
 DestroyFlagLayer :: proc(variant: FlagLayerVariant) {
@@ -122,6 +134,13 @@ DestroyFlagLayer :: proc(variant: FlagLayerVariant) {
         }
         delete(layer.Instances)
         free(layer)
+    case ^FlagLayerSub:
+        for _, index in layer.Instances {
+            DestroyLayerInstance(layer.Instances[index])
+        }
+        delete(layer.Instances)
+        delete(layer.Parent)
+        free(layer)
     }
 }
 CloneFlagLayer :: proc(variant: FlagLayerVariant) -> FlagLayerVariant {
@@ -137,6 +156,12 @@ CloneFlagLayer :: proc(variant: FlagLayerVariant) -> FlagLayerVariant {
         return clonedLayer
     case ^FlagLayerTexturedEmblem:
         clonedLayer := CreateLayerTexturedEmblem(layer.Texture.Name, layer.Texture.Path)
+        for instance in layer.Instances {
+            append(&clonedLayer.Instances, CloneLayerInstance(instance))
+        }
+        return clonedLayer
+    case ^FlagLayerSub:
+        clonedLayer := CreateLayerSub(layer.Parent)
         for instance in layer.Instances {
             append(&clonedLayer.Instances, CloneLayerInstance(instance))
         }
