@@ -35,7 +35,8 @@ DestroyToastContainer :: proc(container: ^ToastContainer) {
     delete(container.Messages)
 }
 
-Toast :: proc(container: ^ToastContainer, header, message: string, expirary: time.Time, type: ToastType = .Info) {
+Toast :: proc(container: ^ToastContainer, header, message: string, type: ToastType = .Info, expiraryMilliseconds: time.Duration = 1000) {
+    expirary := time.time_add(time.now(), expiraryMilliseconds * time.Millisecond)
     toast := ToastMessage{
         Type = type,
         Header = strings.clone(header),

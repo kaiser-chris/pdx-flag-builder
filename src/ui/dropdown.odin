@@ -41,10 +41,15 @@ DestroyDropdown :: proc(dropdown: ^Dropdown) {
     delete(dropdown.Elements)
 }
 
-OpenDropdown :: proc(dropdown: ^Dropdown, location: mu.Vec2, elements: []DropdownElement, width: i32 = 0) {
+OpenDropdown :: proc(ctx: ^mu.Context, dropdown: ^Dropdown, elements: []DropdownElement) {
+    CloseDropdown(dropdown)
+    location := ctx.last_rect
     dropdown.IgnoreUntilMouseUp = true
-    dropdown.Width = width
-    dropdown.Location = location
+    dropdown.Width = location.w
+    dropdown.Location = {
+        location.x,
+        location.y + location.h,
+    }
     append(&dropdown.Elements, ..elements)
 }
 

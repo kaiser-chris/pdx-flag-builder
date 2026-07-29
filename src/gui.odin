@@ -2,7 +2,6 @@ package pdx_flag_builder
 
 import "core:fmt"
 import "core:strings"
-import "core:time"
 import rl "vendor:raylib"
 import mu "vendor:microui"
 import "texture"
@@ -468,25 +467,30 @@ renderToolbar :: proc(ctx: ^mu.Context) {
 
         mu.layout_begin_column(ctx)
         mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
-        if .SUBMIT in mu.button(ctx, "Settings") {
-            if state.SettingsWindowOpen {
-                state.SettingsWindowOpen = false
-            } else {
-                state.SettingsWindowOpen = true
+        if .SUBMIT in mu.button(ctx, "File") {
+            exportToImage :: proc(ctx: ^mu.Context) {
+                exportFlagImage(ctx, state.Flag)
             }
+            exportToClipboard :: proc(ctx: ^mu.Context) {
+                exportFlagToClipboard(ctx, state.Flag)
+            }
+            ui.OpenDropdown(ctx, &state.Dropdown, {
+                ui.CreateDropdownElement("Export to Image", exportToImage),
+                ui.CreateDropdownElement("Export to Clipboard", exportToClipboard),
+            })
         }
         mu.layout_end_column(ctx)
 
-        mu.layout_begin_column(ctx)
-        mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
-        if .SUBMIT in mu.button(ctx, "Toggle Sidebar") {
-            if state.SidebarOpen {
-                state.SidebarOpen = false
-            } else {
-                state.SidebarOpen = true
-            }
-        }
-        mu.layout_end_column(ctx)
+//        mu.layout_begin_column(ctx)
+//        mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
+//        if .SUBMIT in mu.button(ctx, "Toggle Sidebar") {
+//            if state.SidebarOpen {
+//                state.SidebarOpen = false
+//            } else {
+//                state.SidebarOpen = true
+//            }
+//        }
+//        mu.layout_end_column(ctx)
 
         mu.layout_begin_column(ctx)
         mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
@@ -512,25 +516,12 @@ renderToolbar :: proc(ctx: ^mu.Context) {
 
         mu.layout_begin_column(ctx)
         mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
-        buttonRect := mu.layout_next(ctx)
-        mu.layout_set_next(ctx, buttonRect, false)
-        if .SUBMIT in mu.button(ctx, "Export") {
-            exportToImage :: proc(ctx: ^mu.Context) {
-                exportFlagImage(ctx, state.Flag)
+        if .SUBMIT in mu.button(ctx, "Settings") {
+            if state.SettingsWindowOpen {
+                state.SettingsWindowOpen = false
+            } else {
+                state.SettingsWindowOpen = true
             }
-            exportToClipboard :: proc(ctx: ^mu.Context) {
-                script := pdx.WriteFlag(state.Flag, "\n")
-                defer delete(script)
-                clipString := strings.clone_to_cstring(script)
-                defer delete(clipString)
-                rl.SetClipboardText(clipString)
-                expirary := time.time_add(time.now(), 1 * time.Second)
-                ui.Toast(&state.Toast, "Export", "Copied to clipboard", expirary)
-            }
-            ui.OpenDropdown(&state.Dropdown, { buttonRect.x, buttonRect.y + buttonRect.h + 1 }, {
-                ui.CreateDropdownElement("Export to Image", exportToImage),
-                ui.CreateDropdownElement("Export to Clipboard", exportToClipboard),
-            }, buttonRect.w)
         }
         mu.layout_end_column(ctx)
     }
@@ -659,6 +650,7 @@ renderSettings :: proc(ctx: ^mu.Context) {
         mu.layout_row(ctx, {-1, -1}, 0)
         if .SUBMIT in mu.button(ctx, "Save Settings") {
             SaveSettings()
+            ui.Toast(&state.Toast, "Settings", "Successfully saved settings.")
         }
 
         if .ACTIVE in mu.header(ctx, "Paths", {.EXPANDED}) {

@@ -113,11 +113,10 @@ handleFlagExportRequests :: proc() {
         switch request.Type {
         case .Image:
             ok := executeExportFlagImage(request)
-            expirary := time.time_add(time.now(), 1 * time.Second)
             if ok {
-                ui.Toast(&state.Toast, "Export", "Saved image", expirary)
+                ui.Toast(&state.Toast, "Export", "Successfully exported image.")
             } else {
-                ui.Toast(&state.Toast, "Export", "Could not export image", expirary, .Warning)
+                ui.Toast(&state.Toast, "Export", "Could not export image.", .Warning)
             }
         case .Script:
             fmt.eprintln("Not Supported Yet")
@@ -891,4 +890,13 @@ exportFlagImage :: proc(ctx: ^mu.Context, flag: pdx.Flag, width: i32 = 0, height
     if !ok {
         fmt.eprintfln("Could not export flag: %s", flag.Name)
     }
+}
+
+exportFlagToClipboard :: proc(ctx: ^mu.Context, flag: pdx.Flag) {
+    script := pdx.WriteFlag(flag, "\n")
+    defer delete(script)
+    clipString := strings.clone_to_cstring(script)
+    defer delete(clipString)
+    rl.SetClipboardText(clipString)
+    ui.Toast(&state.Toast, "Export", "Copied to clipboard")
 }
