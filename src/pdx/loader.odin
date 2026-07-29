@@ -11,11 +11,14 @@ ERROR_OBJECT_CAST: string: "Could not cast Object: %v"
 ATTRIBUTE_PATTERN: string: "pattern"
 ATTRIBUTE_COLORED_EMBLEM: string: "colored_emblem"
 ATTRIBUTE_TEXTURED_EMBLEM: string: "textured_emblem"
+ATTRIBUTE_SUB: string: "sub"
 ATTRIBUTE_TEXTURE: string: "texture"
+ATTRIBUTE_PARENT: string: "parent"
 ATTRIBUTE_INSTANCE: string: "instance"
 ATTRIBUTE_SCALE: string: "scale"
 ATTRIBUTE_POSITION: string: "position"
 ATTRIBUTE_ROTATION: string: "rotation"
+ATTRIBUTE_OFFSET: string: "offset"
 
 TYPE_TEMPLATE: string: "template"
 
@@ -83,6 +86,14 @@ LoadCoa :: proc(root: coa.Pair) -> (Flag, bool) {
                 append(&flag.Layers, layer)
             }
         }
+        if (attribute.key == ATTRIBUTE_COLORED_EMBLEM || attribute.key == ATTRIBUTE_TEXTURED_EMBLEM || attribute.key == ATTRIBUTE_SUB) && attribute.value.kind == .Object {
+            // layer
+            layerAttributes := attribute.value.data.([]coa.Pair)
+            layer, success := loadLayer(attribute.key, layerAttributes)
+            if success {
+                append(&flag.Layers, layer)
+            }
+        }
     }
     colors := loadColors(attributes)
     for _, index in colors {
@@ -95,18 +106,18 @@ LoadCoa :: proc(root: coa.Pair) -> (Flag, bool) {
 }
 
 loadLayer :: proc(type: string, attributes: []coa.Pair) -> (FlagLayerVariant, bool) {
-    texture: string
-    instances := loadInstances(attributes)
-    defer delete(instances)
+    textureOrParent: string
 
     for attribute in attributes {
-        if attribute.key == ATTRIBUTE_TEXTURE && attribute.value.kind == .String {
-            texture = attribute.value.data.(string)
+        if (attribute.key == ATTRIBUTE_TEXTURE || attribute.key == ATTRIBUTE_PARENT) && attribute.value.kind == .String {
+            textureOrParent = attribute.value.data.(string)
         }
     }
 
     if type == ATTRIBUTE_COLORED_EMBLEM {
-        layer := CreateLayerColoredEmblem(texture, "")
+        instances := loadInstances(attributes)
+        defer delete(instances)
+        layer := CreateLayerColoredEmblem(textureOrParent, "")
         colors := loadColors(attributes)
         for color in colors {
             append(&layer.Colors, color)
@@ -117,7 +128,17 @@ loadLayer :: proc(type: string, attributes: []coa.Pair) -> (FlagLayerVariant, bo
         }
         return layer, true
     } else if type == ATTRIBUTE_TEXTURED_EMBLEM {
-        layer := CreateLayerTexturedEmblem(texture, "")
+        instances := loadInstances(attributes)
+        defer delete(instances)
+        layer := CreateLayerTexturedEmblem(textureOrParent, "")
+        for instance in instances {
+            append(&layer.Instances, instance)
+        }
+        return layer, true
+    } else if type == ATTRIBUTE_SUB {
+        instances := loadSubInstances(attributes)
+        defer delete(instances)
+        layer := CreateLayerSub(textureOrParent)
         for instance in instances {
             append(&layer.Instances, instance)
         }
@@ -183,6 +204,65 @@ loadInstances :: proc(attributeInstances: []coa.Pair) -> []^LayerInstance {
                     }
                 }
                 instance.Position = position
+            }
+        }
+        append(&instances, instance)
+    }
+    return instances[:]
+}
+
+loadSubInstances :: proc(attributeInstances: []coa.Pair) -> []^LayerInstanceSub {
+    instances := make([dynamic]^LayerInstanceSub)
+    for attributeInstance in attributeInstances {
+        if attributeInstance.key != ATTRIBUTE_INSTANCE || attributeInstance.value.kind != .Object {
+            continue
+        }
+        instance := CreateLayerInstanceSub()
+        attributes := attributeInstance.value.data.([]coa.Pair)
+        for attribute in attributes {
+            if attribute.key == ATTRIBUTE_SCALE && attribute.value.kind == .List {
+                values := attribute.value.data.([]coa.Value)
+                scale := LayerVector{}
+                if len(values) != 2 {
+                    fmt.eprintfln("invalid number of values for instance scale: %v", values)
+                    continue
+                }
+                for value, index in values {
+                    if value.kind != .Number {
+                        fmt.eprintfln("non numeric value for instance scale: %v", value.data)
+                        continue
+                    }
+                    number := value.data.(f64)
+                    if index == 0 {
+                        scale.X = f32(number)
+                    }
+                    if index == 1 {
+                        scale.Y = f32(number)
+                    }
+                }
+                instance.Scale = scale
+            }
+            if attribute.key == ATTRIBUTE_OFFSET && attribute.value.kind == .List {
+                values := attribute.value.data.([]coa.Value)
+                offset := LayerVector{}
+                if len(values) != 2 {
+                    fmt.eprintfln("invalid number of values for instance offset: %v", values)
+                    continue
+                }
+                for value, index in values {
+                    if value.kind != .Number {
+                        fmt.eprintfln("non numeric value for instance offset: %v", value.data)
+                        continue
+                    }
+                    number := value.data.(f64)
+                    if index == 0 {
+                        offset.X = f32(number)
+                    }
+                    if index == 1 {
+                        offset.Y = f32(number)
+                    }
+                }
+                instance.Offset = offset
             }
         }
         append(&instances, instance)
