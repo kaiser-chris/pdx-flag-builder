@@ -294,18 +294,25 @@ renderReferenceColorPicker :: proc(ctx: ^mu.Context) {
         for variant in state.Flag.Colors {
             name := variant.Name
             rectColor: mu.Color
+            resolved: pdx.FlagColor
 
-            switch color in variant.Variant {
+            #partial switch color in variant.Variant {
+            case pdx.FlagColorNamed:
+                namedColor, found := getNamedColor(color.NamedColor)
+                if !found {
+                    continue
+                }
+                resolved = namedColor
+            case:
+                resolved = variant
+            }
+
+            #partial switch color in resolved.Variant {
             case pdx.FlagColorRgb:
                 rectColor = mu.Color{ color.R, color.G, color.B, 255 }
             case pdx.FlagColorHsv:
                 tmp := pdx.ToRenderColor(color)
                 rectColor = mu.Color{ tmp[0], tmp[1], tmp[2], 255 }
-            case pdx.FlagColorNamed:
-                renderColor, _ := resolveNamedColor(color.NamedColor)
-                rectColor = mu.Color{ renderColor[0], renderColor[1], renderColor[2], 255 }
-            case pdx.FlagColorReference:
-                fmt.eprintfln("Named color is referencing a reference color")
             }
 
             mu.layout_row(ctx, { -1, -1 }, 20)
@@ -537,7 +544,7 @@ fillColorMapping :: proc(mappings: ^[dynamic]texture.ColorRecolor, variant: pdx.
             append(mappings, mapping)
         }
     case pdx.FlagColorNamed:
-        retrieve, exists := state.NamedColors[color.NamedColor]
+        retrieve, exists := getNamedColor(color.NamedColor)
         if !exists {
             return
         }
@@ -572,7 +579,7 @@ fillColorMapping :: proc(mappings: ^[dynamic]texture.ColorRecolor, variant: pdx.
                 if baseColorVariant.Name != color.Reference {
                     continue
                 }
-                retrieve, exists := state.NamedColors[baseColor.NamedColor]
+                retrieve, exists := getNamedColor(baseColor.NamedColor)
                 if !exists {
                     return
                 }
@@ -717,7 +724,6 @@ renderFlagDatabase :: proc(ctx: ^mu.Context) {
                     if .SUBMIT in mu.button(ctx, "Open") {
                         pdx.DestroyFlag(&state.Flag)
                         clonedFlag := pdx.CloneFlag(flag)
-                        state.Flags[FLAG_ACTIVE] = clonedFlag
                         state.Flag = clonedFlag
                     }
                     mu.pop_id(ctx)
@@ -1098,26 +1104,58 @@ renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
         variant := flag.Colors[index]
         switch color in variant.Variant {
         case pdx.FlagColorNamed:
-            buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, variant.Name, color, state.NamedColors)
-            renderColorButtons(ctx, &variant, &state.Flag.Colors, index, buttonEditRect, buttonDelRect)
+            targetColor, found := getNamedColor(color.NamedColor)
+            targetColorValue: mu.Color
+            if found {
+                renderColorValue := pdx.ToRenderColor(variant)
+                targetColorValue = mu.Color{ renderColorValue[0], renderColorValue[1], renderColorValue[2], 255 }
+            }
+            buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, variant.Name, color, targetColorValue)
+            renderColorButtons(ctx, &flag.Colors[index], &state.Flag.Colors, index, buttonEditRect, buttonDelRect)
         case pdx.FlagColorRgb:
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, variant.Name, variant)
-            renderColorButtons(ctx, &variant, &state.Flag.Colors, index, buttonEditRect, buttonDelRect)
+            renderColorButtons(ctx, &flag.Colors[index], &state.Flag.Colors, index, buttonEditRect, buttonDelRect)
         case pdx.FlagColorHsv:
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, variant.Name, variant)
-            renderColorButtons(ctx, &variant, &state.Flag.Colors, index, buttonEditRect, buttonDelRect)
+            renderColorButtons(ctx, &flag.Colors[index], &state.Flag.Colors, index, buttonEditRect, buttonDelRect)
         case pdx.FlagColorReference:
             // Should not happen
         }
     }
-    renderAddColorButtons(ctx, &flag.Colors)
+    mu.layout_row(ctx, { -1 }, 20)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in mu.button(ctx, "Add RGB color") {
+        colorName := pdx.GetNextFreeColor(flag.Colors[:])
+        if colorName != "" {
+            color := pdx.CreateColorRgb(colorName, 0, 0, 0)
+            append(&flag.Colors, color)
+        }
+    }
+    mu.pop_id(ctx)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in mu.button(ctx, "Add HSV color") {
+        colorName := pdx.GetNextFreeColor(flag.Colors[:])
+        if colorName != "" {
+            color := pdx.CreateColorHsv(colorName, 0, 0, 0)
+            append(&flag.Colors, color)
+        }
+    }
+    mu.pop_id(ctx)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in mu.button(ctx, "Add Named color") {
+        colorName := pdx.GetNextFreeColor(flag.Colors[:])
+        if colorName != "" {
+            color := pdx.CreateColorNamed(colorName, "")
+            append(&flag.Colors, color)
+        }
+    }
+    mu.pop_id(ctx)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
     if .SUBMIT in ui.Button(ctx, "Clear Flag", ui.ButtonStyle.Danger) {
         state.SelectedFlagElement = nil
         pdx.DestroyFlag(&state.Flag)
         flag := pdx.CreateFlag()
         state.Flag = flag
-        state.Flags[FLAG_ACTIVE] = flag
     }
     mu.pop_id(ctx)
 }
@@ -1130,21 +1168,59 @@ renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagL
         variant := layer.Colors[index]
         switch color in variant.Variant {
         case pdx.FlagColorNamed:
-            buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, variant.Name, color, state.NamedColors)
-            renderColorButtons(ctx, &variant, &layer.Colors, index, buttonEditRect, buttonDelRect)
+            targetColor, found := getNamedColor(color.NamedColor)
+            targetColorValue: mu.Color
+            if found {
+                renderColorValue := pdx.ToRenderColor(variant)
+                targetColorValue = mu.Color{ renderColorValue[0], renderColorValue[1], renderColorValue[2], 255 }
+            }
+            buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, variant.Name, color, targetColorValue)
+            renderColorButtons(ctx, &layer.Colors[index], &layer.Colors, index, buttonEditRect, buttonDelRect)
         case pdx.FlagColorRgb:
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, variant.Name, variant)
-            renderColorButtons(ctx, &variant, &layer.Colors, index, buttonEditRect, buttonDelRect)
+            renderColorButtons(ctx, &layer.Colors[index], &layer.Colors, index, buttonEditRect, buttonDelRect)
         case pdx.FlagColorHsv:
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, variant.Name, variant)
-            renderColorButtons(ctx, &variant, &layer.Colors, index, buttonEditRect, buttonDelRect)
+            renderColorButtons(ctx, &layer.Colors[index], &layer.Colors, index, buttonEditRect, buttonDelRect)
         case pdx.FlagColorReference:
-            buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, variant.Name, color, state.Flag.Colors[:], state.NamedColors)
-            renderColorButtons(ctx, &variant, &layer.Colors, index, buttonEditRect, buttonDelRect)
+            targetColor, found := getReferencedColor(color.Reference, state.Flag)
+            targetColorValue: mu.Color
+            if found {
+                renderColorValue := pdx.ToRenderColor(variant)
+                targetColorValue = mu.Color{ renderColorValue[0], renderColorValue[1], renderColorValue[2], 255 }
+            }
+            buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, variant.Name, color, targetColorValue)
+            renderColorButtons(ctx, &layer.Colors[index], &layer.Colors, index, buttonEditRect, buttonDelRect)
         }
     }
-    renderAddColorButtons(ctx, &layer.Colors)
     mu.layout_row(ctx, { -1 }, 20)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in mu.button(ctx, "Add RGB color") {
+        colorName := pdx.GetNextFreeColor(layer.Colors[:])
+        if colorName != "" {
+            color := pdx.CreateColorRgb(colorName, 0, 0, 0)
+            append(&layer.Colors, color)
+        }
+    }
+    mu.pop_id(ctx)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in mu.button(ctx, "Add HSV color") {
+        colorName := pdx.GetNextFreeColor(layer.Colors[:])
+        if colorName != "" {
+            color := pdx.CreateColorHsv(colorName, 0, 0, 0)
+            append(&layer.Colors, color)
+        }
+    }
+    mu.pop_id(ctx)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in mu.button(ctx, "Add Named color") {
+        colorName := pdx.GetNextFreeColor(layer.Colors[:])
+        if colorName != "" {
+            color := pdx.CreateColorNamed(colorName, "")
+            append(&layer.Colors, color)
+        }
+    }
+    mu.pop_id(ctx)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
     if .SUBMIT in mu.button(ctx, "Add reference color") {
         colorName := pdx.GetNextFreeColor(layer.Colors[:])
@@ -1264,37 +1340,6 @@ renderColorButtons :: proc(ctx: ^mu.Context, color: ^pdx.FlagColor, list: ^[dyna
         }
         ordered_remove(list, index)
         pdx.DestroyFlagColor(color)
-    }
-    mu.pop_id(ctx)
-}
-
-renderAddColorButtons :: proc(ctx: ^mu.Context, list: ^[dynamic]pdx.FlagColor) {
-    mu.layout_row(ctx, { -1 }, 20)
-    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in mu.button(ctx, "Add RGB color") {
-        colorName := pdx.GetNextFreeColor(list[:])
-        if colorName != "" {
-            color := pdx.CreateColorRgb(colorName, 0, 0, 0)
-            append(list, color)
-        }
-    }
-    mu.pop_id(ctx)
-    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in mu.button(ctx, "Add HSV color") {
-        colorName := pdx.GetNextFreeColor(list[:])
-        if colorName != "" {
-            color := pdx.CreateColorHsv(colorName, 0, 0, 0)
-            append(list, color)
-        }
-    }
-    mu.pop_id(ctx)
-    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in mu.button(ctx, "Add Named color") {
-        colorName := pdx.GetNextFreeColor(list[:])
-        if colorName != "" {
-            color := pdx.CreateColorNamed(colorName, "")
-            append(list, color)
-        }
     }
     mu.pop_id(ctx)
 }

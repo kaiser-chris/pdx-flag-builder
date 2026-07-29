@@ -1,7 +1,6 @@
 package pdx
 
 import strings "core:strings"
-import fmt "core:fmt"
 
 DEFAULT_SCALE: LayerVector: { 1, 1 }
 DEFAULT_POSITION: LayerVector: { 0.5, 0.5 }
@@ -33,7 +32,7 @@ CreateFlag :: proc(name: string = "") -> Flag {
     return flag
 }
 DestroyFlag :: proc(flag: ^Flag) {
-    DestroyFlagTexture(flag.Pattern)
+    DestroyFlagTexture(&flag.Pattern)
     for _, index in flag.Colors {
         DestroyFlagColor(&flag.Colors[index])
     }
@@ -67,7 +66,7 @@ CreateFlagTexture :: proc(name, path: string) -> FlagTexture {
         Path = strings.clone(path),
     }
 }
-DestroyFlagTexture :: proc(texture: FlagTexture) {
+DestroyFlagTexture :: proc(texture: ^FlagTexture) {
     delete(texture.Name)
     delete(texture.Path)
 }
@@ -121,7 +120,7 @@ CreateLayerSub :: proc(parent: string) -> ^FlagLayerSub {
 DestroyFlagLayer :: proc(variant: FlagLayerVariant) {
     switch layer in variant {
     case ^FlagLayerColoredEmblem:
-        DestroyFlagTexture(layer.Texture)
+        DestroyFlagTexture(&layer.Texture)
         for _, index in layer.Colors {
             DestroyFlagColor(&layer.Colors[index])
         }
@@ -132,7 +131,7 @@ DestroyFlagLayer :: proc(variant: FlagLayerVariant) {
         delete(layer.Instances)
         free(layer)
     case ^FlagLayerTexturedEmblem:
-        DestroyFlagTexture(layer.Texture)
+        DestroyFlagTexture(&layer.Texture)
         for _, index in layer.Instances {
             DestroyLayerInstance(layer.Instances[index])
         }
@@ -254,30 +253,38 @@ CreateColor :: proc($T: typeid, name: string) -> FlagColor {
 
 CreateColorRgb :: proc(name: string, r, g, b: u8) -> FlagColor {
     color := CreateColor(FlagColorRgb, name)
-    variant := color.Variant.(FlagColorRgb)
-    variant.R = r
-    variant.G = g
-    variant.B = b
+    #partial switch &type in color.Variant {
+    case FlagColorRgb:
+        type.R = r
+        type.G = g
+        type.B = b
+    }
     return color
 }
 CreateColorHsv :: proc(name: string, h, s, v: f32) -> FlagColor {
     color := CreateColor(FlagColorHsv, name)
-    variant := color.Variant.(FlagColorHsv)
-    variant.H = h
-    variant.S = s
-    variant.V = v
+    #partial switch &type in color.Variant {
+    case FlagColorHsv:
+        type.H = h
+        type.S = s
+        type.V = v
+    }
     return color
 }
 CreateColorNamed :: proc(name, namedColor: string) -> FlagColor {
     color := CreateColor(FlagColorNamed, name)
-    variant := &color.Variant.(FlagColorNamed)
-    variant.NamedColor = strings.clone(namedColor)
+    #partial switch &type in color.Variant {
+    case FlagColorNamed:
+        type.NamedColor = strings.clone(namedColor)
+    }
     return color
 }
 CreateColorReference :: proc(name, reference: string) -> FlagColor {
     color := CreateColor(FlagColorReference, name)
-    variant := &color.Variant.(FlagColorReference)
-    variant.Reference = strings.clone(reference)
+    #partial switch &type in color.Variant {
+    case FlagColorReference:
+        type.Reference = strings.clone(reference)
+    }
     return color
 }
 DestroyFlagColor :: proc(variant: ^FlagColor) {

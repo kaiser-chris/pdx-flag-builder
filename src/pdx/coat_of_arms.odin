@@ -330,24 +330,21 @@ loadTypedColor :: proc(name: string, type: string, numbers: []parser.Value) -> (
         }
     }
 
-    color: FlagColor
     switch type {
     case COLOR_TYPE_IMPLICIT:
         if firstValue != 0 && firstValue <= 1 && secondValue != 0 && secondValue <= 1 && thirdValue != 0 && thirdValue <= 1 {
-            color = CreateColorRgb(name, u8(firstValue * 255), u8(secondValue * 255), u8(thirdValue * 255))
+            return CreateColorRgb(name, u8(firstValue * 255), u8(secondValue * 255), u8(thirdValue * 255)), true
         } else {
-            color = CreateColorRgb(name, u8(firstValue), u8(secondValue), u8(thirdValue))
+            return CreateColorRgb(name, u8(firstValue), u8(secondValue), u8(thirdValue)), true
         }
     case COLOR_TYPE_RGB:
-        color = CreateColorRgb(name, u8(firstValue), u8(secondValue), u8(thirdValue))
+        return CreateColorRgb(name, u8(firstValue), u8(secondValue), u8(thirdValue)), true
     case COLOR_TYPE_HSV360:
-        color = CreateColorHsv(name, f32(firstValue), f32(secondValue), f32(thirdValue))
+        return CreateColorHsv(name, f32(firstValue), f32(secondValue), f32(thirdValue)), true
     case COLOR_TYPE_HSV:
-        color = CreateColorHsv(name, f32(firstValue) * 360, f32(secondValue) * 100, f32(thirdValue) * 100)
-    case:
-        fmt.eprintfln("unknown color type %s", type)
-        return FlagColor{}, false
+        return CreateColorHsv(name, f32(firstValue) * 360, f32(secondValue) * 100, f32(thirdValue) * 100), true
     }
 
-    return color, true
+    fmt.eprintfln("unknown color type %s", type)
+    return FlagColor{}, false
 }

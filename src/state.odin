@@ -44,7 +44,6 @@ State :: struct {
     SelectedFlagElement: SelectedFlagElement,
     Done: bool,
     RecolorShader: texture.RecolorShader,
-    NamedColors: map[string]pdx.FlagColor,
     Flags: map[string]pdx.Flag,
     GuiFlagMap: map[string]int,
     RenderFlagMap: map[int]pdx.Flag,
@@ -60,11 +59,11 @@ Database :: struct {
     BufferNameLength: int,
     BufferPath: [512]byte,
     BufferPathLength: int,
-    NamedColors: [dynamic]pdx.FlagColor,
     Patterns: [dynamic]pdx.FlagTexture,
     ColoredEmblems: [dynamic]pdx.FlagTexture,
     TexturedEmblems: [dynamic]pdx.FlagTexture,
     Flags: [dynamic]pdx.Flag,
+    NamedColors: [dynamic]pdx.FlagColor,
 }
 
 FlagRequest :: struct {
@@ -103,7 +102,6 @@ CreateState :: proc() {
     state.RenderTextureMap = make(map[string]rl.Texture2D)
     state.GuiTextureCache = make(map[string]rl.Texture2D)
     state.Icons = make(map[ui.IconType]rl.Texture2D)
-    state.NamedColors = make(map[string]pdx.FlagColor)
     state.TextureMap = make(map[string]int)
     state.GuiFlagMap = make(map[string]int)
     state.RenderFlagMap = make(map[int]pdx.Flag)
@@ -129,9 +127,7 @@ CreateState :: proc() {
     state.FlagExportChannel = exportChannel
     state.SidebarOpen = true
     state.SidebarWidth = 350
-    flag := pdx.CreateFlag()
-    state.Flags[FLAG_ACTIVE] = flag
-    state.Flag = flag
+    state.Flag = pdx.CreateFlag()
     state.NextTextureIdentifier = 1
     state.NextFlagIdentifier = 1
     state.TextureLoadingThread = createTextureLoadingThread()
@@ -152,6 +148,7 @@ DestroyState :: proc() {
     for !thread.is_done(state.TextureLoadingThread) {
         time.sleep(10)
     }
+    delete(state.Flags)
     for _, index in state.Databases {
         DestroyDatabase(&state.Databases[index])
     }
@@ -169,13 +166,8 @@ DestroyState :: proc() {
     for key in state.GuiFlagMap {
         delete(key)
     }
-    flag, exists := state.Flags[FLAG_ACTIVE]
-    if exists {
-        pdx.DestroyFlag(&flag)
-    }
     delete(state.GuiFlagMap)
     delete(state.RenderFlagMap)
-    delete(state.Flags)
     delete(state.TextureMap)
     delete(state.RenderTextureMap)
     delete(state.Databases)
@@ -186,8 +178,8 @@ DestroyState :: proc() {
     chan.destroy(state.FlagLoadChannel)
     chan.destroy(state.FlagExportChannel)
     thread.destroy(state.TextureLoadingThread)
-    delete(state.NamedColors)
     settings.DestroySettings(state.Settings)
+    pdx.DestroyFlag(&state.Flag)
 }
 
 CreateDatabase :: proc(name, path: string) -> Database {
@@ -264,16 +256,6 @@ destroyNamedColors :: proc(database: ^Database) {
         return
     }
     for _, index in database.NamedColors {
-        switch type in database.NamedColors[index].Variant {
-        case pdx.FlagColorHsv:
-            delete_key(&state.NamedColors, database.NamedColors[index].Name)
-        case pdx.FlagColorRgb:
-            delete_key(&state.NamedColors, database.NamedColors[index].Name)
-        case pdx.FlagColorNamed:
-            delete_key(&state.NamedColors, database.NamedColors[index].Name)
-        case pdx.FlagColorReference:
-            delete_key(&state.NamedColors, database.NamedColors[index].Name)
-        }
         pdx.DestroyFlagColor(&database.NamedColors[index])
     }
     delete(database.NamedColors)
@@ -374,19 +356,19 @@ loadDatabaseTextures :: proc(database: ^Database) {
 destroyLoadedTextures :: proc(database: ^Database) {
     if database.Patterns != nil {
         for _, index in database.Patterns {
-            pdx.DestroyFlagTexture(database.Patterns[index])
+            pdx.DestroyFlagTexture(&database.Patterns[index])
         }
         delete(database.Patterns)
     }
     if database.ColoredEmblems != nil {
         for _, index in database.ColoredEmblems {
-            pdx.DestroyFlagTexture(database.ColoredEmblems[index])
+            pdx.DestroyFlagTexture(&database.ColoredEmblems[index])
         }
         delete(database.ColoredEmblems)
     }
     if database.TexturedEmblems != nil {
         for _, index in database.TexturedEmblems {
-            pdx.DestroyFlagTexture(database.TexturedEmblems[index])
+            pdx.DestroyFlagTexture(&database.TexturedEmblems[index])
         }
         delete(database.TexturedEmblems)
     }
@@ -433,7 +415,7 @@ EnrichLoadedFlag  :: proc(flag: ^pdx.Flag, databases: ^[dynamic]Database) -> boo
         }
         name := strings.clone(flag.Pattern.Name)
         defer delete(name)
-        pdx.DestroyFlagTexture(flag.Pattern)
+        pdx.DestroyFlagTexture(&flag.Pattern)
         flag.Pattern = pdx.CreateFlagTexture(name, path)
     }
     for variant, index in flag.Layers {
@@ -447,7 +429,7 @@ EnrichLoadedFlag  :: proc(flag: ^pdx.Flag, databases: ^[dynamic]Database) -> boo
                 }
                 name := strings.clone(layer.Texture.Name)
                 defer delete(name)
-                pdx.DestroyFlagTexture(layer.Texture)
+                pdx.DestroyFlagTexture(&layer.Texture)
                 layer.Texture = pdx.CreateFlagTexture(name, path)
             }
         case ^pdx.FlagLayerTexturedEmblem:
@@ -459,7 +441,7 @@ EnrichLoadedFlag  :: proc(flag: ^pdx.Flag, databases: ^[dynamic]Database) -> boo
                 }
                 name := strings.clone(layer.Texture.Name)
                 defer delete(name)
-                pdx.DestroyFlagTexture(layer.Texture)
+                pdx.DestroyFlagTexture(&layer.Texture)
                 layer.Texture = pdx.CreateFlagTexture(name, path)
             }
         case ^pdx.FlagLayerSub:
@@ -500,20 +482,32 @@ findTexturedEmblemTexturePath :: proc(name: string, databases: ^[dynamic]Databas
     }
     return "", false
 }
-resolveNamedColor :: proc(name: string) -> (rl.Color, pdx.FlagColor) {
-    variant, exists := state.NamedColors[name]
-    if !exists {
-        return rl.Color{}, pdx.FlagColor{}
+
+getNamedColor :: proc(name: string) -> (pdx.FlagColor, bool) {
+    for database in state.Databases {
+        for color in database.NamedColors {
+            if color.Name == name {
+                return color, true
+            }
+        }
     }
-    switch color in variant.Variant {
-    case pdx.FlagColorRgb:
-        return pdx.ToRenderColor(variant), variant
-    case pdx.FlagColorHsv:
-        return pdx.ToRenderColor(variant), variant
+    return pdx.FlagColor{}, false
+}
+
+getReferencedColor :: proc(reference: string, flag: pdx.Flag) -> (pdx.FlagColor, bool) {
+    referencedColor: pdx.FlagColor
+    found: bool
+    for color in flag.Colors {
+        if color.Name == reference {
+            referencedColor = color
+            found = true
+        }
+    }
+    #partial switch type in referencedColor.Variant {
     case pdx.FlagColorNamed:
-    case pdx.FlagColorReference:
+        referencedColor, found = getNamedColor(type.NamedColor)
     }
-    return rl.Color{}, pdx.FlagColor{}
+    return pdx.FlagColor{}, false
 }
 
 SaveSettings :: proc() {

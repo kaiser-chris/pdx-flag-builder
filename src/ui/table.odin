@@ -133,29 +133,16 @@ drawNamedColorAttributeRow :: proc(
     ctx: ^mu.Context,
     label: string,
     color: pdx.FlagColorNamed,
-    namedColors: map[string]pdx.FlagColor,
+    renderColor: mu.Color,
     labelSize: f32 = 0.3
 ) -> (mu.Rect, mu.Rect) {
     valueRect := setupAttributeRow(ctx, label, labelSize)
 
-    rgbColor: mu.Color
     colorText: string
     if color.NamedColor == "" {
         colorText = "Named ( Empty )"
     } else {
         colorText = fmt.tprintf("Named ( %s )", color.NamedColor)
-        reference, ok := namedColors[color.NamedColor]
-        switch referenceColor in reference.Variant {
-        case pdx.FlagColorRgb:
-            rgbColor = mu.Color{ referenceColor.R, referenceColor.G, referenceColor.B, 255 }
-        case pdx.FlagColorHsv:
-            tmp := pdx.ToRenderColor(referenceColor)
-            rgbColor = mu.Color{ tmp[0], tmp[1], tmp[2], 255 }
-        case pdx.FlagColorNamed:
-            fmt.eprintfln("named color is referencing another named color")
-        case pdx.FlagColorReference:
-            fmt.eprintfln("named color is referencing a reference color")
-        }
     }
 
     colorPreviewRect := mu.Rect{
@@ -185,7 +172,7 @@ drawNamedColorAttributeRow :: proc(
         w = buttonDeleteRect.x - ctx.style.spacing - (colorPreviewRect.x + colorPreviewRect.w + ctx.style.spacing),
     }
     mu.draw_control_text(ctx, colorText, colorTextRect, .TEXT, {.ALIGN_CENTER})
-    mu.draw_rect(ctx, colorPreviewRect, rgbColor)
+    mu.draw_rect(ctx, colorPreviewRect, renderColor)
     mu.layout_end_column(ctx)
 
     layout := mu.get_layout(ctx)
@@ -199,42 +186,10 @@ drawReferenceColorAttributeRow :: proc(
     ctx: ^mu.Context,
     label: string,
     color: pdx.FlagColorReference,
-    baseColors: []pdx.FlagColor,
-    namedColors: map[string]pdx.FlagColor,
+    renderColor: mu.Color,
     labelSize: f32 = 0.3
 ) -> (mu.Rect, mu.Rect) {
     valueRect := setupAttributeRow(ctx, label, labelSize)
-
-    colorValue: mu.Color
-    for baseColor in baseColors {
-        baseColorValue: mu.Color
-        baseColorName := baseColor.Name
-        switch referenceColor in baseColor.Variant {
-        case pdx.FlagColorRgb:
-            baseColorValue = mu.Color{ referenceColor.R, referenceColor.G, referenceColor.B, 255 }
-        case pdx.FlagColorHsv:
-            tmp := pdx.ToRenderColor(referenceColor)
-            baseColorValue = mu.Color{ tmp[0], tmp[1], tmp[2], 255 }
-        case pdx.FlagColorNamed:
-            reference, ok := namedColors[referenceColor.NamedColor]
-            switch referenceColor in reference.Variant {
-            case pdx.FlagColorRgb:
-                baseColorValue = mu.Color{ referenceColor.R, referenceColor.G, referenceColor.B, 255 }
-            case pdx.FlagColorHsv:
-                tmp := pdx.ToRenderColor(referenceColor)
-                baseColorValue = mu.Color{ tmp[0], tmp[1], tmp[2], 255 }
-            case pdx.FlagColorNamed:
-                fmt.eprintfln("named color is referencing another named color")
-            case pdx.FlagColorReference:
-                fmt.eprintfln("named color is referencing a reference color")
-            }
-        case pdx.FlagColorReference:
-            fmt.eprintfln("reference color is referencing a reference color")
-        }
-        if baseColorName == color.Reference {
-            colorValue = baseColorValue
-        }
-    }
 
     colorText: string
     if color.Reference == "" {
@@ -270,7 +225,7 @@ drawReferenceColorAttributeRow :: proc(
         w = buttonDeleteRect.x - ctx.style.spacing - (colorPreviewRect.x + colorPreviewRect.w + ctx.style.spacing),
     }
     mu.draw_control_text(ctx, colorText, colorTextRect, .TEXT, {.ALIGN_CENTER})
-    mu.draw_rect(ctx, colorPreviewRect, colorValue)
+    mu.draw_rect(ctx, colorPreviewRect, renderColor)
     mu.layout_end_column(ctx)
 
     layout := mu.get_layout(ctx)
