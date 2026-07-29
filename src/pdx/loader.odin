@@ -78,14 +78,6 @@ LoadCoa :: proc(root: coa.Pair) -> (Flag, bool) {
             pattern := attribute.value.data.(string)
             flag.Pattern = CreateFlagTexture(pattern, "")
         }
-        if (attribute.key == ATTRIBUTE_COLORED_EMBLEM || attribute.key == ATTRIBUTE_TEXTURED_EMBLEM) && attribute.value.kind == .Object {
-            // layer
-            layerAttributes := attribute.value.data.([]coa.Pair)
-            layer, success := loadLayer(attribute.key, layerAttributes)
-            if success {
-                append(&flag.Layers, layer)
-            }
-        }
         if (attribute.key == ATTRIBUTE_COLORED_EMBLEM || attribute.key == ATTRIBUTE_TEXTURED_EMBLEM || attribute.key == ATTRIBUTE_SUB) && attribute.value.kind == .Object {
             // layer
             layerAttributes := attribute.value.data.([]coa.Pair)
