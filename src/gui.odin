@@ -1139,7 +1139,7 @@ renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagL
         }
     }
     renderAddColorButtons(ctx, &layer.Colors)
-    mu.layout_row(ctx, {-1,-1}, 20)
+    mu.layout_row(ctx, { -1 }, 20)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
     if .SUBMIT in mu.button(ctx, "Add reference color") {
         colorName := pdx.GetNextFreeColor(layer.Colors[:])
@@ -1149,12 +1149,17 @@ renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagL
         }
     }
     mu.pop_id(ctx)
-
-    mu.layout_row(ctx, { -1, -1 }, 20)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
     if .SUBMIT in mu.button(ctx, "Add new insance") {
         instance := pdx.CreateLayerInstance()
         append(&layer.Instances, instance)
+        state.SelectedFlagElement = instance
+    }
+    mu.pop_id(ctx)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in mu.button(ctx, "Delete Layer") {
+        removeLayer(layer)
+        state.SelectedFlagElement = nil
     }
     mu.pop_id(ctx)
 }
@@ -1163,11 +1168,18 @@ renderSelectedFlagLayerTexturedEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.Flag
     ui.DrawAttributeRow(ctx, "Type", "Textured Emblem")
     ui.DrawAttributeRow(ctx, "Texture", layer.Texture.Name)
     ui.DrawAttributeRow(ctx, "Instances", fmt.tprintf("%i", len(layer.Instances)))
-    mu.layout_row(ctx, { -1, -1 }, 20)
+    mu.layout_row(ctx, { -1 }, 20)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
     if .SUBMIT in mu.button(ctx, "Add new insance") {
         instance := pdx.CreateLayerInstance()
         append(&layer.Instances, instance)
+        state.SelectedFlagElement = instance
+    }
+    mu.pop_id(ctx)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in mu.button(ctx, "Delete Layer") {
+        removeLayer(layer)
+        state.SelectedFlagElement = nil
     }
     mu.pop_id(ctx)
 }
@@ -1176,11 +1188,18 @@ renderSelectedFlagLayerSub :: proc(ctx: ^mu.Context, layer: ^pdx.FlagLayerSub) {
     ui.DrawAttributeRow(ctx, "Type", "Sub Flag")
     ui.DrawAttributeRow(ctx, "Parent", layer.Parent)
     ui.DrawAttributeRow(ctx, "Instances", fmt.tprintf("%i", len(layer.Instances)))
-    mu.layout_row(ctx, { -1, -1 }, 20)
+    mu.layout_row(ctx, { -1 }, 20)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
     if .SUBMIT in mu.button(ctx, "Add new insance") {
         instance := pdx.CreateLayerInstanceSub()
         append(&layer.Instances, instance)
+        state.SelectedFlagElement = instance
+    }
+    mu.pop_id(ctx)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in mu.button(ctx, "Delete Layer") {
+        removeLayer(layer)
+        state.SelectedFlagElement = nil
     }
     mu.pop_id(ctx)
 }
@@ -1245,7 +1264,7 @@ renderColorButtons :: proc(ctx: ^mu.Context, color: pdx.FlagColorVariant, list: 
 }
 
 renderAddColorButtons :: proc(ctx: ^mu.Context, list: ^[dynamic]pdx.FlagColorVariant) {
-    mu.layout_row(ctx, {-1,-1}, 20)
+    mu.layout_row(ctx, { -1 }, 20)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
     if .SUBMIT in mu.button(ctx, "Add RGB color") {
         colorName := pdx.GetNextFreeColor(list[:])
@@ -1255,7 +1274,6 @@ renderAddColorButtons :: proc(ctx: ^mu.Context, list: ^[dynamic]pdx.FlagColorVar
         }
     }
     mu.pop_id(ctx)
-    mu.layout_row(ctx, {-1,-1}, 20)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
     if .SUBMIT in mu.button(ctx, "Add HSV color") {
         colorName := pdx.GetNextFreeColor(list[:])
@@ -1265,7 +1283,6 @@ renderAddColorButtons :: proc(ctx: ^mu.Context, list: ^[dynamic]pdx.FlagColorVar
         }
     }
     mu.pop_id(ctx)
-    mu.layout_row(ctx, {-1,-1}, 20)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
     if .SUBMIT in mu.button(ctx, "Add Named color") {
         colorName := pdx.GetNextFreeColor(list[:])
@@ -1277,10 +1294,30 @@ renderAddColorButtons :: proc(ctx: ^mu.Context, list: ^[dynamic]pdx.FlagColorVar
     mu.pop_id(ctx)
 }
 
-removeLayer :: proc(index: int){
-    variant := state.Flag.Layers[index]
-    ordered_remove(&state.Flag.Layers, index)
-    pdx.DestroyFlagLayer(variant)
+removeLayer :: proc(layer: pdx.FlagLayerVariant) {
+    switch type in layer {
+    case ^pdx.FlagLayerColoredEmblem:
+        for _, index in state.Flag.Layers {
+            if state.Flag.Layers[index] == layer {
+                ordered_remove(&state.Flag.Layers, index)
+                pdx.DestroyFlagLayer(layer)
+            }
+        }
+    case ^pdx.FlagLayerTexturedEmblem:
+        for _, index in state.Flag.Layers {
+            if state.Flag.Layers[index] == layer {
+                ordered_remove(&state.Flag.Layers, index)
+                pdx.DestroyFlagLayer(layer)
+            }
+        }
+    case ^pdx.FlagLayerSub:
+        for _, index in state.Flag.Layers {
+            if state.Flag.Layers[index] == layer {
+                ordered_remove(&state.Flag.Layers, index)
+                pdx.DestroyFlagLayer(layer)
+            }
+        }
+    }
 }
 
 removeInstance :: proc(instance: pdx.LayerInstanceVariant) {
