@@ -202,10 +202,34 @@ renderNamedColorPicker :: proc(ctx: ^mu.Context) {
         window.rect.w = width
         window.rect.h = height
 
+        mu.layout_row(ctx, { -1 }, 15)
+        mu.text(ctx, "Search:")
+        @static searchBuffer: [128]byte
+        @static searchBufferLength: int
+        if .CHANGE in mu.textbox(ctx, searchBuffer[:], &searchBufferLength) {
+            delete(state.SearchCache.NamedColorSearch)
+            state.SearchCache.NamedColorSearch = strings.to_lower(string(searchBuffer[:searchBufferLength]))
+        }
+        mu.layout_row(ctx, { -1 }, 5)
+        r := mu.layout_next(ctx)
+        mu.draw_rect(ctx, r, ctx.style.colors[.WINDOW_BG])
+
+        options: mu.Options
+        if state.SearchCache.NamedColorSearch != "" {
+            options = { .EXPANDED }
+        }
+
         for database in state.Databases {
             ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-            if .ACTIVE in mu.header(ctx, database.Settings.Name) {
+            if .ACTIVE in mu.header(ctx, database.Settings.Name, options) {
                 for variant in database.NamedColors {
+                    searchName := strings.to_lower(variant.Name)
+                    defer delete(searchName)
+
+                    if !strings.contains(searchName, state.SearchCache.NamedColorSearch) {
+                        continue
+                    }
+
                     name := variant.Name
                     rectColor: mu.Color
                     switch color in variant.Variant {
@@ -683,22 +707,20 @@ renderFlagDatabase :: proc(ctx: ^mu.Context) {
     if mu.window(ctx, WINDOM_FLAG_DATABASE, {10, 10 + TOOLBAR_HEIGHT, 500, rl.GetScreenHeight() - 20 - TOOLBAR_HEIGHT}, {}) {
         guranteeBounds(ctx)
 
-        mu.layout_row(ctx, {-1, -1}, 15)
+        mu.layout_row(ctx, { -1 }, 15)
         mu.text(ctx, "Search:")
         @static searchBuffer: [128]byte
         @static searchBufferLength: int
-        @static search: string
-        mu.layout_row(ctx, {-1, -1}, 20)
         if .CHANGE in mu.textbox(ctx, searchBuffer[:], &searchBufferLength) {
-            delete(search)
-            search = strings.to_lower(string(searchBuffer[:searchBufferLength]))
+            delete(state.SearchCache.FlagDatabaseSearch)
+            state.SearchCache.FlagDatabaseSearch = strings.to_lower(string(searchBuffer[:searchBufferLength]))
         }
-        mu.layout_row(ctx, {-1, -1}, 5)
+        mu.layout_row(ctx, { -1 }, 5)
         r := mu.layout_next(ctx)
         mu.draw_rect(ctx, r, ctx.style.colors[.WINDOW_BG])
 
         options: mu.Options
-        if search != "" {
+        if state.SearchCache.FlagDatabaseSearch != "" {
             options = { .EXPANDED }
         }
 
@@ -708,7 +730,7 @@ renderFlagDatabase :: proc(ctx: ^mu.Context) {
                 for flag in database.Flags {
                     searchName := strings.to_lower(flag.Name)
                     defer delete(searchName)
-                    if !strings.contains(searchName, search) {
+                    if !strings.contains(searchName, state.SearchCache.FlagDatabaseSearch) {
                         continue
                     }
                     mu.layout_row(ctx, {40, -136, 80, 40}, 24)
@@ -749,18 +771,17 @@ renderTextureDatabase :: proc(ctx: ^mu.Context) {
         mu.text(ctx, "Search:")
         @static searchBuffer: [128]byte
         @static searchBufferLength: int
-        @static search: string
         mu.layout_row(ctx, {-1, -1}, 20)
         if .CHANGE in mu.textbox(ctx, searchBuffer[:], &searchBufferLength) {
-            delete(search)
-            search = strings.to_lower(string(searchBuffer[:searchBufferLength]))
+            delete(state.SearchCache.TextureDatabaseSearch)
+            state.SearchCache.TextureDatabaseSearch = strings.to_lower(string(searchBuffer[:searchBufferLength]))
         }
         mu.layout_row(ctx, {-1, -1}, 5)
         r := mu.layout_next(ctx)
         mu.draw_rect(ctx, r, ctx.style.colors[.WINDOW_BG])
 
         options: mu.Options
-        if search != "" {
+        if state.SearchCache.TextureDatabaseSearch != "" {
             options = { .EXPANDED }
         }
 
@@ -772,7 +793,7 @@ renderTextureDatabase :: proc(ctx: ^mu.Context) {
                     for texture in database.Patterns {
                         name := strings.to_lower(texture.Name)
                         defer delete(name)
-                        if search == "" || strings.contains(name, search) {
+                        if state.SearchCache.TextureDatabaseSearch == "" || strings.contains(name, state.SearchCache.TextureDatabaseSearch) {
                             renderTextureDatabaseItem(ctx, texture, pdx.FOLDER_PATTERNS)
                         }
                     }
@@ -789,7 +810,7 @@ renderTextureDatabase :: proc(ctx: ^mu.Context) {
                     for texture in database.ColoredEmblems {
                         name := strings.to_lower(texture.Name)
                         defer delete(name)
-                        if search == "" || strings.contains(name, search) {
+                        if state.SearchCache.TextureDatabaseSearch == "" || strings.contains(name, state.SearchCache.TextureDatabaseSearch) {
                             renderTextureDatabaseItem(ctx, texture, pdx.FOLDER_COLORED_EMBLEMS)
                         }
                     }
@@ -806,7 +827,7 @@ renderTextureDatabase :: proc(ctx: ^mu.Context) {
                     for texture in database.TexturedEmblems {
                         name := strings.to_lower(texture.Name)
                         defer delete(name)
-                        if search == "" || strings.contains(name, search) {
+                        if state.SearchCache.TextureDatabaseSearch == "" || strings.contains(name, state.SearchCache.TextureDatabaseSearch) {
                             renderTextureDatabaseItem(ctx, texture, pdx.FOLDER_TEXTURED_EMBLEMS)
                         }
                     }
@@ -1338,78 +1359,8 @@ renderColorButtons :: proc(ctx: ^mu.Context, color: ^pdx.FlagColor, list: ^[dyna
         if color == state.ColorPickerColor {
             state.ColorPickerColor = nil
         }
-        ordered_remove(list, index)
         pdx.DestroyFlagColor(color)
+        ordered_remove(list, index)
     }
     mu.pop_id(ctx)
-}
-
-removeLayer :: proc(layer: pdx.FlagLayerVariant) {
-    switch type in layer {
-    case ^pdx.FlagLayerColoredEmblem:
-        for _, index in state.Flag.Layers {
-            if state.Flag.Layers[index] == layer {
-                ordered_remove(&state.Flag.Layers, index)
-                pdx.DestroyFlagLayer(layer)
-            }
-        }
-    case ^pdx.FlagLayerTexturedEmblem:
-        for _, index in state.Flag.Layers {
-            if state.Flag.Layers[index] == layer {
-                ordered_remove(&state.Flag.Layers, index)
-                pdx.DestroyFlagLayer(layer)
-            }
-        }
-    case ^pdx.FlagLayerSub:
-        for _, index in state.Flag.Layers {
-            if state.Flag.Layers[index] == layer {
-                ordered_remove(&state.Flag.Layers, index)
-                pdx.DestroyFlagLayer(layer)
-            }
-        }
-    }
-}
-
-removeInstance :: proc(instance: pdx.LayerInstanceVariant) {
-    for layer in state.Flag.Layers {
-        removeLayerInstance(layer, instance)
-    }
-    switch type in instance {
-    case ^pdx.LayerInstance:
-        pdx.DestroyLayerInstance(type)
-    case ^pdx.LayerInstanceSub:
-        pdx.DestroyLayerInstanceSub(type)
-    }
-}
-
-removeLayerInstance :: proc(layerVariant: pdx.FlagLayerVariant, instance: pdx.LayerInstanceVariant) {
-    switch layer in layerVariant {
-    case ^pdx.FlagLayerColoredEmblem:
-        for _, index in layer.Instances {
-            #partial switch type in instance {
-            case ^pdx.LayerInstance:
-                if layer.Instances[index] == type {
-                    ordered_remove(&layer.Instances, index)
-                }
-            }
-        }
-    case ^pdx.FlagLayerTexturedEmblem:
-        for _, index in layer.Instances {
-            #partial switch type in instance {
-            case ^pdx.LayerInstance:
-                if layer.Instances[index] == type {
-                    ordered_remove(&layer.Instances, index)
-                }
-            }
-        }
-    case ^pdx.FlagLayerSub:
-        for _, index in layer.Instances {
-            #partial switch type in instance {
-            case ^pdx.LayerInstanceSub:
-                if layer.Instances[index] == type {
-                    ordered_remove(&layer.Instances, index)
-                }
-            }
-        }
-    }
 }

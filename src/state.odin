@@ -51,6 +51,13 @@ State :: struct {
     FlagExportChannel: chan.Chan(FlagExportRequest),
     Dropdown: ui.Dropdown,
     Icons: map[ui.IconType]rl.Texture2D,
+    SearchCache: SearchCache,
+}
+
+SearchCache :: struct {
+    FlagDatabaseSearch: string,
+    TextureDatabaseSearch: string,
+    NamedColorSearch: string,
 }
 
 Database :: struct {
@@ -97,6 +104,7 @@ state := State{}
 
 CreateState :: proc() {
     state.Dropdown = ui.CreateDropdown()
+    state.SearchCache = CreateSearchCache()
     state.Databases = make([dynamic]Database)
     state.RenderTextureCache = make(map[int]rl.Texture2D)
     state.RenderTextureMap = make(map[string]rl.Texture2D)
@@ -180,6 +188,7 @@ DestroyState :: proc() {
     thread.destroy(state.TextureLoadingThread)
     settings.DestroySettings(state.Settings)
     pdx.DestroyFlag(&state.Flag)
+    DestroySearchCache(&state.SearchCache)
 }
 
 CreateDatabase :: proc(name, path: string) -> Database {
@@ -209,6 +218,19 @@ DestroyDatabase :: proc(database: ^Database) {
     destroyNamedColors(database)
     destroyDatabaseFlags(database)
     destroyLoadedTextures(database)
+}
+
+CreateSearchCache :: proc() -> SearchCache {
+    return SearchCache{
+        FlagDatabaseSearch = strings.clone(""),
+        TextureDatabaseSearch = strings.clone(""),
+        NamedColorSearch = strings.clone(""),
+    }
+}
+DestroySearchCache :: proc(cache: ^SearchCache) {
+    delete(cache.FlagDatabaseSearch)
+    delete(cache.TextureDatabaseSearch)
+    delete(cache.NamedColorSearch)
 }
 
 loadNamedColors :: proc(database: ^Database) {
@@ -534,5 +556,75 @@ loadIcons :: proc() {
 unloadIcons :: proc() {
     for key in state.Icons {
         rl.UnloadTexture(state.Icons[key])
+    }
+}
+
+removeLayer :: proc(layer: pdx.FlagLayerVariant) {
+    switch type in layer {
+    case ^pdx.FlagLayerColoredEmblem:
+        for _, index in state.Flag.Layers {
+            if state.Flag.Layers[index] == layer {
+                ordered_remove(&state.Flag.Layers, index)
+                pdx.DestroyFlagLayer(layer)
+            }
+        }
+    case ^pdx.FlagLayerTexturedEmblem:
+        for _, index in state.Flag.Layers {
+            if state.Flag.Layers[index] == layer {
+                ordered_remove(&state.Flag.Layers, index)
+                pdx.DestroyFlagLayer(layer)
+            }
+        }
+    case ^pdx.FlagLayerSub:
+        for _, index in state.Flag.Layers {
+            if state.Flag.Layers[index] == layer {
+                ordered_remove(&state.Flag.Layers, index)
+                pdx.DestroyFlagLayer(layer)
+            }
+        }
+    }
+}
+
+removeInstance :: proc(instance: pdx.LayerInstanceVariant) {
+    for layer in state.Flag.Layers {
+        removeLayerInstance(layer, instance)
+    }
+    switch type in instance {
+    case ^pdx.LayerInstance:
+        pdx.DestroyLayerInstance(type)
+    case ^pdx.LayerInstanceSub:
+        pdx.DestroyLayerInstanceSub(type)
+    }
+}
+
+removeLayerInstance :: proc(layerVariant: pdx.FlagLayerVariant, instance: pdx.LayerInstanceVariant) {
+    switch layer in layerVariant {
+    case ^pdx.FlagLayerColoredEmblem:
+        for _, index in layer.Instances {
+            #partial switch type in instance {
+            case ^pdx.LayerInstance:
+                if layer.Instances[index] == type {
+                    ordered_remove(&layer.Instances, index)
+                }
+            }
+        }
+    case ^pdx.FlagLayerTexturedEmblem:
+        for _, index in layer.Instances {
+            #partial switch type in instance {
+            case ^pdx.LayerInstance:
+                if layer.Instances[index] == type {
+                    ordered_remove(&layer.Instances, index)
+                }
+            }
+        }
+    case ^pdx.FlagLayerSub:
+        for _, index in layer.Instances {
+            #partial switch type in instance {
+            case ^pdx.LayerInstanceSub:
+                if layer.Instances[index] == type {
+                    ordered_remove(&layer.Instances, index)
+                }
+            }
+        }
     }
 }
