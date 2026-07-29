@@ -287,9 +287,7 @@ DestroyFlagColor :: proc(variant: FlagColorVariant) {
         free(color)
     case ^FlagColorNamed:
         delete(color.Name)
-        if color.NamedColor != "" {
-            delete(color.NamedColor)
-        }
+        delete(color.NamedColor)
         free(color)
     case ^FlagColorReference:
         delete(color.Name)

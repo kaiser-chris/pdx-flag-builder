@@ -11,7 +11,12 @@ COLOR_BUTTON_DANGER_BACKGROUND: mu.Color: { 100, 16, 0, 255 }
 COLOR_BUTTON_DANGER_BACKGROUND_HOVER: mu.Color: { 167, 16, 0, 255 }
 COLOR_BUTTON_DANGER_BORDER: mu.Color: { 62, 16, 0, 255 }
 
-Button :: proc(ctx: ^mu.Context, label: string, style: ButtonStyle = .Default, options: mu.Options = {.ALIGN_CENTER}) -> (res: mu.Result_Set) {
+Button :: proc{
+    ButtonText,
+    ButtonIcon,
+}
+
+ButtonText :: proc(ctx: ^mu.Context, label: string, style: ButtonStyle = .Default, options: mu.Options = {.ALIGN_CENTER}) -> (res: mu.Result_Set) {
     id := mu.get_id(ctx, label)
     rect := mu.layout_next(ctx)
     mu.update_control(ctx, id, rect, options)
@@ -44,5 +49,73 @@ Button :: proc(ctx: ^mu.Context, label: string, style: ButtonStyle = .Default, o
     if len(label) > 0 {
         mu.draw_control_text(ctx, label, rect, .TEXT, options)
     }
+    return
+}
+
+ButtonIcon :: proc(
+    ctx: ^mu.Context,
+    icon: IconType,
+    width: i32 = 0,
+    height: i32 = 0,
+    style: ButtonStyle = .Default,
+    tint := mu.Color{ 255, 255, 255, 255 },
+    options: mu.Options = {.ALIGN_CENTER}
+) -> (res: mu.Result_Set) {
+    id := mu.get_id(ctx, "")
+    buttonRect := mu.layout_next(ctx)
+    mu.update_control(ctx, id, buttonRect, options)
+
+    if ctx.mouse_pressed_bits == { .LEFT } && ctx.focus_id == id {
+        res += { .SUBMIT }
+    }
+
+    switch style {
+    case .Default:
+        if ctx.hover_id == id || ctx.focus_id == id {
+            mu.draw_rect(ctx, buttonRect, ctx.style.colors[.BUTTON_HOVER])
+        } else {
+            mu.draw_rect(ctx, buttonRect, ctx.style.colors[.BUTTON])
+        }
+        if ctx.style.colors[.BORDER].a != 0 { /* draw border */
+            mu.draw_box(ctx, mu.expand_rect(buttonRect, 1), ctx.style.colors[.BORDER])
+        }
+    case .Danger:
+        if ctx.hover_id == id || ctx.focus_id == id {
+            mu.draw_rect(ctx, buttonRect, COLOR_BUTTON_DANGER_BACKGROUND_HOVER)
+        } else {
+            mu.draw_rect(ctx, buttonRect, COLOR_BUTTON_DANGER_BACKGROUND)
+        }
+        if ctx.style.colors[.BORDER].a != 0 { /* draw border */
+            mu.draw_box(ctx, mu.expand_rect(buttonRect, 1), COLOR_BUTTON_DANGER_BORDER)
+        }
+    }
+
+    iconRect := mu.Rect{
+        x = buttonRect.x,
+        y = buttonRect.y,
+        w = buttonRect.w,
+        h = buttonRect.h,
+    }
+
+    if width != 0 && width < buttonRect.w {
+        iconRect.w = width
+    }
+    if height != 0 && height < buttonRect.h {
+        iconRect.h = height
+    }
+
+    if width != 0 || height != 0 {
+        if .ALIGN_CENTER in options {
+            iconRect.x = buttonRect.x + (buttonRect.w - iconRect.w) / 2
+        } else if .ALIGN_RIGHT in options {
+            iconRect.x = buttonRect.x + buttonRect.w - iconRect.w
+        } else {
+            iconRect.x = buttonRect.x
+        }
+    }
+
+    iconRect.y = buttonRect.y + (buttonRect.h - iconRect.h) / 2
+    mu.draw_icon(ctx, mu.Icon(icon), iconRect, { 255, 255, 255, 255 })
+
     return
 }

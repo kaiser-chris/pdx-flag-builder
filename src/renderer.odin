@@ -451,15 +451,6 @@ render :: proc(ctx: ^mu.Context) {
     defer rl.EndDrawing()
 }
 
-loadIcons :: proc() {
-    state.Icons[.Sub] = texture.LoadTexture(TEXTURE_SUB)
-}
-unloadIcons :: proc() {
-    for key in state.Icons {
-        rl.UnloadTexture(state.Icons[key])
-    }
-}
-
 renderIcon :: proc(cmd: ^mu.Command_Icon) -> bool {
     texture, exists := state.Icons[ui.IconType(cmd.id)]
     if !exists {

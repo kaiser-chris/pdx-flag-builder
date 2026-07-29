@@ -3,7 +3,9 @@ package ui
 import mu "vendor:microui"
 
 IconType :: enum u32 {
-    Sub = 10000
+    Sub    = 10000,
+    Edit   = 10001,
+    Delete = 10002,
 }
 
 Icon :: proc(ctx: ^mu.Context, icon: IconType, tint := mu.Color{ 255, 255, 255, 255 }) {

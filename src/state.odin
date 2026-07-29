@@ -623,3 +623,14 @@ SaveSettings :: proc() {
     }
     settings.SaveSettings(settings.FILE_NAME_SETTINGS, state.Settings)
 }
+
+loadIcons :: proc() {
+    state.Icons[.Sub] = texture.LoadTexture(TEXTURE_ICON_SUB)
+    state.Icons[.Edit] = texture.LoadTexture(TEXTURE_ICON_EDIT)
+    state.Icons[.Delete] = texture.LoadTexture(TEXTURE_ICON_DELETE)
+}
+unloadIcons :: proc() {
+    for key in state.Icons {
+        rl.UnloadTexture(state.Icons[key])
+    }
+}

@@ -19,7 +19,9 @@ WINDOM_SIDEBAR: string: "Sidebar"
 WINDOM_COLOR_PICKER: string: "Color Picker"
 WINDOM_INSTANCE_EDITOR: string: "Instance Editor"
 
-TEXTURE_SUB: string: "assets/textures/sub.dds"
+TEXTURE_ICON_SUB: string: "assets/textures/icons/sub.dds"
+TEXTURE_ICON_EDIT: string: "assets/textures/icons/edit.dds"
+TEXTURE_ICON_DELETE: string: "assets/textures/icons/delete.dds"
 TEXTURE_TRANSPARENCY: string: "assets/textures/transparency.dds"
 TEXTURE_INVALID: string: "assets/textures/invalid.dds"
 
@@ -1114,7 +1116,7 @@ renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
     }
     renderAddColorButtons(ctx, &flag.Colors)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in ui.Button(ctx, "Clear Flag", .Danger) {
+    if .SUBMIT in ui.Button(ctx, "Clear Flag", ui.ButtonStyle.Danger) {
         state.SelectedFlagElement = nil
         pdx.DestroyFlag(state.Flag)
         flag := pdx.CreateFlag()
@@ -1163,7 +1165,7 @@ renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagL
     }
     mu.pop_id(ctx)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in ui.Button(ctx, "Delete Layer", .Danger) {
+    if .SUBMIT in ui.Button(ctx, "Delete Layer", ui.ButtonStyle.Danger) {
         removeLayer(layer)
         state.SelectedFlagElement = nil
     }
@@ -1183,7 +1185,7 @@ renderSelectedFlagLayerTexturedEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.Flag
     }
     mu.pop_id(ctx)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in ui.Button(ctx, "Delete Layer", .Danger) {
+    if .SUBMIT in ui.Button(ctx, "Delete Layer", ui.ButtonStyle.Danger) {
         removeLayer(layer)
         state.SelectedFlagElement = nil
     }
@@ -1203,7 +1205,7 @@ renderSelectedFlagLayerSub :: proc(ctx: ^mu.Context, layer: ^pdx.FlagLayerSub) {
     }
     mu.pop_id(ctx)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in ui.Button(ctx, "Delete Layer", .Danger) {
+    if .SUBMIT in ui.Button(ctx, "Delete Layer", ui.ButtonStyle.Danger) {
         removeLayer(layer)
         state.SelectedFlagElement = nil
     }
@@ -1243,7 +1245,7 @@ renderSelectedLayerInstance :: proc(ctx: ^mu.Context, instance: pdx.LayerInstanc
     }
     mu.pop_id(ctx)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in ui.Button(ctx, "Delete instance", .Danger) {
+    if .SUBMIT in ui.Button(ctx, "Delete instance", ui.ButtonStyle.Danger) {
         removeInstance(instance)
         state.SelectedFlagElement = nil
     }
@@ -1253,13 +1255,13 @@ renderSelectedLayerInstance :: proc(ctx: ^mu.Context, instance: pdx.LayerInstanc
 renderColorButtons :: proc(ctx: ^mu.Context, color: pdx.FlagColorVariant, list: ^[dynamic]pdx.FlagColorVariant, index: int, edit, delete: mu.Rect) {
     mu.layout_set_next(ctx, edit, false)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in mu.button(ctx, "edit") {
+    if .SUBMIT in ui.Button(ctx, ui.IconType.Edit, edit.h - 4, edit.h - 4) {
         state.ColorPickerColor = color
     }
     mu.pop_id(ctx)
     mu.layout_set_next(ctx, delete, false)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in ui.Button(ctx, "del", .Danger) {
+    if .SUBMIT in ui.Button(ctx, ui.IconType.Delete, delete.h - 4, delete.h - 4, ui.ButtonStyle.Danger) {
         if color == state.ColorPickerColor {
             state.ColorPickerColor = nil
         }
