@@ -516,8 +516,16 @@ renderToolbar :: proc(ctx: ^mu.Context) {
             exportToImage :: proc(ctx: ^mu.Context) {
                 exportFlagImage(ctx, state.Flag)
             }
+            exportToClipboard :: proc(ctx: ^mu.Context) {
+                script := pdx.WriteFlag(state.Flag, "\n")
+                defer delete(script)
+                clipString := strings.clone_to_cstring(script)
+                defer delete(clipString)
+                rl.SetClipboardText(clipString)
+            }
             ui.OpenDropdown(&state.Dropdown, { buttonRect.x, buttonRect.y + buttonRect.h + 1 }, {
-                ui.CreateDropdownElement("Export to Image", exportToImage)
+                ui.CreateDropdownElement("Export to Image", exportToImage),
+                ui.CreateDropdownElement("Export to Clipboard", exportToClipboard),
             }, buttonRect.w)
         }
         mu.layout_end_column(ctx)

@@ -4,6 +4,7 @@ import "parser"
 import "core:slice"
 import os "core:os"
 import fmt "core:fmt"
+import strings "core:strings"
 
 ERROR_OBJECT_CAST: string: "Could not cast Object: %v"
 ATTRIBUTE_PATTERN: string: "pattern"
@@ -351,4 +352,159 @@ loadTypedColor :: proc(name: string, type: string, numbers: []parser.Value) -> (
 
     fmt.eprintfln("unknown color type %s", type)
     return FlagColor{}, false
+}
+
+WriteFlag :: proc(flag: Flag, lineBreak: string) -> string {
+    builder, err := strings.builder_make(context.temp_allocator)
+    defer free_all(context.temp_allocator)
+    if err != nil {
+        fmt.eprintfln("could not init flag script builder: %v", err)
+        return ""
+    }
+
+    if flag.Name == "" {
+        strings.write_string(&builder, "NONE = {")
+    } else {
+        strings.write_string(&builder, fmt.tprintf("%s = {{", flag.Name))
+    }
+    strings.write_string(&builder, lineBreak)
+
+    if flag.Pattern.Name != "" {
+        strings.write_string(&builder, fmt.tprintf("\t%s = \"%s\"", ATTRIBUTE_PATTERN, flag.Pattern.Name))
+        strings.write_string(&builder, lineBreak)
+    }
+
+    writeColors(&builder, flag.Colors[:], "\t", lineBreak)
+
+    if len(flag.Layers) > 0 {
+        strings.write_string(&builder, lineBreak)
+    }
+
+    for variant, index in flag.Layers {
+        switch layer in variant {
+        case ^FlagLayerColoredEmblem:
+            writeColoredEmblemLayer(&builder, layer, lineBreak)
+        case ^FlagLayerTexturedEmblem:
+            writeTexturedEmblemLayer(&builder, layer, lineBreak)
+        case ^FlagLayerSub:
+            writeSubFlagLayer(&builder, layer, lineBreak)
+        }
+        strings.write_string(&builder, lineBreak)
+        if index + 1 < len(flag.Layers) {
+            strings.write_string(&builder, lineBreak)
+        }
+    }
+
+    strings.write_string(&builder, "}")
+
+    return strings.clone(strings.to_string(builder))
+}
+
+writeColoredEmblemLayer :: proc(builder: ^strings.Builder, layer: ^FlagLayerColoredEmblem, lineBreak: string) {
+    strings.write_string(builder, fmt.tprintf("\t%s = {{", ATTRIBUTE_COLORED_EMBLEM))
+    strings.write_string(builder, lineBreak)
+
+    strings.write_string(builder, fmt.tprintf("\t\t%s = \"%s\"", ATTRIBUTE_TEXTURE, layer.Texture.Name))
+    strings.write_string(builder, lineBreak)
+
+    writeColors(builder, layer.Colors[:], "\t\t", lineBreak)
+
+    if len(layer.Instances) > 0 {
+        strings.write_string(builder, lineBreak)
+    }
+
+    for instance, index in layer.Instances {
+        strings.write_string(builder, fmt.tprintf("\t\t%s = {{", ATTRIBUTE_INSTANCE))
+        strings.write_string(builder, lineBreak)
+        strings.write_string(builder, fmt.tprintf("\t\t\t%s = %i", ATTRIBUTE_ROTATION, instance.Rotation))
+        strings.write_string(builder, lineBreak)
+        strings.write_string(builder, fmt.tprintf("\t\t\t%s = {{ %.3f %.3f }}", ATTRIBUTE_SCALE, instance.Scale.X, instance.Scale.Y))
+        strings.write_string(builder, lineBreak)
+        strings.write_string(builder, fmt.tprintf("\t\t\t%s = {{ %.3f %.3f }}", ATTRIBUTE_POSITION, instance.Position.X, instance.Position.Y))
+        strings.write_string(builder, lineBreak)
+        strings.write_string(builder, "\t\t}")
+        strings.write_string(builder, lineBreak)
+        if index + 1 < len(layer.Instances) {
+            strings.write_string(builder, lineBreak)
+        }
+    }
+
+    strings.write_string(builder, "\t}")
+}
+
+writeTexturedEmblemLayer :: proc(builder: ^strings.Builder, layer: ^FlagLayerTexturedEmblem, lineBreak: string) {
+    strings.write_string(builder, fmt.tprintf("\t%s = {{", ATTRIBUTE_TEXTURED_EMBLEM))
+    strings.write_string(builder, lineBreak)
+
+    strings.write_string(builder, fmt.tprintf("\t\t%s = \"%s\"", ATTRIBUTE_TEXTURE, layer.Texture.Name))
+    strings.write_string(builder, lineBreak)
+
+    if len(layer.Instances) > 0 {
+        strings.write_string(builder, lineBreak)
+    }
+
+    for instance, index in layer.Instances {
+        strings.write_string(builder, fmt.tprintf("\t\t%s = {{", ATTRIBUTE_INSTANCE))
+        strings.write_string(builder, lineBreak)
+        strings.write_string(builder, fmt.tprintf("\t\t\t%s = %i", ATTRIBUTE_ROTATION, instance.Rotation))
+        strings.write_string(builder, lineBreak)
+        strings.write_string(builder, fmt.tprintf("\t\t\t%s = {{ %.3f %.3f }}", ATTRIBUTE_SCALE, instance.Scale.X, instance.Scale.Y))
+        strings.write_string(builder, lineBreak)
+        strings.write_string(builder, fmt.tprintf("\t\t\t%s = {{ %.3f %.3f }}", ATTRIBUTE_POSITION, instance.Position.X, instance.Position.Y))
+        strings.write_string(builder, lineBreak)
+        strings.write_string(builder, "\t\t}")
+        strings.write_string(builder, lineBreak)
+        if index + 1 < len(layer.Instances) {
+            strings.write_string(builder, lineBreak)
+        }
+    }
+
+    strings.write_string(builder, "\t}")
+}
+
+writeSubFlagLayer :: proc(builder: ^strings.Builder, layer: ^FlagLayerSub, lineBreak: string) {
+    strings.write_string(builder, fmt.tprintf("\t%s = {{", ATTRIBUTE_SUB))
+    strings.write_string(builder, lineBreak)
+
+    strings.write_string(builder, fmt.tprintf("\t\t%s = \"%s\"", ATTRIBUTE_PARENT, layer.Parent))
+    strings.write_string(builder, lineBreak)
+
+    if len(layer.Instances) > 0 {
+        strings.write_string(builder, lineBreak)
+    }
+
+    for instance, index in layer.Instances {
+        strings.write_string(builder, fmt.tprintf("\t\t%s = {{", ATTRIBUTE_INSTANCE))
+        strings.write_string(builder, lineBreak)
+        strings.write_string(builder, fmt.tprintf("\t\t\t%s = {{ %.3f %.3f }}", ATTRIBUTE_SCALE, instance.Scale.X, instance.Scale.Y))
+        strings.write_string(builder, lineBreak)
+        strings.write_string(builder, fmt.tprintf("\t\t\t%s = {{ %.3f %.3f }}", ATTRIBUTE_OFFSET, instance.Offset.X, instance.Offset.Y))
+        strings.write_string(builder, lineBreak)
+        strings.write_string(builder, "\t\t}")
+        strings.write_string(builder, lineBreak)
+        if index + 1 < len(layer.Instances) {
+            strings.write_string(builder, lineBreak)
+        }
+    }
+
+    strings.write_string(builder, "\t}")
+}
+
+writeColors :: proc(builder: ^strings.Builder, colors: []FlagColor, prefix, lineBreak: string) {
+    for variant in colors {
+        switch color in variant.Variant {
+        case FlagColorNamed:
+            strings.write_string(builder, fmt.tprintf("%s%s = \"%s\"", prefix, variant.Name, color.NamedColor))
+            strings.write_string(builder, lineBreak)
+        case FlagColorReference:
+            strings.write_string(builder, fmt.tprintf("%s%s = %s", prefix, variant.Name, color.Reference))
+            strings.write_string(builder, lineBreak)
+        case FlagColorRgb:
+            strings.write_string(builder, fmt.tprintf("%s%s = %s{{ %i %i %i }}", prefix, COLOR_TYPE_RGB, variant.Name, color.R, color.G, color.B))
+            strings.write_string(builder, lineBreak)
+        case FlagColorHsv:
+            strings.write_string(builder, fmt.tprintf("%s%s = %s{{ %.0f %.0f %.0f }}", prefix, COLOR_TYPE_HSV360, variant.Name, color.H, color.S, color.V))
+            strings.write_string(builder, lineBreak)
+        }
+    }
 }
