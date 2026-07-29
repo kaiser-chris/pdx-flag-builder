@@ -71,24 +71,24 @@ drawTextAttributeRow :: proc(ctx: ^mu.Context, label, value: string, labelSize: 
 drawColorAttributeRow :: proc(
     ctx: ^mu.Context,
     label: string,
-    variant: pdx.FlagColorVariant,
+    variant: pdx.FlagColor,
     labelSize: f32 = 0.3
 ) -> (mu.Rect, mu.Rect) {
     valueRect := setupAttributeRow(ctx, label, labelSize)
 
     rgbColor: mu.Color
     colorText: string
-    switch color in variant {
-    case ^pdx.FlagColorRgb:
+    switch color in variant.Variant {
+    case pdx.FlagColorRgb:
         colorText = fmt.tprintf("RGB ( %i %i %i )", color.R, color.G, color.B)
         rgbColor = mu.Color{ color.R, color.G, color.B, 255 }
-    case ^pdx.FlagColorHsv:
+    case pdx.FlagColorHsv:
         colorText = fmt.tprintf("HSV ( %.0f %.0f %.0f )", color.H, color.S, color.V)
         tmp := pdx.ToRenderColor(color)
         rgbColor = mu.Color{ tmp[0], tmp[1], tmp[2], 255 }
-    case ^pdx.FlagColorNamed:
+    case pdx.FlagColorNamed:
         fmt.eprintfln("named color is used in absolute color attribute row")
-    case ^pdx.FlagColorReference:
+    case pdx.FlagColorReference:
         fmt.eprintfln("reference color is used in absolute color attribute row")
     }
 
@@ -132,8 +132,8 @@ drawColorAttributeRow :: proc(
 drawNamedColorAttributeRow :: proc(
     ctx: ^mu.Context,
     label: string,
-    color: ^pdx.FlagColorNamed,
-    namedColors: map[string]pdx.FlagColorVariant,
+    color: pdx.FlagColorNamed,
+    namedColors: map[string]pdx.FlagColor,
     labelSize: f32 = 0.3
 ) -> (mu.Rect, mu.Rect) {
     valueRect := setupAttributeRow(ctx, label, labelSize)
@@ -145,15 +145,15 @@ drawNamedColorAttributeRow :: proc(
     } else {
         colorText = fmt.tprintf("Named ( %s )", color.NamedColor)
         reference, ok := namedColors[color.NamedColor]
-        switch referenceColor in reference {
-        case ^pdx.FlagColorRgb:
+        switch referenceColor in reference.Variant {
+        case pdx.FlagColorRgb:
             rgbColor = mu.Color{ referenceColor.R, referenceColor.G, referenceColor.B, 255 }
-        case ^pdx.FlagColorHsv:
+        case pdx.FlagColorHsv:
             tmp := pdx.ToRenderColor(referenceColor)
             rgbColor = mu.Color{ tmp[0], tmp[1], tmp[2], 255 }
-        case ^pdx.FlagColorNamed:
+        case pdx.FlagColorNamed:
             fmt.eprintfln("named color is referencing another named color")
-        case ^pdx.FlagColorReference:
+        case pdx.FlagColorReference:
             fmt.eprintfln("named color is referencing a reference color")
         }
     }
@@ -198,9 +198,9 @@ drawNamedColorAttributeRow :: proc(
 drawReferenceColorAttributeRow :: proc(
     ctx: ^mu.Context,
     label: string,
-    color: ^pdx.FlagColorReference,
-    baseColors: []pdx.FlagColorVariant,
-    namedColors: map[string]pdx.FlagColorVariant,
+    color: pdx.FlagColorReference,
+    baseColors: []pdx.FlagColor,
+    namedColors: map[string]pdx.FlagColor,
     labelSize: f32 = 0.3
 ) -> (mu.Rect, mu.Rect) {
     valueRect := setupAttributeRow(ctx, label, labelSize)
@@ -208,30 +208,27 @@ drawReferenceColorAttributeRow :: proc(
     colorValue: mu.Color
     for baseColor in baseColors {
         baseColorValue: mu.Color
-        baseColorName: string
-        switch referenceColor in baseColor {
-        case ^pdx.FlagColorRgb:
-            baseColorName = referenceColor.Name
+        baseColorName := baseColor.Name
+        switch referenceColor in baseColor.Variant {
+        case pdx.FlagColorRgb:
             baseColorValue = mu.Color{ referenceColor.R, referenceColor.G, referenceColor.B, 255 }
-        case ^pdx.FlagColorHsv:
-            baseColorName = referenceColor.Name
+        case pdx.FlagColorHsv:
             tmp := pdx.ToRenderColor(referenceColor)
             baseColorValue = mu.Color{ tmp[0], tmp[1], tmp[2], 255 }
-        case ^pdx.FlagColorNamed:
-            baseColorName = referenceColor.Name
+        case pdx.FlagColorNamed:
             reference, ok := namedColors[referenceColor.NamedColor]
-            switch referenceColor in reference {
-            case ^pdx.FlagColorRgb:
+            switch referenceColor in reference.Variant {
+            case pdx.FlagColorRgb:
                 baseColorValue = mu.Color{ referenceColor.R, referenceColor.G, referenceColor.B, 255 }
-            case ^pdx.FlagColorHsv:
+            case pdx.FlagColorHsv:
                 tmp := pdx.ToRenderColor(referenceColor)
                 baseColorValue = mu.Color{ tmp[0], tmp[1], tmp[2], 255 }
-            case ^pdx.FlagColorNamed:
+            case pdx.FlagColorNamed:
                 fmt.eprintfln("named color is referencing another named color")
-            case ^pdx.FlagColorReference:
+            case pdx.FlagColorReference:
                 fmt.eprintfln("named color is referencing a reference color")
             }
-        case ^pdx.FlagColorReference:
+        case pdx.FlagColorReference:
             fmt.eprintfln("reference color is referencing a reference color")
         }
         if baseColorName == color.Reference {

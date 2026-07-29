@@ -1,6 +1,7 @@
 package pdx
 
 import strings "core:strings"
+import fmt "core:fmt"
 
 DEFAULT_SCALE: LayerVector: { 1, 1 }
 DEFAULT_POSITION: LayerVector: { 0.5, 0.5 }
@@ -18,23 +19,23 @@ MAX_OFFSET: f32: 5
 Flag :: struct {
     Name: string,
     Pattern: FlagTexture,
-    Colors: [dynamic]FlagColorVariant,
+    Colors: [dynamic]FlagColor,
     Layers: [dynamic]FlagLayerVariant,
 }
 
 CreateFlag :: proc(name: string = "") -> Flag {
     flag := Flag{
         Name = strings.clone(name),
-        Colors = make([dynamic]FlagColorVariant),
+        Colors = make([dynamic]FlagColor),
         Layers = make([dynamic]FlagLayerVariant),
     }
 
     return flag
 }
-DestroyFlag :: proc(flag: Flag) {
+DestroyFlag :: proc(flag: ^Flag) {
     DestroyFlagTexture(flag.Pattern)
     for _, index in flag.Colors {
-        DestroyFlagColor(flag.Colors[index])
+        DestroyFlagColor(&flag.Colors[index])
     }
     delete(flag.Colors)
     for _, index in flag.Layers {
@@ -88,7 +89,7 @@ FlagLayer :: struct {
 }
 FlagLayerColoredEmblem :: struct {
     using Layer: FlagLayer,
-    Colors: [dynamic]FlagColorVariant,
+    Colors: [dynamic]FlagColor,
 }
 FlagLayerTexturedEmblem :: struct {
     using Layer: FlagLayer,
@@ -108,7 +109,7 @@ CreateLayerColoredEmblem :: proc(name, path: string) -> ^FlagLayerColoredEmblem 
     return new_clone(FlagLayerColoredEmblem{
         Texture = CreateFlagTexture(name, path),
         Instances = make([dynamic]^LayerInstance),
-        Colors = make([dynamic]FlagColorVariant),
+        Colors = make([dynamic]FlagColor),
     })
 }
 CreateLayerSub :: proc(parent: string) -> ^FlagLayerSub {
@@ -122,7 +123,7 @@ DestroyFlagLayer :: proc(variant: FlagLayerVariant) {
     case ^FlagLayerColoredEmblem:
         DestroyFlagTexture(layer.Texture)
         for _, index in layer.Colors {
-            DestroyFlagColor(layer.Colors[index])
+            DestroyFlagColor(&layer.Colors[index])
         }
         delete(layer.Colors)
         for _, index in layer.Instances {
@@ -218,93 +219,88 @@ CloneLayerInstanceSub :: proc(instance: ^LayerInstanceSub) -> ^LayerInstanceSub 
     return CreateLayerInstanceSub({ instance.Scale.X, instance.Scale.Y }, { instance.Offset.X, instance.Offset.Y })
 }
 
-FlagColorVariant :: union {
-    ^FlagColorNamed,
-    ^FlagColorHsv,
-    ^FlagColorRgb,
-    ^FlagColorReference,
-}
 FlagColor :: struct {
-    Variant: FlagColorVariant,
     Name: string,
+    Variant: union {
+        FlagColorNamed,
+        FlagColorHsv,
+        FlagColorRgb,
+        FlagColorReference,
+    },
 }
 FlagColorNamed :: struct {
-    using color: FlagColor,
     NamedColor: string,
 }
 FlagColorHsv :: struct {
-    using color: FlagColor,
     H: f32,
     S: f32,
     V: f32,
 }
 FlagColorRgb :: struct {
-    using color: FlagColor,
     R: u8,
     G: u8,
     B: u8,
 }
 FlagColorReference :: struct {
-    using Color: FlagColor,
     Reference: string,
 }
 
-CreateColorRgb :: proc(name: string, r, g, b: u8) -> ^FlagColorRgb {
-    return new_clone(FlagColorRgb{
-        Name = strings.clone(name),
-        R = r,
-        G = g,
-        B = b,
-    })
+CreateColor :: proc($T: typeid, name: string) -> FlagColor {
+    color := FlagColor{}
+    color.Name = strings.clone(name)
+    color.Variant = T{}
+    return color
 }
-CreateColorHsv :: proc(name: string, h, s, v: f32) -> ^FlagColorHsv {
-    return new_clone(FlagColorHsv{
-        Name = strings.clone(name),
-        H = h,
-        S = s,
-        V = v,
-    })
+
+CreateColorRgb :: proc(name: string, r, g, b: u8) -> FlagColor {
+    color := CreateColor(FlagColorRgb, name)
+    variant := color.Variant.(FlagColorRgb)
+    variant.R = r
+    variant.G = g
+    variant.B = b
+    return color
 }
-CreateColorNamed :: proc(name, namedColor: string) -> ^FlagColorNamed {
-    return new_clone(FlagColorNamed{
-        Name = strings.clone(name),
-        NamedColor = strings.clone(namedColor),
-    })
+CreateColorHsv :: proc(name: string, h, s, v: f32) -> FlagColor {
+    color := CreateColor(FlagColorHsv, name)
+    variant := color.Variant.(FlagColorHsv)
+    variant.H = h
+    variant.S = s
+    variant.V = v
+    return color
 }
-CreateColorReference :: proc(name, reference: string) -> ^FlagColorReference {
-    return new_clone(FlagColorReference{
-        Name = strings.clone(name),
-        Reference = strings.clone(reference),
-    })
+CreateColorNamed :: proc(name, namedColor: string) -> FlagColor {
+    color := CreateColor(FlagColorNamed, name)
+    variant := &color.Variant.(FlagColorNamed)
+    variant.NamedColor = strings.clone(namedColor)
+    return color
 }
-DestroyFlagColor :: proc(variant: FlagColorVariant) {
-    switch color in variant {
-    case ^FlagColorRgb:
-        delete(color.Name)
-        free(color)
-    case ^FlagColorHsv:
-        delete(color.Name)
-        free(color)
-    case ^FlagColorNamed:
-        delete(color.Name)
+CreateColorReference :: proc(name, reference: string) -> FlagColor {
+    color := CreateColor(FlagColorReference, name)
+    variant := &color.Variant.(FlagColorReference)
+    variant.Reference = strings.clone(reference)
+    return color
+}
+DestroyFlagColor :: proc(variant: ^FlagColor) {
+    delete(variant.Name)
+    switch &color in variant.Variant {
+    case FlagColorRgb:
+    case FlagColorHsv:
+    case FlagColorNamed:
         delete(color.NamedColor)
-        free(color)
-    case ^FlagColorReference:
-        delete(color.Name)
+    case FlagColorReference:
         delete(color.Reference)
-        free(color)
     }
 }
-CloneFlagColor :: proc(variant: FlagColorVariant) -> FlagColorVariant {
-    switch color in variant {
-    case ^FlagColorNamed:
-        return CreateColorNamed(color.Name, color.NamedColor)
-    case ^FlagColorReference:
-        return CreateColorReference(color.Name, color.Reference)
-    case ^FlagColorRgb:
-        return CreateColorRgb(color.Name, color.R, color.G, color.B)
-    case ^FlagColorHsv:
-        return CreateColorHsv(color.Name, color.H, color.S, color.V)
+CloneFlagColor :: proc(variant: FlagColor) -> FlagColor {
+    switch color in variant.Variant {
+    case FlagColorNamed:
+        return CreateColorNamed(variant.Name, color.NamedColor)
+    case FlagColorReference:
+        return CreateColorReference(variant.Name, color.Reference)
+    case FlagColorRgb:
+        return CreateColorRgb(variant.Name, color.R, color.G, color.B)
+    case FlagColorHsv:
+        return CreateColorHsv(variant.Name, color.H, color.S, color.V)
     }
-    return nil
+    return FlagColor{}
 }

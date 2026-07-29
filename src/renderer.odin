@@ -157,7 +157,6 @@ executeExportFlagImage :: proc(request: FlagExportRequest) {
 
 createSplashScreenThread :: proc() -> ^thread.Thread {
     loader :: proc(t: ^thread.Thread) {
-        pdx.setupParsing()
         CreateState()
         time.sleep(time.Millisecond * 500)
     }
@@ -254,7 +253,6 @@ main :: proc() {
     defer nfd.Quit()
 
     showSplashScreen()
-    defer pdx.destroyParsing()
     defer DestroyState()
 
     rl.SetConfigFlags({ .WINDOW_RESIZABLE })

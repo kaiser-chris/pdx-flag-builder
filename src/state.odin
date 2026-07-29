@@ -1,10 +1,8 @@
 package pdx_flag_builder
 
-import "core:text/regex"
 import "core:fmt"
 import "core:os"
 import "core:strings"
-import "core:strconv"
 import "core:time"
 import "pdx"
 import rl "vendor:raylib"
@@ -41,12 +39,12 @@ State :: struct {
     Flag: pdx.Flag,
     ButtonIdentifier: i32,
     NextTextureIdentifier: int,
-    ColorPickerColor: pdx.FlagColorVariant,
+    ColorPickerColor: ^pdx.FlagColor,
     InstanceEditorInstance: pdx.LayerInstanceVariant,
     SelectedFlagElement: SelectedFlagElement,
     Done: bool,
     RecolorShader: texture.RecolorShader,
-    NamedColors: map[string]pdx.FlagColorVariant,
+    NamedColors: map[string]pdx.FlagColor,
     Flags: map[string]pdx.Flag,
     GuiFlagMap: map[string]int,
     RenderFlagMap: map[int]pdx.Flag,
@@ -62,7 +60,7 @@ Database :: struct {
     BufferNameLength: int,
     BufferPath: [512]byte,
     BufferPathLength: int,
-    NamedColors: [dynamic]pdx.FlagColorVariant,
+    NamedColors: [dynamic]pdx.FlagColor,
     Patterns: [dynamic]pdx.FlagTexture,
     ColoredEmblems: [dynamic]pdx.FlagTexture,
     TexturedEmblems: [dynamic]pdx.FlagTexture,
@@ -105,7 +103,7 @@ CreateState :: proc() {
     state.RenderTextureMap = make(map[string]rl.Texture2D)
     state.GuiTextureCache = make(map[string]rl.Texture2D)
     state.Icons = make(map[ui.IconType]rl.Texture2D)
-    state.NamedColors = make(map[string]pdx.FlagColorVariant)
+    state.NamedColors = make(map[string]pdx.FlagColor)
     state.TextureMap = make(map[string]int)
     state.GuiFlagMap = make(map[string]int)
     state.RenderFlagMap = make(map[int]pdx.Flag)
@@ -173,7 +171,7 @@ DestroyState :: proc() {
     }
     flag, exists := state.Flags[FLAG_ACTIVE]
     if exists {
-        pdx.DestroyFlag(flag)
+        pdx.DestroyFlag(&flag)
     }
     delete(state.GuiFlagMap)
     delete(state.RenderFlagMap)
@@ -195,7 +193,7 @@ DestroyState :: proc() {
 CreateDatabase :: proc(name, path: string) -> Database {
     database := Database{
         Settings = settings.CreateDatabase(name, path),
-        NamedColors = make([dynamic]pdx.FlagColorVariant),
+        NamedColors = make([dynamic]pdx.FlagColor),
         Patterns = make([dynamic]pdx.FlagTexture),
         TexturedEmblems = make([dynamic]pdx.FlagTexture),
         ColoredEmblems = make([dynamic]pdx.FlagTexture),
@@ -224,7 +222,7 @@ DestroyDatabase :: proc(database: ^Database) {
 loadNamedColors :: proc(database: ^Database) {
     destroyNamedColors(database)
 
-    database.NamedColors = make([dynamic]pdx.FlagColorVariant)
+    database.NamedColors = make([dynamic]pdx.FlagColor)
     path, err := os.join_path([]string{ database.Settings.Path, pdx.FOLDER_COMMON, pdx.FOLDER_NAMED_COLORS }, context.allocator)
     if err != nil {
         fmt.eprintfln("could not build named colors path for database %s: %v", database.Settings.Name, err)
@@ -251,102 +249,12 @@ loadNamedColors :: proc(database: ^Database) {
             continue
         }
 
-        data, err := os.read_entire_file_from_path(info.fullpath, context.allocator)
-        defer delete(data)
-        if err != nil {
-            fmt.eprintfln("could not load named color file %s: %v", info.fullpath, err)
-            continue
+        colors := pdx.LoadNamedColorsFile(info.fullpath)
+        for _, index in colors {
+            append(&database.NamedColors, colors[index])
         }
+        delete(colors)
 
-        lines := strings.split_lines(string(data))
-        defer delete(lines)
-
-        for line in lines {
-            capture, ok := regex.match(pdx.regexNamedColor, line)
-            defer regex.destroy(capture)
-            if !ok {
-                continue
-            }
-
-            name := capture.groups[1]
-            type := strings.to_lower(capture.groups[2])
-            defer delete(type)
-
-            if type == pdx.COLOR_TYPE_RGB || type == pdx.COLOR_TYPE_IMPLICIT {
-                red, redOk := strconv.parse_f64(capture.groups[3])
-                green, greenOk := strconv.parse_f64(capture.groups[4])
-                blue, blueOk := strconv.parse_f64(capture.groups[5])
-
-                if !redOk || !greenOk || !blueOk {
-                    fmt.eprintfln("invalid named rgb color: %s = ( %s %s %s )", name, capture.groups[3], capture.groups[4], capture.groups[5])
-                    continue
-                }
-                persistantName := strings.clone(name)
-                color := new_clone(pdx.FlagColorRgb{
-                    Name = persistantName,
-                    R = u8(red),
-                    G = u8(green),
-                    B = u8(blue),
-                })
-
-                // Assume its a comma value
-                if red <= 1 && green <= 1 && blue <= 1 {
-                    color.R = u8(red * 255)
-                    color.G = u8(green * 255)
-                    color.B = u8(blue * 255)
-                }
-
-                append(&database.NamedColors, color)
-                state.NamedColors[persistantName] = color
-                continue
-            }
-
-            if type == pdx.COLOR_TYPE_HSV {
-                hue, hueOk := strconv.parse_f32(capture.groups[3])
-                saturation, saturationOk := strconv.parse_f32(capture.groups[4])
-                value, valueOk := strconv.parse_f32(capture.groups[5])
-
-                if !hueOk || !saturationOk || !valueOk {
-                    fmt.eprintfln("invalid named hsv color: %s = ( %s %s %s )", name, capture.groups[3], capture.groups[4], capture.groups[5])
-                    continue
-                }
-
-                persistantName := strings.clone(name)
-                color := new_clone(pdx.FlagColorHsv{
-                    Name = persistantName,
-                    H = hue * 360,
-                    S = saturation * 100,
-                    V = value * 100,
-                })
-                append(&database.NamedColors, color)
-                state.NamedColors[persistantName] = color
-                continue
-            }
-
-            if type == pdx.COLOR_TYPE_HSV360 {
-                hue, hueOk := strconv.parse_u64(capture.groups[3])
-                saturation, saturationOk := strconv.parse_u64(capture.groups[4])
-                value, valueOk := strconv.parse_u64(capture.groups[5])
-
-                if !hueOk || !saturationOk || !valueOk {
-                    fmt.eprintfln("invalid named hsv360 color: %s = ( %s %s %s )", name, capture.groups[3], capture.groups[4], capture.groups[5])
-                    continue
-                }
-
-                persistantName := strings.clone(name)
-                color := new_clone(pdx.FlagColorHsv{
-                    Name = persistantName,
-                    H = f32(hue),
-                    S = f32(saturation),
-                    V = f32(value),
-                })
-                append(&database.NamedColors, color)
-                state.NamedColors[persistantName] = color
-                continue
-            }
-
-            fmt.eprintfln("unknown named color type: %s = ( %s %s %s )", name, capture.groups[3], capture.groups[4], capture.groups[5])
-        }
     }
 
     fmt.printfln("Loaded %i named colors from database: %s", len(database.NamedColors), database.Settings.Name)
@@ -355,18 +263,18 @@ destroyNamedColors :: proc(database: ^Database) {
     if database.NamedColors == nil {
         return
     }
-    for color, index in database.NamedColors {
-        switch type in color {
-        case ^pdx.FlagColorHsv:
-            delete_key(&state.NamedColors, type.Name)
-        case ^pdx.FlagColorRgb:
-            delete_key(&state.NamedColors, type.Name)
-        case ^pdx.FlagColorNamed:
-            delete_key(&state.NamedColors, type.Name)
-        case ^pdx.FlagColorReference:
-            delete_key(&state.NamedColors, type.Name)
+    for _, index in database.NamedColors {
+        switch type in database.NamedColors[index].Variant {
+        case pdx.FlagColorHsv:
+            delete_key(&state.NamedColors, database.NamedColors[index].Name)
+        case pdx.FlagColorRgb:
+            delete_key(&state.NamedColors, database.NamedColors[index].Name)
+        case pdx.FlagColorNamed:
+            delete_key(&state.NamedColors, database.NamedColors[index].Name)
+        case pdx.FlagColorReference:
+            delete_key(&state.NamedColors, database.NamedColors[index].Name)
         }
-        pdx.DestroyFlagColor(database.NamedColors[index])
+        pdx.DestroyFlagColor(&database.NamedColors[index])
     }
     delete(database.NamedColors)
 }
@@ -424,7 +332,7 @@ destroyDatabaseFlags :: proc(database: ^Database) {
         return
     }
     for _, index in database.Flags {
-        pdx.DestroyFlag(database.Flags[index])
+        pdx.DestroyFlag(&database.Flags[index])
     }
     delete(database.Flags)
 }
@@ -592,20 +500,20 @@ findTexturedEmblemTexturePath :: proc(name: string, databases: ^[dynamic]Databas
     }
     return "", false
 }
-resolveNamedColor :: proc(name: string) -> (rl.Color, pdx.FlagColorVariant) {
+resolveNamedColor :: proc(name: string) -> (rl.Color, pdx.FlagColor) {
     variant, exists := state.NamedColors[name]
     if !exists {
-        return rl.Color{}, nil
+        return rl.Color{}, pdx.FlagColor{}
     }
-    switch color in variant {
-    case ^pdx.FlagColorRgb:
+    switch color in variant.Variant {
+    case pdx.FlagColorRgb:
         return pdx.ToRenderColor(variant), variant
-    case ^pdx.FlagColorHsv:
+    case pdx.FlagColorHsv:
         return pdx.ToRenderColor(variant), variant
-    case ^pdx.FlagColorNamed:
-    case ^pdx.FlagColorReference:
+    case pdx.FlagColorNamed:
+    case pdx.FlagColorReference:
     }
-    return rl.Color{}, nil
+    return rl.Color{}, pdx.FlagColor{}
 }
 
 SaveSettings :: proc() {

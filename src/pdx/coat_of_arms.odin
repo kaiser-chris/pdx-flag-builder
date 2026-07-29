@@ -1,11 +1,9 @@
 package pdx
 
-import "coa"
+import "parser"
 import "core:slice"
 import os "core:os"
 import fmt "core:fmt"
-
-RELEASE :: #config(RELEASE, false)
 
 ERROR_OBJECT_CAST: string: "Could not cast Object: %v"
 ATTRIBUTE_PATTERN: string: "pattern"
@@ -25,17 +23,17 @@ TYPE_TEMPLATE: string: "template"
 LoadCoaFile :: proc(path: string) -> []Flag {
     data, err := os.read_entire_file(path, context.allocator)
     if err != nil {
-        fmt.eprintfln("could not read coa file %s: %v", path, err)
+        fmt.eprintfln("could not read coat of arms file %s: %v", path, err)
         return []Flag{}
     }
 
     content := string(data)
     defer delete(data)
-    result := coa.parse_document(content, context.temp_allocator)
+    result := parser.parse_document(content, context.temp_allocator)
     defer free_all(context.temp_allocator)
     if !result.ok {
         when !RELEASE {
-            fmt.printfln("could not parse coa file %s: %s at %i:%i", path, result, result.err.message, result.err.line, result.err.col)
+            fmt.printfln("could not parse coat of arms file %s: %s at %i:%i", path, result, result.err.message, result.err.line, result.err.col)
         }
         return []Flag{}
     }
@@ -44,7 +42,7 @@ LoadCoaFile :: proc(path: string) -> []Flag {
         return []Flag{}
     }
 
-    coaList, ok := result.root.data.([]coa.Pair)
+    coaList, ok := result.root.data.([]parser.Pair)
     if !ok {
         fmt.eprintln(ERROR_OBJECT_CAST)
         return []Flag{}
@@ -62,13 +60,13 @@ LoadCoaFile :: proc(path: string) -> []Flag {
     return flags[:]
 }
 
-LoadCoa :: proc(root: coa.Pair) -> (Flag, bool) {
+LoadCoa :: proc(root: parser.Pair) -> (Flag, bool) {
 
     if root.value.kind != .Object || root.key == TYPE_TEMPLATE {
         return Flag{}, false
     }
 
-    attributes := root.value.data.([]coa.Pair)
+    attributes := root.value.data.([]parser.Pair)
 
     flag := CreateFlag(root.key)
 
@@ -80,7 +78,7 @@ LoadCoa :: proc(root: coa.Pair) -> (Flag, bool) {
         }
         if (attribute.key == ATTRIBUTE_COLORED_EMBLEM || attribute.key == ATTRIBUTE_TEXTURED_EMBLEM || attribute.key == ATTRIBUTE_SUB) && attribute.value.kind == .Object {
             // layer
-            layerAttributes := attribute.value.data.([]coa.Pair)
+            layerAttributes := attribute.value.data.([]parser.Pair)
             layer, success := loadLayer(attribute.key, layerAttributes)
             if success {
                 append(&flag.Layers, layer)
@@ -97,7 +95,7 @@ LoadCoa :: proc(root: coa.Pair) -> (Flag, bool) {
     return flag, true
 }
 
-loadLayer :: proc(type: string, attributes: []coa.Pair) -> (FlagLayerVariant, bool) {
+loadLayer :: proc(type: string, attributes: []parser.Pair) -> (FlagLayerVariant, bool) {
     textureOrParent: string
 
     for attribute in attributes {
@@ -111,7 +109,7 @@ loadLayer :: proc(type: string, attributes: []coa.Pair) -> (FlagLayerVariant, bo
         defer delete(instances)
         layer := CreateLayerColoredEmblem(textureOrParent, "")
         colors := loadColors(attributes)
-        for color in colors {
+        for &color in colors {
             append(&layer.Colors, color)
         }
         delete(colors)
@@ -140,21 +138,21 @@ loadLayer :: proc(type: string, attributes: []coa.Pair) -> (FlagLayerVariant, bo
     return nil, false
 }
 
-loadInstances :: proc(attributeInstances: []coa.Pair) -> []^LayerInstance {
+loadInstances :: proc(attributeInstances: []parser.Pair) -> []^LayerInstance {
     instances := make([dynamic]^LayerInstance)
     for attributeInstance in attributeInstances {
         if attributeInstance.key != ATTRIBUTE_INSTANCE || attributeInstance.value.kind != .Object {
             continue
         }
         instance := CreateLayerInstance()
-        attributes := attributeInstance.value.data.([]coa.Pair)
+        attributes := attributeInstance.value.data.([]parser.Pair)
         for attribute in attributes {
             if attribute.key == ATTRIBUTE_ROTATION && attribute.value.kind == .Number {
                 rotation := attribute.value.data.(f64)
                 instance.Rotation = i32(rotation)
             }
             if attribute.key == ATTRIBUTE_SCALE && attribute.value.kind == .List {
-                values := attribute.value.data.([]coa.Value)
+                values := attribute.value.data.([]parser.Value)
                 scale := LayerVector{}
                 if len(values) != 2 {
                     fmt.eprintfln("invalid number of values for instance scale: %v", values)
@@ -176,7 +174,7 @@ loadInstances :: proc(attributeInstances: []coa.Pair) -> []^LayerInstance {
                 instance.Scale = scale
             }
             if attribute.key == ATTRIBUTE_POSITION && attribute.value.kind == .List {
-                values := attribute.value.data.([]coa.Value)
+                values := attribute.value.data.([]parser.Value)
                 position := LayerVector{}
                 if len(values) != 2 {
                     fmt.eprintfln("invalid number of values for instance position: %v", values)
@@ -203,17 +201,17 @@ loadInstances :: proc(attributeInstances: []coa.Pair) -> []^LayerInstance {
     return instances[:]
 }
 
-loadSubInstances :: proc(attributeInstances: []coa.Pair) -> []^LayerInstanceSub {
+loadSubInstances :: proc(attributeInstances: []parser.Pair) -> []^LayerInstanceSub {
     instances := make([dynamic]^LayerInstanceSub)
     for attributeInstance in attributeInstances {
         if attributeInstance.key != ATTRIBUTE_INSTANCE || attributeInstance.value.kind != .Object {
             continue
         }
         instance := CreateLayerInstanceSub()
-        attributes := attributeInstance.value.data.([]coa.Pair)
+        attributes := attributeInstance.value.data.([]parser.Pair)
         for attribute in attributes {
             if attribute.key == ATTRIBUTE_SCALE && attribute.value.kind == .List {
-                values := attribute.value.data.([]coa.Value)
+                values := attribute.value.data.([]parser.Value)
                 scale := LayerVector{}
                 if len(values) != 2 {
                     fmt.eprintfln("invalid number of values for instance scale: %v", values)
@@ -235,7 +233,7 @@ loadSubInstances :: proc(attributeInstances: []coa.Pair) -> []^LayerInstanceSub 
                 instance.Scale = scale
             }
             if attribute.key == ATTRIBUTE_OFFSET && attribute.value.kind == .List {
-                values := attribute.value.data.([]coa.Value)
+                values := attribute.value.data.([]parser.Value)
                 offset := LayerVector{}
                 if len(values) != 2 {
                     fmt.eprintfln("invalid number of values for instance offset: %v", values)
@@ -262,13 +260,13 @@ loadSubInstances :: proc(attributeInstances: []coa.Pair) -> []^LayerInstanceSub 
     return instances[:]
 }
 
-loadColors :: proc(attributes: []coa.Pair) -> []FlagColorVariant {
-    colors := make([dynamic]FlagColorVariant)
+loadColors :: proc(attributes: []parser.Pair) -> []FlagColor {
+    colors := make([dynamic]FlagColor)
     for attribute in attributes {
         if slice.contains(COLOR_NAMES, attribute.key) && attribute.value.kind == .String {
             colorName := attribute.value.data.(string)
 
-            color: FlagColorVariant
+            color: FlagColor
             if slice.contains(COLOR_NAMES, colorName) {
                 color = CreateColorReference(attribute.key, colorName)
             } else {
@@ -279,12 +277,12 @@ loadColors :: proc(attributes: []coa.Pair) -> []FlagColorVariant {
         }
         if slice.contains(COLOR_NAMES, attribute.key) && attribute.value.kind == .Typed {
             // typed color
-            type := attribute.value.data.(coa.TypedValue)
+            type := attribute.value.data.(parser.TypedValue)
             if type.value.kind != .List {
                 fmt.eprintfln("invalid color values for type %s", type.tag)
                 return colors[:]
             }
-            values := type.value.data.([]coa.Value)
+            values := type.value.data.([]parser.Value)
             color, success := loadTypedColor(attribute.key, type.tag, values)
             if success {
                 append(&colors, color)
@@ -292,7 +290,7 @@ loadColors :: proc(attributes: []coa.Pair) -> []FlagColorVariant {
         }
         if slice.contains(COLOR_NAMES, attribute.key) && attribute.value.kind == .List {
             // untyped color
-            values := attribute.value.data.([]coa.Value)
+            values := attribute.value.data.([]parser.Value)
             color, success := loadTypedColor(attribute.key, COLOR_TYPE_IMPLICIT, values)
             if success {
                 append(&colors, color)
@@ -302,24 +300,24 @@ loadColors :: proc(attributes: []coa.Pair) -> []FlagColorVariant {
     return colors[:]
 }
 
-loadTypedColor :: proc(name: string, type: string, numbers: []coa.Value) -> (FlagColorVariant, bool) {
+loadTypedColor :: proc(name: string, type: string, numbers: []parser.Value) -> (FlagColor, bool) {
     firstValue: f64 = 0
     secondValue: f64 = 0
     thirdValue: f64 = 0
 
     if len(numbers) != 3 {
         fmt.eprintfln("invalid number of color values for type %s", type)
-        return nil, false
+        return FlagColor{}, false
     }
     for value, index in numbers {
         if value.kind != .Number {
             fmt.eprintfln("non numeric color value for type %s", type)
-            return nil, false
+            return FlagColor{}, false
         }
         number := value.data.(f64)
         if number < 0 {
             fmt.eprintfln("negative color value for type %s", type)
-            return nil, false
+            return FlagColor{}, false
         }
         if index == 0 {
             firstValue = number
@@ -332,7 +330,7 @@ loadTypedColor :: proc(name: string, type: string, numbers: []coa.Value) -> (Fla
         }
     }
 
-    color: FlagColorVariant
+    color: FlagColor
     switch type {
     case COLOR_TYPE_IMPLICIT:
         if firstValue != 0 && firstValue <= 1 && secondValue != 0 && secondValue <= 1 && thirdValue != 0 && thirdValue <= 1 {
@@ -348,7 +346,7 @@ loadTypedColor :: proc(name: string, type: string, numbers: []coa.Value) -> (Fla
         color = CreateColorHsv(name, f32(firstValue) * 360, f32(secondValue) * 100, f32(thirdValue) * 100)
     case:
         fmt.eprintfln("unknown color type %s", type)
-        return nil, false
+        return FlagColor{}, false
     }
 
     return color, true
