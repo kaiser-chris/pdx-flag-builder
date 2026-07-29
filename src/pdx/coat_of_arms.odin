@@ -332,13 +332,17 @@ loadTypedColor :: proc(name: string, type: string, numbers: []parser.Value) -> (
 
     switch type {
     case COLOR_TYPE_IMPLICIT:
-        if firstValue != 0 && firstValue <= 1 && secondValue != 0 && secondValue <= 1 && thirdValue != 0 && thirdValue <= 1 {
+        if firstValue <= 1 && secondValue <= 1 && thirdValue <= 1 {
             return CreateColorRgb(name, u8(firstValue * 255), u8(secondValue * 255), u8(thirdValue * 255)), true
         } else {
             return CreateColorRgb(name, u8(firstValue), u8(secondValue), u8(thirdValue)), true
         }
     case COLOR_TYPE_RGB:
-        return CreateColorRgb(name, u8(firstValue), u8(secondValue), u8(thirdValue)), true
+        if firstValue <= 1 && secondValue <= 1 && thirdValue <= 1 {
+            return CreateColorRgb(name, u8(firstValue * 255), u8(secondValue * 255), u8(thirdValue * 255)), true
+        } else {
+            return CreateColorRgb(name, u8(firstValue), u8(secondValue), u8(thirdValue)), true
+        }
     case COLOR_TYPE_HSV360:
         return CreateColorHsv(name, f32(firstValue), f32(secondValue), f32(thirdValue)), true
     case COLOR_TYPE_HSV:
