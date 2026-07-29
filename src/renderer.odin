@@ -14,6 +14,7 @@ import "pdx"
 import nfd "nativefiledialog"
 import time "core:time"
 import "core:math"
+import ui "ui"
 
 RELEASE :: #config(RELEASE, false)
 
@@ -291,6 +292,9 @@ main :: proc() {
     state.InvalidTexture = texture.LoadTexture(TEXTURE_INVALID)
     defer rl.UnloadTexture(state.InvalidTexture)
 
+    loadIcons()
+    defer unloadIcons()
+
     ctx := &state.Context
     mu.init(ctx, set_clipboard, get_clipboard)
 
@@ -429,10 +433,13 @@ render :: proc(ctx: ^mu.Context) {
                 rl.DrawRectangle(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, transmute(rl.Color)cmd.color)
             }
         case ^mu.Command_Icon:
-            rect := mu.default_atlas[cmd.id]
-            x := cmd.rect.x + (cmd.rect.w - rect.w)/2
-            y := cmd.rect.y + (cmd.rect.h - rect.h)/2
-            render_texture(rect, {x, y}, cmd.color)
+            success := renderIcon(cmd)
+            if !success {
+                rect := mu.default_atlas[cmd.id]
+                x := cmd.rect.x + (cmd.rect.w - rect.w)/2
+                y := cmd.rect.y + (cmd.rect.h - rect.h)/2
+                render_texture(rect, {x, y}, cmd.color)
+            }
         case ^mu.Command_Clip:
             rl.EndScissorMode()
             rl.BeginScissorMode(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h)
@@ -442,6 +449,26 @@ render :: proc(ctx: ^mu.Context) {
     }
 
     defer rl.EndDrawing()
+}
+
+loadIcons :: proc() {
+    state.Icons[.Sub] = texture.LoadTexture(TEXTURE_SUB)
+}
+unloadIcons :: proc() {
+    for key in state.Icons {
+        rl.UnloadTexture(state.Icons[key])
+    }
+}
+
+renderIcon :: proc(cmd: ^mu.Command_Icon) -> bool {
+    texture, exists := state.Icons[ui.IconType(cmd.id)]
+    if !exists {
+        return false
+    }
+    destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
+    source := rl.Rectangle{0, 0, f32(texture.width), f32(texture.height)}
+    rl.DrawTexturePro(texture, source, destination, { 0, 0 }, 0, rl.Color{ cmd.color.r, cmd.color.g, cmd.color.b, cmd.color.a })
+    return true
 }
 
 set_clipboard :: proc(user_data: rawptr, text: string) -> bool {

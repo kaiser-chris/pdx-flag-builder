@@ -15,6 +15,8 @@ import "core:thread"
 import "settings"
 import "ui"
 
+FLAG_ACTIVE: string: "init"
+
 State :: struct {
     Settings: ^settings.Settings,
     Databases: [dynamic]Database,
@@ -51,6 +53,7 @@ State :: struct {
     NextFlagIdentifier: int,
     FlagExportChannel: chan.Chan(FlagExportRequest),
     Dropdown: ui.Dropdown,
+    Icons: map[ui.IconType]rl.Texture2D,
 }
 
 Database :: struct {
@@ -101,6 +104,7 @@ CreateState :: proc() {
     state.RenderTextureCache = make(map[int]rl.Texture2D)
     state.RenderTextureMap = make(map[string]rl.Texture2D)
     state.GuiTextureCache = make(map[string]rl.Texture2D)
+    state.Icons = make(map[ui.IconType]rl.Texture2D)
     state.NamedColors = make(map[string]pdx.FlagColorVariant)
     state.TextureMap = make(map[string]int)
     state.GuiFlagMap = make(map[string]int)
@@ -128,7 +132,7 @@ CreateState :: proc() {
     state.SidebarOpen = true
     state.SidebarWidth = 350
     flag := pdx.CreateFlag()
-    state.Flags["init"] = flag
+    state.Flags[FLAG_ACTIVE] = flag
     state.Flag = flag
     state.NextTextureIdentifier = 1
     state.NextFlagIdentifier = 1
@@ -167,7 +171,7 @@ DestroyState :: proc() {
     for key in state.GuiFlagMap {
         delete(key)
     }
-    flag, exists := state.Flags["init"]
+    flag, exists := state.Flags[FLAG_ACTIVE]
     if exists {
         pdx.DestroyFlag(flag)
     }
@@ -178,6 +182,7 @@ DestroyState :: proc() {
     delete(state.RenderTextureMap)
     delete(state.Databases)
     delete(state.DatabaseSearch)
+    delete(state.Icons)
     chan.destroy(state.ImageLoadChannel)
     chan.destroy(state.TextureLoadChannel)
     chan.destroy(state.FlagLoadChannel)

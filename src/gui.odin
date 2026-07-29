@@ -720,7 +720,7 @@ renderFlagDatabase :: proc(ctx: ^mu.Context) {
                     if .SUBMIT in mu.button(ctx, "Open") {
                         pdx.DestroyFlag(state.Flag)
                         clonedFlag := pdx.CloneFlag(flag)
-                        state.Flags["init"] = clonedFlag
+                        state.Flags[FLAG_ACTIVE] = clonedFlag
                         state.Flag = clonedFlag
                     }
                     mu.pop_id(ctx)
@@ -961,7 +961,7 @@ renderFlagMenu :: proc(ctx: ^mu.Context) {
             switch layer in variant {
             case ^pdx.FlagLayerColoredEmblem:
                 mu.layout_row(ctx, {15, -1}, 20)
-                drawTransparentTexture(ctx, TEXTURE_SUB, 15, 20)
+                ui.Icon(ctx, .Sub)
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
                 if .SUBMIT in mu.button(ctx, fmt.tprintf("Colored Emblem: %s", layer.Texture.Name)) {
                     state.SelectedFlagElement = layer
@@ -970,7 +970,7 @@ renderFlagMenu :: proc(ctx: ^mu.Context) {
                 renderLayerInstances(ctx, layer.Instances)
             case ^pdx.FlagLayerTexturedEmblem:
                 mu.layout_row(ctx, {15, -1}, 20)
-                drawTransparentTexture(ctx, TEXTURE_SUB, 15, 20)
+                ui.Icon(ctx, .Sub)
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
                 if .SUBMIT in mu.button(ctx, fmt.tprintf("Textured Emblem: %s", layer.Texture.Name)) {
                     state.SelectedFlagElement = layer
@@ -979,7 +979,7 @@ renderFlagMenu :: proc(ctx: ^mu.Context) {
                 renderLayerInstances(ctx, layer.Instances)
             case ^pdx.FlagLayerSub:
                 mu.layout_row(ctx, {15, -1}, 20)
-                drawTransparentTexture(ctx, TEXTURE_SUB, 15, 20)
+                ui.Icon(ctx, .Sub)
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
                 if .SUBMIT in mu.button(ctx, fmt.tprintf("Sub Flag: %s", layer.Parent)) {
                     state.SelectedFlagElement = layer
@@ -1007,8 +1007,7 @@ renderLayerInstances :: proc(ctx: ^mu.Context, instances: [dynamic]^pdx.LayerIns
         buttonRect.x = buttonRect.x + 19
 
         mu.layout_set_next(ctx, subRect, false)
-        drawTransparentTexture(ctx, TEXTURE_SUB, 15, 20)
-
+        ui.Icon(ctx, .Sub)
         mu.layout_set_next(ctx, buttonRect, false)
         ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
         if .SUBMIT in mu.button(ctx, "Instance") {
@@ -1033,7 +1032,7 @@ renderLayerSubInstances :: proc(ctx: ^mu.Context, instances: [dynamic]^pdx.Layer
         buttonRect.x = buttonRect.x + 19
 
         mu.layout_set_next(ctx, subRect, false)
-        drawTransparentTexture(ctx, TEXTURE_SUB, 15, 20)
+        ui.Icon(ctx, .Sub)
 
         mu.layout_set_next(ctx, buttonRect, false)
         ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
@@ -1086,10 +1085,8 @@ renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
     ui.DrawAttributeRow(ctx, "Layer", "Coat of Arms")
     @static buf: [128]byte
     @static bufLen: int
-    if flag.Name != "" {
-        bufLen = len(flag.Name)
-        copy(buf[:], flag.Name)
-    }
+    bufLen = len(flag.Name)
+    copy(buf[:], flag.Name)
     if .CHANGE in ui.DrawAttributeRowTextbox(ctx, "Name", buf[:], &bufLen) {
         name := strings.clone(string(buf[:bufLen]))
         delete(flag.Name)
@@ -1116,6 +1113,15 @@ renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
         }
     }
     renderAddColorButtons(ctx, &flag.Colors)
+    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+    if .SUBMIT in ui.Button(ctx, "Clear Flag", .Danger) {
+        state.SelectedFlagElement = nil
+        pdx.DestroyFlag(state.Flag)
+        flag := pdx.CreateFlag()
+        state.Flag = flag
+        state.Flags[FLAG_ACTIVE] = flag
+    }
+    mu.pop_id(ctx)
 }
 
 renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagLayerColoredEmblem) {
@@ -1157,7 +1163,7 @@ renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagL
     }
     mu.pop_id(ctx)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in mu.button(ctx, "Delete Layer") {
+    if .SUBMIT in ui.Button(ctx, "Delete Layer", .Danger) {
         removeLayer(layer)
         state.SelectedFlagElement = nil
     }
@@ -1177,7 +1183,7 @@ renderSelectedFlagLayerTexturedEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.Flag
     }
     mu.pop_id(ctx)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in mu.button(ctx, "Delete Layer") {
+    if .SUBMIT in ui.Button(ctx, "Delete Layer", .Danger) {
         removeLayer(layer)
         state.SelectedFlagElement = nil
     }
@@ -1197,7 +1203,7 @@ renderSelectedFlagLayerSub :: proc(ctx: ^mu.Context, layer: ^pdx.FlagLayerSub) {
     }
     mu.pop_id(ctx)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in mu.button(ctx, "Delete Layer") {
+    if .SUBMIT in ui.Button(ctx, "Delete Layer", .Danger) {
         removeLayer(layer)
         state.SelectedFlagElement = nil
     }
@@ -1237,7 +1243,7 @@ renderSelectedLayerInstance :: proc(ctx: ^mu.Context, instance: pdx.LayerInstanc
     }
     mu.pop_id(ctx)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in mu.button(ctx, "Delete instance") {
+    if .SUBMIT in ui.Button(ctx, "Delete instance", .Danger) {
         removeInstance(instance)
         state.SelectedFlagElement = nil
     }
@@ -1253,7 +1259,7 @@ renderColorButtons :: proc(ctx: ^mu.Context, color: pdx.FlagColorVariant, list: 
     mu.pop_id(ctx)
     mu.layout_set_next(ctx, delete, false)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-    if .SUBMIT in mu.button(ctx, "del") {
+    if .SUBMIT in ui.Button(ctx, "del", .Danger) {
         if color == state.ColorPickerColor {
             state.ColorPickerColor = nil
         }
