@@ -722,9 +722,8 @@ renderSubInstances :: proc(layer: ^pdx.FlagLayerSub, destination: rl.Rectangle) 
     }
 
     if len(layer.Instances) == 0 {
-        instance := pdx.LayerInstance{
-            Rotation = 0,
-            Position = { 0, 0 }, // starts at 0 instead of 0.5
+        instance := pdx.LayerInstanceSub{
+            Offset = pdx.DEFAULT_OFFSET,
             Scale = pdx.DEFAULT_SCALE,
         }
         target := calculateSubInstanceDestination(&instance, destination)
@@ -739,12 +738,12 @@ calculateInstanceOrigin :: proc(texture: rl.Texture2D, instance: ^pdx.LayerInsta
     }
 }
 
-calculateSubInstanceDestination :: proc(instance: ^pdx.LayerInstance, target: rl.Rectangle) -> rl.Rectangle {
+calculateSubInstanceDestination :: proc(instance: ^pdx.LayerInstanceSub, target: rl.Rectangle) -> rl.Rectangle {
     width: f32 = target.width * instance.Scale.X
     height: f32 = target.height * instance.Scale.Y
 
-    x := target.x + target.width * instance.Position.X
-    y := target.y + target.height * instance.Position.Y
+    x := target.x + target.width * instance.Offset.X
+    y := target.y + target.height * instance.Offset.Y
 
     return rl.Rectangle{ x, y, width, height }
 }

@@ -40,7 +40,7 @@ State :: struct {
     ButtonIdentifier: i32,
     NextTextureIdentifier: int,
     ColorPickerColor: pdx.FlagColorVariant,
-    InstanceEditorInstance: ^pdx.LayerInstance,
+    InstanceEditorInstance: pdx.LayerInstanceVariant,
     SelectedFlagElement: SelectedFlagElement,
     Done: bool,
     RecolorShader: texture.RecolorShader,

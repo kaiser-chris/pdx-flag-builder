@@ -38,6 +38,7 @@ SelectedFlagElement :: union {
     ^pdx.FlagLayerTexturedEmblem,
     ^pdx.FlagLayerSub,
     ^pdx.LayerInstance,
+    ^pdx.LayerInstanceSub,
 }
 
 renderGui :: proc(ctx: ^mu.Context) {
@@ -389,25 +390,37 @@ renderInstanceEditor :: proc(ctx: ^mu.Context) {
         window.rect.h = height
 
         mu.layout_row(ctx, {80, -90, 80}, 0)
-        mu.label(ctx, "Rotation:")
-        ui.Slider(ctx, &state.InstanceEditorInstance.Rotation, 0, 360, step = 1)
-        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Rotation, rotationBuf[:], &rotationBufLen, 360, 0)
-
-        mu.label(ctx, "Scale - Width:")
-        ui.Slider(ctx, &state.InstanceEditorInstance.Scale.X, 0, 3, "%.2f", step = 0.05)
-        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Scale.X, scaleXBuf[:], &scaleXBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
-
-        mu.label(ctx, "Scale - Height:")
-        ui.Slider(ctx, &state.InstanceEditorInstance.Scale.Y, 0, 3, "%.2f", step = 0.05)
-        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Scale.Y, scaleYBuf[:], &scaleYBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
-
-        mu.label(ctx, "Position - X:")
-        ui.Slider(ctx, &state.InstanceEditorInstance.Position.X, -2, 3, "%.2f", step = 0.05)
-        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Position.X, positionXBuf[:], &positionXBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f")
-
-        mu.label(ctx, "Position - Y:")
-        ui.Slider(ctx, &state.InstanceEditorInstance.Position.Y, -2, 3, "%.2f", step = 0.05)
-        ui.NumberTextbox(ctx, &state.InstanceEditorInstance.Position.Y, positionYBuf[:], &positionYBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f")
+        switch type in state.InstanceEditorInstance {
+        case ^pdx.LayerInstance:
+            mu.label(ctx, "Rotation:")
+            ui.Slider(ctx, &type.Rotation, 0, 360, step = 1)
+            ui.NumberTextbox(ctx, &type.Rotation, rotationBuf[:], &rotationBufLen, 360, 0)
+            mu.label(ctx, "Scale - Width:")
+            ui.Slider(ctx, &type.Scale.X, 0, 3, "%.2f", step = 0.05)
+            ui.NumberTextbox(ctx, &type.Scale.X, scaleXBuf[:], &scaleXBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
+            mu.label(ctx, "Scale - Height:")
+            ui.Slider(ctx, &type.Scale.Y, 0, 3, "%.2f", step = 0.05)
+            ui.NumberTextbox(ctx, &type.Scale.Y, scaleYBuf[:], &scaleYBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
+            mu.label(ctx, "Position - X:")
+            ui.Slider(ctx, &type.Position.X, -2, 3, "%.2f", step = 0.05)
+            ui.NumberTextbox(ctx, &type.Position.X, positionXBuf[:], &positionXBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f")
+            mu.label(ctx, "Position - Y:")
+            ui.Slider(ctx, &type.Position.Y, -2, 3, "%.2f", step = 0.05)
+            ui.NumberTextbox(ctx, &type.Position.Y, positionYBuf[:], &positionYBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f")
+        case ^pdx.LayerInstanceSub:
+            mu.label(ctx, "Scale - Width:")
+            ui.Slider(ctx, &type.Scale.X, 0, 3, "%.2f", step = 0.05)
+            ui.NumberTextbox(ctx, &type.Scale.X, scaleXBuf[:], &scaleXBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
+            mu.label(ctx, "Scale - Height:")
+            ui.Slider(ctx, &type.Scale.Y, 0, 3, "%.2f", step = 0.05)
+            ui.NumberTextbox(ctx, &type.Scale.Y, scaleYBuf[:], &scaleYBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
+            mu.label(ctx, "Offset - X:")
+            ui.Slider(ctx, &type.Offset.X, -2, 3, "%.2f", step = 0.05)
+            ui.NumberTextbox(ctx, &type.Offset.X, positionXBuf[:], &positionXBufLen, pdx.MAX_OFFSET, pdx.MIN_OFFSET, "%.3f")
+            mu.label(ctx, "Offset - Y:")
+            ui.Slider(ctx, &type.Offset.Y, -2, 3, "%.2f", step = 0.05)
+            ui.NumberTextbox(ctx, &type.Offset.Y, positionYBuf[:], &positionYBufLen, pdx.MAX_OFFSET, pdx.MIN_OFFSET, "%.3f")
+        }
     }
 
     cnt := mu.get_container(ctx, WINDOM_INSTANCE_EDITOR)
@@ -954,7 +967,7 @@ renderFlagMenu :: proc(ctx: ^mu.Context) {
                     state.SelectedFlagElement = layer
                 }
                 mu.pop_id(ctx)
-                renderLayerInstances(ctx, layer.Instances, true)
+                renderLayerInstances(ctx, layer.Instances)
             case ^pdx.FlagLayerTexturedEmblem:
                 mu.layout_row(ctx, {15, -1}, 20)
                 drawTransparentTexture(ctx, TEXTURE_SUB, 15, 20)
@@ -963,7 +976,7 @@ renderFlagMenu :: proc(ctx: ^mu.Context) {
                     state.SelectedFlagElement = layer
                 }
                 mu.pop_id(ctx)
-                renderLayerInstances(ctx, layer.Instances, true)
+                renderLayerInstances(ctx, layer.Instances)
             case ^pdx.FlagLayerSub:
                 mu.layout_row(ctx, {15, -1}, 20)
                 drawTransparentTexture(ctx, TEXTURE_SUB, 15, 20)
@@ -972,14 +985,40 @@ renderFlagMenu :: proc(ctx: ^mu.Context) {
                     state.SelectedFlagElement = layer
                 }
                 mu.pop_id(ctx)
-                renderLayerInstances(ctx, layer.Instances, true)
+                renderLayerSubInstances(ctx, layer.Instances)
             }
         }
         mu.layout_row(ctx, { -1, -1 }, 20)
     }
 }
 
-renderLayerInstances :: proc(ctx: ^mu.Context, instances: [dynamic]^pdx.LayerInstance, hasNext: bool) {
+renderLayerInstances :: proc(ctx: ^mu.Context, instances: [dynamic]^pdx.LayerInstance) {
+    for instance, index in instances {
+        mu.layout_row(ctx, {-1, -1}, 20)
+        buttonRect := mu.layout_next(ctx)
+        buttonRect.w = buttonRect.w - 19
+        buttonRect.x = buttonRect.x + 19
+
+        subRect := mu.Rect{
+            buttonRect.x, buttonRect.y, 15, 20
+        }
+
+        buttonRect.w = buttonRect.w - 19
+        buttonRect.x = buttonRect.x + 19
+
+        mu.layout_set_next(ctx, subRect, false)
+        drawTransparentTexture(ctx, TEXTURE_SUB, 15, 20)
+
+        mu.layout_set_next(ctx, buttonRect, false)
+        ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+        if .SUBMIT in mu.button(ctx, "Instance") {
+            state.SelectedFlagElement = instance
+        }
+        mu.pop_id(ctx)
+    }
+}
+
+renderLayerSubInstances :: proc(ctx: ^mu.Context, instances: [dynamic]^pdx.LayerInstanceSub) {
     for instance, index in instances {
         mu.layout_row(ctx, {-1, -1}, 20)
         buttonRect := mu.layout_next(ctx)
@@ -1035,6 +1074,8 @@ renderSelectedElementMenu :: proc(ctx: ^mu.Context) {
             case ^pdx.FlagLayerSub:
                 renderSelectedFlagLayerSub(ctx, element)
             case ^pdx.LayerInstance:
+                renderSelectedLayerInstance(ctx, element)
+            case ^pdx.LayerInstanceSub:
                 renderSelectedLayerInstance(ctx, element)
             }
         }
@@ -1138,13 +1179,13 @@ renderSelectedFlagLayerSub :: proc(ctx: ^mu.Context, layer: ^pdx.FlagLayerSub) {
     mu.layout_row(ctx, { -1, -1 }, 20)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
     if .SUBMIT in mu.button(ctx, "Add new insance") {
-        instance := pdx.CreateLayerInstance()
+        instance := pdx.CreateLayerInstanceSub()
         append(&layer.Instances, instance)
     }
     mu.pop_id(ctx)
 }
 
-renderSelectedLayerInstance :: proc(ctx: ^mu.Context, instance: ^pdx.LayerInstance) {
+renderSelectedLayerInstance :: proc(ctx: ^mu.Context, instance: pdx.LayerInstanceVariant) {
     @static rotationBuf: [16]byte
     @static rotationBufLen: int
     @static scaleXBuf: [16]byte
@@ -1157,11 +1198,19 @@ renderSelectedLayerInstance :: proc(ctx: ^mu.Context, instance: ^pdx.LayerInstan
     @static positionYBufLen: int
 
     ui.DrawAttributeRow(ctx, "Type", "Layer Instance")
-    ui.DrawAttributeRowNumberTextbox(ctx, "Rotation", &instance.Rotation, rotationBuf[:], &rotationBufLen, 360, 0)
-    ui.DrawAttributeRowNumberTextbox(ctx, "Scale Width", &instance.Scale.X, scaleXBuf[:], &scaleXBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
-    ui.DrawAttributeRowNumberTextbox(ctx, "Scale Height", &instance.Scale.Y, scaleYBuf[:], &scaleYBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
-    ui.DrawAttributeRowNumberTextbox(ctx, "Position X", &instance.Position.X, positionXBuf[:], &positionXBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f")
-    ui.DrawAttributeRowNumberTextbox(ctx, "Position Y", &instance.Position.Y, positionYBuf[:], &positionYBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f")
+    switch type in instance {
+    case ^pdx.LayerInstance:
+        ui.DrawAttributeRowNumberTextbox(ctx, "Rotation", &type.Rotation, rotationBuf[:], &rotationBufLen, 360, 0)
+        ui.DrawAttributeRowNumberTextbox(ctx, "Scale Width", &type.Scale.X, scaleXBuf[:], &scaleXBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
+        ui.DrawAttributeRowNumberTextbox(ctx, "Scale Height", &type.Scale.Y, scaleYBuf[:], &scaleYBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
+        ui.DrawAttributeRowNumberTextbox(ctx, "Position X", &type.Position.X, positionXBuf[:], &positionXBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f")
+        ui.DrawAttributeRowNumberTextbox(ctx, "Position Y", &type.Position.Y, positionYBuf[:], &positionYBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f")
+    case ^pdx.LayerInstanceSub:
+        ui.DrawAttributeRowNumberTextbox(ctx, "Scale Width", &type.Scale.X, scaleXBuf[:], &scaleXBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
+        ui.DrawAttributeRowNumberTextbox(ctx, "Scale Height", &type.Scale.Y, scaleYBuf[:], &scaleYBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
+        ui.DrawAttributeRowNumberTextbox(ctx, "Offset X", &type.Offset.X, positionXBuf[:], &positionXBufLen, pdx.MAX_OFFSET, pdx.MIN_OFFSET, "%.3f")
+        ui.DrawAttributeRowNumberTextbox(ctx, "Offset Y", &type.Offset.Y, positionYBuf[:], &positionYBufLen, pdx.MAX_OFFSET, pdx.MIN_OFFSET, "%.3f")
+    }
     mu.layout_row(ctx, { -1 }, 20)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
     if .SUBMIT in mu.button(ctx, "Edit instance") {
@@ -1234,31 +1283,45 @@ removeLayer :: proc(index: int){
     pdx.DestroyFlagLayer(variant)
 }
 
-removeInstance :: proc(instance: ^pdx.LayerInstance) {
+removeInstance :: proc(instance: pdx.LayerInstanceVariant) {
     for layer in state.Flag.Layers {
         removeLayerInstance(layer, instance)
     }
-    pdx.DestroyLayerInstance(instance)
+    switch type in instance {
+    case ^pdx.LayerInstance:
+        pdx.DestroyLayerInstance(type)
+    case ^pdx.LayerInstanceSub:
+        pdx.DestroyLayerInstanceSub(type)
+    }
 }
 
-removeLayerInstance :: proc(layerVariant: pdx.FlagLayerVariant, instance: ^pdx.LayerInstance) {
+removeLayerInstance :: proc(layerVariant: pdx.FlagLayerVariant, instance: pdx.LayerInstanceVariant) {
     switch layer in layerVariant {
     case ^pdx.FlagLayerColoredEmblem:
         for _, index in layer.Instances {
-            if layer.Instances[index] == instance {
-                ordered_remove(&layer.Instances, index)
+            #partial switch type in instance {
+            case ^pdx.LayerInstance:
+                if layer.Instances[index] == type {
+                    ordered_remove(&layer.Instances, index)
+                }
             }
         }
     case ^pdx.FlagLayerTexturedEmblem:
         for _, index in layer.Instances {
-            if layer.Instances[index] == instance {
-                ordered_remove(&layer.Instances, index)
+            #partial switch type in instance {
+            case ^pdx.LayerInstance:
+                if layer.Instances[index] == type {
+                    ordered_remove(&layer.Instances, index)
+                }
             }
         }
     case ^pdx.FlagLayerSub:
         for _, index in layer.Instances {
-            if layer.Instances[index] == instance {
-                ordered_remove(&layer.Instances, index)
+            #partial switch type in instance {
+            case ^pdx.LayerInstanceSub:
+                if layer.Instances[index] == type {
+                    ordered_remove(&layer.Instances, index)
+                }
             }
         }
     }

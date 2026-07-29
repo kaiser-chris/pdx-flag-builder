@@ -4,12 +4,16 @@ import strings "core:strings"
 
 DEFAULT_SCALE: LayerVector: { 1, 1 }
 DEFAULT_POSITION: LayerVector: { 0.5, 0.5 }
+DEFAULT_OFFSET: LayerVector: { 0, 0 }
 
 MIN_SCALE: f32: 0
 MAX_SCALE: f32: 10
 
 MIN_POSITION: f32: -4
 MAX_POSITION: f32: 5
+
+MIN_OFFSET: f32: -5
+MAX_OFFSET: f32: 5
 
 Flag :: struct {
     Name: string,
@@ -80,18 +84,17 @@ FlagLayerVariant :: union {
 }
 FlagLayer :: struct {
     Instances: [dynamic]^LayerInstance,
+    Texture: FlagTexture,
 }
 FlagLayerColoredEmblem :: struct {
     using Layer: FlagLayer,
-    Texture: FlagTexture,
     Colors: [dynamic]FlagColorVariant,
 }
 FlagLayerTexturedEmblem :: struct {
     using Layer: FlagLayer,
-    Texture: FlagTexture,
 }
 FlagLayerSub :: struct {
-    using Layer: FlagLayer,
+    Instances: [dynamic]^LayerInstanceSub,
     Parent: string,
 }
 
@@ -110,7 +113,7 @@ CreateLayerColoredEmblem :: proc(name, path: string) -> ^FlagLayerColoredEmblem 
 }
 CreateLayerSub :: proc(parent: string) -> ^FlagLayerSub {
     return new_clone(FlagLayerSub{
-        Instances = make([dynamic]^LayerInstance),
+        Instances = make([dynamic]^LayerInstanceSub),
         Parent = strings.clone(parent)
     })
 }
@@ -136,7 +139,7 @@ DestroyFlagLayer :: proc(variant: FlagLayerVariant) {
         free(layer)
     case ^FlagLayerSub:
         for _, index in layer.Instances {
-            DestroyLayerInstance(layer.Instances[index])
+            DestroyLayerInstanceSub(layer.Instances[index])
         }
         delete(layer.Instances)
         delete(layer.Parent)
@@ -163,11 +166,16 @@ CloneFlagLayer :: proc(variant: FlagLayerVariant) -> FlagLayerVariant {
     case ^FlagLayerSub:
         clonedLayer := CreateLayerSub(layer.Parent)
         for instance in layer.Instances {
-            append(&clonedLayer.Instances, CloneLayerInstance(instance))
+            append(&clonedLayer.Instances, CloneLayerInstanceSub(instance))
         }
         return clonedLayer
     }
     return nil
+}
+
+LayerInstanceVariant :: union {
+    ^LayerInstance,
+    ^LayerInstanceSub,
 }
 
 LayerVector :: struct {
@@ -191,6 +199,23 @@ DestroyLayerInstance :: proc(instance: ^LayerInstance) {
 }
 CloneLayerInstance :: proc(instance: ^LayerInstance) -> ^LayerInstance {
     return CreateLayerInstance(instance.Rotation, { instance.Scale.X, instance.Scale.Y }, { instance.Position.X, instance.Position.Y })
+}
+
+LayerInstanceSub :: struct {
+    Scale: LayerVector,
+    Offset: LayerVector,
+}
+CreateLayerInstanceSub :: proc(scale: LayerVector = { 1, 1 }, offset: LayerVector = { 0.0, 0.0 }) -> ^LayerInstanceSub {
+    return new_clone(LayerInstanceSub{
+        Scale = scale,
+        Offset = offset,
+    })
+}
+DestroyLayerInstanceSub :: proc(instance: ^LayerInstanceSub) {
+    free(instance)
+}
+CloneLayerInstanceSub :: proc(instance: ^LayerInstanceSub) -> ^LayerInstanceSub {
+    return CreateLayerInstanceSub({ instance.Scale.X, instance.Scale.Y }, { instance.Offset.X, instance.Offset.Y })
 }
 
 FlagColorVariant :: union {
