@@ -58,10 +58,10 @@ ButtonIcon :: proc(
     width: i32 = 0,
     height: i32 = 0,
     style: ButtonStyle = .Default,
-    tint := mu.Color{ 255, 255, 255, 255 },
+    tint := COLOR_TINT_NONE,
     options: mu.Options = {.ALIGN_CENTER}
 ) -> (res: mu.Result_Set) {
-    id := mu.get_id(ctx, "")
+    id := mu.get_id(ctx, uintptr(icon))
     buttonRect := mu.layout_next(ctx)
     mu.update_control(ctx, id, buttonRect, options)
 
