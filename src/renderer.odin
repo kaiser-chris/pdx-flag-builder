@@ -112,47 +112,48 @@ handleFlagExportRequests :: proc() {
         }
         switch request.Type {
         case .Image:
-            executeExportFlagImage(request)
+            ok := executeExportFlagImage(request)
+            expirary := time.time_add(time.now(), 1 * time.Second)
+            if ok {
+                ui.Toast(&state.Toast, "Export", "Saved image", expirary)
+            } else {
+                ui.Toast(&state.Toast, "Export", "Could not export image", expirary, .Warning)
+            }
         case .Script:
             fmt.eprintln("Not Supported Yet")
         }
     }
 }
 
-executeExportFlagImage :: proc(request: FlagExportRequest) {
+executeExportFlagImage :: proc(request: FlagExportRequest) -> bool {
     path: cstring
     filters := [1]nfd.Filter_Item { { "Image", "png" } }
     args := nfd.Save_Dialog_Args {
         filter_list = raw_data(filters[:]),
-        filter_count = len(filters)
+        filter_count = len(filters),
     }
 
     result := nfd.SaveDialogU8_With(&path, &args)
+    defer nfd.FreePathU8(path)
     if result == .Cancel {
-        return
+        return false
     }
     if result == .Error {
         fmt.eprintln("Export dialog error:", nfd.GetError())
-        return
+        return false
     }
 
-    target := rl.LoadRenderTexture(request.Size[0], request.Size[1]);
+    target := rl.LoadRenderTexture(request.Size[0], request.Size[1])
+    defer rl.UnloadRenderTexture(target)
     destination := rl.Rectangle{0, 0, f32(request.Size[0]), f32(request.Size[1])}
-    rl.BeginTextureMode(target);
-    rl.ClearBackground(rl.WHITE);
+    rl.BeginTextureMode(target)
+    rl.ClearBackground(rl.WHITE)
     renderFlag(request.Flag, destination)
-    rl.EndTextureMode();
+    rl.EndTextureMode()
 
-    image := rl.LoadImageFromTexture(target.texture);
-    success := rl.ExportImage(image, path);
-    rl.UnloadImage(image);
-    rl.UnloadRenderTexture(target);
-    if !success {
-        fmt.eprintfln("Could not export image")
-    } else {
-        fmt.printfln("Successfully exported")
-    }
-    nfd.FreePathU8(path)
+    image := rl.LoadImageFromTexture(target.texture)
+    defer rl.UnloadImage(image)
+    return rl.ExportImage(image, path)
 }
 
 createSplashScreenThread :: proc() -> ^thread.Thread {

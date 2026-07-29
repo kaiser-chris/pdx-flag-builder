@@ -50,6 +50,7 @@ State :: struct {
     NextFlagIdentifier: int,
     FlagExportChannel: chan.Chan(FlagExportRequest),
     Dropdown: ui.Dropdown,
+    Toast: ui.ToastContainer,
     Icons: map[ui.IconType]rl.Texture2D,
     SearchCache: SearchCache,
 }
@@ -104,6 +105,7 @@ state := State{}
 
 CreateState :: proc() {
     state.Dropdown = ui.CreateDropdown()
+    state.Toast = ui.CreateToastContainer()
     state.SearchCache = CreateSearchCache()
     state.Databases = make([dynamic]Database)
     state.RenderTextureCache = make(map[int]rl.Texture2D)
@@ -189,6 +191,8 @@ DestroyState :: proc() {
     settings.DestroySettings(state.Settings)
     pdx.DestroyFlag(&state.Flag)
     DestroySearchCache(&state.SearchCache)
+    ui.DestroyDropdown(&state.Dropdown)
+    ui.DestroyToastContainer(&state.Toast)
 }
 
 CreateDatabase :: proc(name, path: string) -> Database {

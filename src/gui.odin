@@ -2,6 +2,7 @@ package pdx_flag_builder
 
 import "core:fmt"
 import "core:strings"
+import "core:time"
 import rl "vendor:raylib"
 import mu "vendor:microui"
 import "texture"
@@ -44,8 +45,6 @@ SelectedFlagElement :: union {
 }
 
 renderGui :: proc(ctx: ^mu.Context) {
-    ui.InitDropdown(ctx, &state.Dropdown, &state.ButtonIdentifier)
-
     renderFlagPreview(ctx)
 
     renderToolbar(ctx)
@@ -106,6 +105,9 @@ renderGui :: proc(ctx: ^mu.Context) {
         }
         renderInstanceEditor(ctx)
     }
+
+    ui.InitDropdown(ctx, &state.Dropdown, &state.ButtonIdentifier)
+    ui.InitToast(ctx, &state.Toast, { 10, TOOLBAR_HEIGHT + 10, 200, rl.GetScreenHeight() - (TOOLBAR_HEIGHT + 20) }, &state.ButtonIdentifier)
 
     rl.SetWindowMinSize(FLAG_WIDTH + state.SidebarWidth, FLAG_HEIGHT + TOOLBAR_HEIGHT)
 }
@@ -460,7 +462,7 @@ renderInstanceEditor :: proc(ctx: ^mu.Context) {
 }
 
 renderToolbar :: proc(ctx: ^mu.Context) {
-    if mu.window(ctx, WINDOM_TOOLBAR, { 0, 0, rl.GetScreenWidth(), TOOLBAR_HEIGHT }, {.NO_CLOSE, .NO_TITLE, .NO_RESIZE, .NO_SCROLL}) {
+    if mu.window(ctx, WINDOM_TOOLBAR, { 0, 0, rl.GetScreenWidth(), TOOLBAR_HEIGHT }, { .NO_CLOSE, .NO_TITLE, .NO_RESIZE, .NO_SCROLL }) {
         mu.get_current_container(ctx).rect.w = rl.GetScreenWidth()
         mu.layout_row_items(ctx, 6, TOOLBAR_HEIGHT - 8)
 
@@ -522,6 +524,8 @@ renderToolbar :: proc(ctx: ^mu.Context) {
                 clipString := strings.clone_to_cstring(script)
                 defer delete(clipString)
                 rl.SetClipboardText(clipString)
+                expirary := time.time_add(time.now(), 1 * time.Second)
+                ui.Toast(&state.Toast, "Export", "Copied to clipboard", expirary)
             }
             ui.OpenDropdown(&state.Dropdown, { buttonRect.x, buttonRect.y + buttonRect.h + 1 }, {
                 ui.CreateDropdownElement("Export to Image", exportToImage),
@@ -550,7 +554,7 @@ renderFlagPreview :: proc(ctx: ^mu.Context) {
         }
     }
 
-    if mu.window(ctx, WINDOM_PREVIEW, destination, {.NO_CLOSE, .NO_TITLE, .NO_RESIZE, .NO_SCROLL, .NO_FRAME}) {
+    if mu.window(ctx, WINDOM_PREVIEW, destination, {.NO_CLOSE, .NO_TITLE, .NO_RESIZE, .NO_SCROLL, .NO_FRAME, .NO_INTERACT}) {
         window := mu.get_current_container(ctx)
         window.rect = destination
         target := mu.Rect{x = 0, y = 0, w = FLAG_WIDTH, h = FLAG_HEIGHT}

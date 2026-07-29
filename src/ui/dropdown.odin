@@ -38,6 +38,7 @@ DestroyDropdown :: proc(dropdown: ^Dropdown) {
     for _, index in dropdown.Elements {
         DestroyDropdownElement(&dropdown.Elements[index])
     }
+    delete(dropdown.Elements)
 }
 
 OpenDropdown :: proc(dropdown: ^Dropdown, location: mu.Vec2, elements: []DropdownElement, width: i32 = 0) {
