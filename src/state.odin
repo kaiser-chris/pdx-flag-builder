@@ -537,17 +537,33 @@ getReferencedColor :: proc(reference: string, flag: pdx.Flag) -> (pdx.FlagColor,
 }
 
 SaveSettings :: proc() {
+    state.FlagDatabaseWindowOpen = false
+    state.TextureDatabaseWindowOpen = false
     for _, index in state.Settings.Databases {
         settings.DestroyDatabase(&state.Settings.Databases[index])
     }
+    clear(&state.Settings.Databases)
     delete(state.Settings.Databases)
-    state.Settings.Databases = make([dynamic]settings.Database, len(state.Databases))
+    state.Settings.Databases = make([dynamic]settings.Database)
+    for database in state.Databases {
+        append(&state.Settings.Databases, settings.CreateDatabase(database.Settings.Name, database.Settings.Path))
+    }
     for _, index in state.Databases {
-        database := state.Databases[index]
-        state.Settings.Databases[index] = settings.CreateDatabase(database.Settings.Name, database.Settings.Path)
-        loadNamedColors(&database)
-        loadDatabaseTextures(&database)
-        loadExistingFlags(&database)
+        DestroyDatabase(&state.Databases[index])
+    }
+    clear(&state.Databases)
+    delete(state.Databases)
+    state.Databases = make([dynamic]Database)
+    delete(state.Flags)
+    state.Flags = make(map[string]pdx.Flag)
+    for database in state.Settings.Databases {
+        append(&state.Databases, CreateDatabase(database.Name, database.Path))
+    }
+    for _, i in state.Databases {
+        for _, j in state.Databases[i].Flags {
+            EnrichLoadedFlag(&state.Databases[i].Flags[j], &state.Databases)
+            state.Flags[state.Databases[i].Flags[j].Name] = state.Databases[i].Flags[j]
+        }
     }
     settings.SaveSettings(settings.FILE_NAME_SETTINGS, state.Settings)
 }
