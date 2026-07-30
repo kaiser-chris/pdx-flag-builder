@@ -36,3 +36,4 @@ The resulting binary as well as the needed assets can be found in the `bin` fold
 - Delete by Chehuna from <a href="https://thenounproject.com/browse/icons/term/delete/" target="_blank" title="Delete Icons">Noun Project</a> (CC BY 3.0)
 - edit by etika ariatna from <a href="https://thenounproject.com/browse/icons/term/edit/" target="_blank" title="edit Icons">Noun Project</a> (CC BY 3.0)
 - Upload by Heztasia from <a href="https://thenounproject.com/browse/icons/term/upload/" target="_blank" title="Upload Icons">Noun Project</a> (CC BY 3.0)
+- unknown by LAFS from <a href="https://thenounproject.com/browse/icons/term/unknown/" target="_blank" title="unknown Icons">Noun Project</a> (CC BY 3.0)

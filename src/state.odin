@@ -61,7 +61,14 @@ SearchCache :: struct {
     NamedColorSearch: string,
 }
 
+DatabaseType :: enum {
+    Vic3,
+    Eu5,
+    Unknown,
+}
+
 Database :: struct {
+    Type: DatabaseType,
     Settings: settings.Database,
     IsDeleted: bool,
     BufferName: [128]byte,
@@ -197,6 +204,7 @@ DestroyState :: proc() {
 
 NewDatabase :: proc(name, path: string) -> Database {
     return Database{
+        Type = .Unknown,
         Settings = settings.CreateDatabase(name, path),
         NamedColors = make([dynamic]pdx.FlagColor),
         Patterns = make([dynamic]pdx.FlagTexture),
@@ -215,6 +223,7 @@ CreateDatabase :: proc(name, path: string) -> Database {
         database.BufferPathLength = len(path)
         copy(database.BufferPath[:], path)
     }
+    determineDatabaseType(&database)
     loadNamedColors(&database)
     loadDatabaseTextures(&database)
     loadExistingFlags(&database)
@@ -240,42 +249,104 @@ DestroySearchCache :: proc(cache: ^SearchCache) {
     delete(cache.NamedColorSearch)
 }
 
+determineDatabaseType :: proc(database: ^Database) {
+    defer free_all(context.temp_allocator)
+
+    folderMainMenu, mmErr := os.join_path({ database.Settings.Path, pdx.FOLDER_EU5_MAIN_MENU }, context.temp_allocator)
+    if mmErr != nil {
+        fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_EU5_MAIN_MENU, mmErr)
+        return
+    }
+    folderLoadingScreen, lsErr := os.join_path({ database.Settings.Path, pdx.FOLDER_EU5_LOADING_SCREEN }, context.temp_allocator)
+    if lsErr != nil {
+        fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_EU5_LOADING_SCREEN, lsErr)
+        return
+    }
+    folderInGame, igErr := os.join_path({ database.Settings.Path, pdx.FOLDER_EU5_IN_GAME }, context.temp_allocator)
+    if igErr != nil {
+        fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_EU5_IN_GAME, igErr)
+        return
+    }
+    if os.exists(folderMainMenu) || os.exists(folderLoadingScreen) || os.exists(folderInGame) {
+        database.Type = .Eu5
+        return
+    }
+
+    folderCommon, comErr := os.join_path({ database.Settings.Path, pdx.FOLDER_COMMON }, context.temp_allocator)
+    if comErr != nil {
+        fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_COMMON, comErr)
+        return
+    }
+    folderGfx, gfxErr := os.join_path({ database.Settings.Path, pdx.FOLDER_GFX }, context.temp_allocator)
+    if gfxErr != nil {
+        fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_GFX, gfxErr)
+        return
+    }
+    if os.exists(folderCommon) || os.exists(folderGfx) {
+        database.Type = .Vic3
+        return
+    }
+
+    database.Type = .Unknown
+}
+determineRootFolder :: proc(database: ^Database) -> []string {
+    rootFolders := make([dynamic]string)
+    switch database.Type {
+    case .Vic3:
+        append(&rootFolders, "")
+        return rootFolders[:]
+    case .Eu5:
+        append(&rootFolders, pdx.FOLDER_EU5_MAIN_MENU)
+        append(&rootFolders, pdx.FOLDER_EU5_LOADING_SCREEN)
+        append(&rootFolders, pdx.FOLDER_EU5_IN_GAME)
+        return rootFolders[:]
+    case .Unknown:
+        return {}
+    }
+    return {}
+}
+
 loadNamedColors :: proc(database: ^Database) {
     destroyNamedColors(database)
 
     database.NamedColors = make([dynamic]pdx.FlagColor)
-    path, err := os.join_path([]string{ database.Settings.Path, pdx.FOLDER_COMMON, pdx.FOLDER_NAMED_COLORS }, context.allocator)
-    if err != nil {
-        fmt.eprintfln("could not build named colors path for database %s: %v", database.Settings.Name, err)
-        return
-    }
-    defer delete(path)
 
-    walker := os.walker_create_path(path)
-    defer os.walker_destroy(&walker)
-
-    for info in os.walker_walk(&walker) {
-        _ = os.walker_error(&walker) or_break
-
-        if path, err := os.walker_error(&walker); err != nil {
-            fmt.eprintfln("failed walking %s: %s", path, err)
+    rootFolders := determineRootFolder(database)
+    defer delete(rootFolders)
+    for root in rootFolders {
+        path, err := os.join_path([]string{ database.Settings.Path, root, pdx.FOLDER_COMMON, pdx.FOLDER_NAMED_COLORS }, context.allocator)
+        if err != nil {
+            fmt.eprintfln("could not build named colors path for database %s: %v", database.Settings.Name, err)
             continue
         }
+        defer delete(path)
 
-        if !strings.has_suffix(info.fullpath, ".txt") {
-            continue
+        walker := os.walker_create_path(path)
+        defer os.walker_destroy(&walker)
+
+        for info in os.walker_walk(&walker) {
+            _ = os.walker_error(&walker) or_break
+
+            if path, err := os.walker_error(&walker); err != nil {
+                fmt.eprintfln("failed walking %s: %s", path, err)
+                continue
+            }
+
+            if !strings.has_suffix(info.fullpath, ".txt") {
+                continue
+            }
+
+            if info.type != os.File_Type.Regular {
+                continue
+            }
+
+            colors := pdx.LoadNamedColorsFile(info.fullpath)
+            for _, index in colors {
+                append(&database.NamedColors, colors[index])
+            }
+            delete(colors)
+
         }
-
-        if info.type != os.File_Type.Regular {
-            continue
-        }
-
-        colors := pdx.LoadNamedColorsFile(info.fullpath)
-        for _, index in colors {
-            append(&database.NamedColors, colors[index])
-        }
-        delete(colors)
-
     }
 
     fmt.printfln("Loaded %i named colors from database: %s", len(database.NamedColors), database.Settings.Name)
@@ -294,46 +365,51 @@ loadExistingFlags :: proc(database: ^Database) {
     destroyDatabaseFlags(database)
 
     database.Flags = make([dynamic]pdx.Flag)
-    path, err := os.join_path([]string{ database.Settings.Path, pdx.FOLDER_COMMON, pdx.FOLDER_COA, pdx.FOLDER_COA }, context.allocator)
-    if err != nil {
-        fmt.eprintfln("could not build coat of arms path for database %s: %v", database.Settings.Name, err)
-        return
-    }
-    defer delete(path)
 
-    if !os.exists(path) {
-        return
-    }
+    rootFolders := determineRootFolder(database)
+    defer delete(rootFolders)
+    for root in rootFolders {
+        path, err := os.join_path([]string{ database.Settings.Path, root, pdx.FOLDER_COMMON, pdx.FOLDER_COA, pdx.FOLDER_COA }, context.allocator)
+        if err != nil {
+            fmt.eprintfln("could not build coat of arms path for database %s: %v", database.Settings.Name, err)
+            continue
+        }
+        defer delete(path)
 
-    walker := os.walker_create_path(path)
-    defer os.walker_destroy(&walker)
-
-    for info in os.walker_walk(&walker) {
-        _ = os.walker_error(&walker) or_break
-
-        if path, err := os.walker_error(&walker); err != nil {
-            fmt.eprintfln("failed walking %s: %s", path, err)
+        if !os.exists(path) {
             continue
         }
 
-        if info.type == .Directory && path != info.fullpath {
-            walker.skip_dir = true
-            continue
-        }
+        walker := os.walker_create_path(path)
+        defer os.walker_destroy(&walker)
 
-        if !strings.has_suffix(info.fullpath, ".txt") {
-            continue
-        }
+        for info in os.walker_walk(&walker) {
+            _ = os.walker_error(&walker) or_break
 
-        if info.type != .Regular {
-            continue
-        }
+            if path, err := os.walker_error(&walker); err != nil {
+                fmt.eprintfln("failed walking %s: %s", path, err)
+                continue
+            }
 
-        flags := pdx.LoadCoaFile(info.fullpath, database.Settings.Name)
-        for flag, index in flags {
-            append(&database.Flags, flags[index])
+            if info.type == .Directory && path != info.fullpath {
+                walker.skip_dir = true
+                continue
+            }
+
+            if !strings.has_suffix(info.fullpath, ".txt") {
+                continue
+            }
+
+            if info.type != .Regular {
+                continue
+            }
+
+            flags := pdx.LoadCoaFile(info.fullpath, database.Settings.Name)
+            for flag, index in flags {
+                append(&database.Flags, flags[index])
+            }
+            delete(flags)
         }
-        delete(flags)
     }
 
     fmt.printfln("Loaded %i coat of arms from database: %s", len(database.Flags), database.Settings.Name)
@@ -354,32 +430,37 @@ loadDatabaseTextures :: proc(database: ^Database) {
     database.Patterns = make([dynamic]pdx.FlagTexture)
     database.ColoredEmblems = make([dynamic]pdx.FlagTexture)
     database.TexturedEmblems = make([dynamic]pdx.FlagTexture)
-    {
-        path, err := os.join_path([]string{ database.Settings.Path, pdx.FOLDER_GFX, pdx.FOLDER_COA, pdx.FOLDER_PATTERNS }, context.allocator)
-        defer delete(path)
-        if err != nil {
-            fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_PATTERNS, err)
-            return
+
+    rootFolders := determineRootFolder(database)
+    defer delete(rootFolders)
+    for root in rootFolders {
+        {
+            path, err := os.join_path({ database.Settings.Path, root, pdx.FOLDER_GFX, pdx.FOLDER_COA, pdx.FOLDER_PATTERNS }, context.allocator)
+            defer delete(path)
+            if err != nil {
+                fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_PATTERNS, err)
+                continue
+            }
+            loadDatabaseFolderTextures(database, path, pdx.FOLDER_PATTERNS)
         }
-        loadDatabaseFolderTextures(database, path, pdx.FOLDER_PATTERNS)
-    }
-    {
-        path, err := os.join_path([]string{ database.Settings.Path, pdx.FOLDER_GFX, pdx.FOLDER_COA, pdx.FOLDER_COLORED_EMBLEMS }, context.allocator)
-        defer delete(path)
-        if err != nil {
-            fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_COLORED_EMBLEMS, err)
-            return
+        {
+            path, err := os.join_path({ database.Settings.Path, root, pdx.FOLDER_GFX, pdx.FOLDER_COA, pdx.FOLDER_COLORED_EMBLEMS }, context.allocator)
+            defer delete(path)
+            if err != nil {
+                fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_COLORED_EMBLEMS, err)
+                continue
+            }
+            loadDatabaseFolderTextures(database, path, pdx.FOLDER_COLORED_EMBLEMS)
         }
-        loadDatabaseFolderTextures(database, path, pdx.FOLDER_COLORED_EMBLEMS)
-    }
-    {
-        path, err := os.join_path([]string{ database.Settings.Path, pdx.FOLDER_GFX, pdx.FOLDER_COA, pdx.FOLDER_TEXTURED_EMBLEMS }, context.allocator)
-        defer delete(path)
-        if err != nil {
-            fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_TEXTURED_EMBLEMS, err)
-            return
+        {
+            path, err := os.join_path({ database.Settings.Path, root, pdx.FOLDER_GFX, pdx.FOLDER_COA, pdx.FOLDER_TEXTURED_EMBLEMS }, context.allocator)
+            defer delete(path)
+            if err != nil {
+                fmt.eprintfln("Could not build %s path: %v", pdx.FOLDER_TEXTURED_EMBLEMS, err)
+                continue
+            }
+            loadDatabaseFolderTextures(database, path, pdx.FOLDER_TEXTURED_EMBLEMS)
         }
-        loadDatabaseFolderTextures(database, path, pdx.FOLDER_TEXTURED_EMBLEMS)
     }
 }
 destroyLoadedTextures :: proc(database: ^Database) {
@@ -543,6 +624,14 @@ getReferencedColor :: proc(reference: string, flag: pdx.Flag) -> (pdx.FlagColor,
 }
 
 SaveSettings :: proc() {
+//    for key in state.TextureMap {
+//        delete(key)
+//    }
+//    for key in state.GuiFlagMap {
+//        delete(key)
+//    }
+//    clear_map(&state.GuiFlagMap)
+//    clear_map(&state.RenderFlagMap)
     state.FlagDatabaseWindowOpen = false
     state.TextureDatabaseWindowOpen = false
     for _, index in state.Settings.Databases {
@@ -573,14 +662,6 @@ SaveSettings :: proc() {
             state.Flags[state.Databases[i].Flags[j].Name] = state.Databases[i].Flags[j]
         }
     }
-    for key in state.TextureMap {
-        delete(key)
-    }
-    for key in state.GuiFlagMap {
-        delete(key)
-    }
-    clear_map(&state.GuiFlagMap)
-    clear_map(&state.RenderFlagMap)
     settings.SaveSettings(settings.FILE_NAME_SETTINGS, state.Settings)
 }
 
@@ -590,6 +671,7 @@ loadIcons :: proc() {
     state.Icons[.Delete] = texture.LoadTexture(TEXTURE_ICON_DELETE)
     state.Icons[.ArrowUp] = texture.LoadTexture(TEXTURE_ICON_ARROW_UP)
     state.Icons[.ArrowDown] = texture.LoadTexture(TEXTURE_ICON_ARROW_DOWN)
+    state.Icons[.Unknown] = texture.LoadTexture(TEXTURE_ICON_UNKNOWN)
 }
 unloadIcons :: proc() {
     for key in state.Icons {

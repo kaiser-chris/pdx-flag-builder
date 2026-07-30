@@ -8,6 +8,7 @@ IconType :: enum u32 {
     Delete    = 10002,
     ArrowUp   = 10003,
     ArrowDown = 10004,
+    Unknown   = 10005,
 }
 
 COLOR_TINT_NONE: mu.Color: { 255, 255, 255, 255 }

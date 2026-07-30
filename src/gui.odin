@@ -25,8 +25,12 @@ TEXTURE_ICON_EDIT: string: "assets/textures/icons/edit.dds"
 TEXTURE_ICON_DELETE: string: "assets/textures/icons/delete.dds"
 TEXTURE_ICON_ARROW_UP: string: "assets/textures/icons/arrow_up.dds"
 TEXTURE_ICON_ARROW_DOWN: string: "assets/textures/icons/arrow_down.dds"
+TEXTURE_ICON_UNKNOWN: string: "assets/textures/icons/unknown.dds"
 TEXTURE_TRANSPARENCY: string: "assets/textures/transparency.dds"
 TEXTURE_INVALID: string: "assets/textures/invalid.dds"
+
+TEXTURE_ICON_GAME_VIC3: string: "assets/textures/icons/game_vic3.dds"
+TEXTURE_ICON_GAME_EU5: string: "assets/textures/icons/game_eu5.dds"
 
 SHADER_RECOLOR: string: "assets/shaders/recolor.fs"
 
@@ -663,25 +667,46 @@ renderSettings :: proc(ctx: ^mu.Context) {
         windows.rect.w = 670
         guranteeBounds(ctx)
 
+        @static hasUnsavedChanges: bool
+
         mu.layout_row(ctx, { -1 }, 0)
         if .SUBMIT in mu.button(ctx, "Save Settings") {
+            hasUnsavedChanges = false
             SaveSettings()
             ui.Toast(&state.Toast, "Settings", "Successfully saved settings.")
         }
 
+        if hasUnsavedChanges {
+            warn := mu.layout_next(ctx)
+            next := mu.layout_next(ctx)
+            mu.draw_rect(ctx, warn, ui.COLOR_BUTTON_DANGER_BACKGROUND_DISABLED)
+            mu.draw_control_text(ctx, "You have unsaved changes!", warn, .TEXT, { .ALIGN_CENTER })
+            mu.layout_set_next(ctx, next, false)
+        }
+
         if .ACTIVE in mu.header(ctx, "Paths", {.EXPANDED}) {
             mu.text(ctx, "These are paths to the root of your mod or the \"game\" folder for the base game.")
-            mu.layout_row(ctx, {100, -209, 100, 100}, 0)
+            mu.layout_row(ctx, {20, 100, -209, 100, 100}, 20)
             for _, index in state.Databases {
+                switch state.Databases[index].Type {
+                case .Vic3:
+                    drawTransparentTexture(ctx, TEXTURE_ICON_GAME_VIC3)
+                case .Eu5:
+                    drawTransparentTexture(ctx, TEXTURE_ICON_GAME_EU5)
+                case .Unknown:
+                    ui.Icon(ctx, .Unknown, ui.COLOR_BUTTON_DANGER_BACKGROUND_HOVER)
+                }
                 if .CHANGE in mu.textbox(ctx, state.Databases[index].BufferName[:], &state.Databases[index].BufferNameLength) {
                     name := strings.clone(string(state.Databases[index].BufferName[:state.Databases[index].BufferNameLength]))
                     delete(state.Databases[index].Settings.Name)
                     state.Databases[index].Settings.Name = name
+                    hasUnsavedChanges = true
                 }
                 if .CHANGE in mu.textbox(ctx, state.Databases[index].BufferPath[:], &state.Databases[index].BufferPathLength) {
                     path := strings.clone(string(state.Databases[index].BufferPath[:state.Databases[index].BufferPathLength]))
                     delete(state.Databases[index].Settings.Path)
                     state.Databases[index].Settings.Path = path
+                    hasUnsavedChanges = true
                 }
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
                 if .SUBMIT in ui.Button(ctx, "Choose Folder") {
@@ -697,6 +722,9 @@ renderSettings :: proc(ctx: ^mu.Context) {
                         copy(state.Databases[index].BufferName[:], file)
                         delete(state.Databases[index].Settings.Name)
                         state.Databases[index].Settings.Name = strings.clone(file)
+
+                        determineDatabaseType(&state.Databases[index])
+                        hasUnsavedChanges = true
                     }
                 }
                 mu.pop_id(ctx)
@@ -716,6 +744,7 @@ renderSettings :: proc(ctx: ^mu.Context) {
             if .SUBMIT in mu.button(ctx, "Add new path") {
                 element := NewDatabase("", "")
                 append(&state.Databases, element)
+                hasUnsavedChanges = true
             }
         }
 

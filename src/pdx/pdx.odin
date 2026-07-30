@@ -1,11 +1,12 @@
 package pdx
 
-import "core:text/regex"
-import "core:fmt"
-import "core:os"
 import rl "vendor:raylib"
 
 RELEASE :: #config(RELEASE, false)
+
+FOLDER_EU5_MAIN_MENU: string: "main_menu"
+FOLDER_EU5_LOADING_SCREEN: string: "loading_screen"
+FOLDER_EU5_IN_GAME: string: "in_game"
 
 FOLDER_GFX: string: "gfx"
 FOLDER_COA: string: "coat_of_arms"
