@@ -97,7 +97,6 @@ ExportRequestType :: enum {
 
 FlagExportRequest :: struct {
     Flag: pdx.Flag,
-    Type: ExportRequestType,
     Size: [2]i32,
 }
 

@@ -110,16 +110,11 @@ handleFlagExportRequests :: proc() {
         if !ok {
             break
         }
-        switch request.Type {
-        case .Image:
-            ok := executeExportFlagImage(request)
-            if ok {
-                ui.Toast(&state.Toast, "Export", "Successfully exported image.")
-            } else {
-                ui.Toast(&state.Toast, "Export", "Could not export image.", .Warning)
-            }
-        case .Script:
-            fmt.eprintln("Not Supported Yet")
+        success := executeExportFlagImage(request)
+        if success {
+            ui.Toast(&state.Toast, "Export", "Successfully exported image.")
+        } else {
+            ui.Toast(&state.Toast, "Export", "Could not export flag image.", .Warning)
         }
     }
 }
@@ -138,7 +133,7 @@ executeExportFlagImage :: proc(request: FlagExportRequest) -> bool {
         return false
     }
     if result == .Error {
-        fmt.eprintln("Export dialog error:", nfd.GetError())
+        fmt.eprintln("Export dialog error: ", nfd.GetError())
         return false
     }
 
@@ -878,7 +873,6 @@ exportFlagImage :: proc(ctx: ^mu.Context, flag: pdx.Flag, width: i32 = 0, height
     request := FlagExportRequest{
         Flag = flag,
         Size = { FLAG_WIDTH, FLAG_HEIGHT },
-        Type = .Image
     }
     if width != 0 {
         request.Size[0] = width
@@ -899,4 +893,37 @@ exportFlagToClipboard :: proc(ctx: ^mu.Context, flag: pdx.Flag) {
     defer delete(clipString)
     rl.SetClipboardText(clipString)
     ui.Toast(&state.Toast, "Export", "Copied to clipboard")
+}
+
+exportFlagAsFile :: proc(ctx: ^mu.Context, flag: pdx.Flag) {
+    path: cstring
+    filters := [1]nfd.Filter_Item { { "Script", "txt" } }
+    args := nfd.Save_Dialog_Args {
+        filter_list = raw_data(filters[:]),
+        filter_count = len(filters),
+    }
+
+    result := nfd.SaveDialogU8_With(&path, &args)
+    defer nfd.FreePathU8(path)
+    if result == .Cancel {
+        return
+    }
+    if result == .Error {
+        ui.Toast(&state.Toast, "Export", fmt.tprintf("Export dialog error: %s", nfd.GetError()))
+        return
+    }
+
+    normalPath := strings.clone_from_cstring(path)
+    defer delete(normalPath)
+
+    script := pdx.WriteFlag(flag, "\n")
+    defer delete(script)
+
+    scriptWithBom := fmt.tprintf("%c%s", utf8.RUNE_BOM, script)
+
+    err := os.write_entire_file(normalPath, scriptWithBom)
+    if err != nil {
+        ui.Toast(&state.Toast, "Export", fmt.tprintf("Could not write file: %v", err))
+    }
+    ui.Toast(&state.Toast, "Export", "Successfully saved the flag script.")
 }

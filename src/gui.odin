@@ -474,13 +474,18 @@ renderToolbar :: proc(ctx: ^mu.Context) {
             exportToClipboard :: proc(ctx: ^mu.Context) {
                 exportFlagToClipboard(ctx, state.Flag)
             }
+            exportToFile :: proc(ctx: ^mu.Context) {
+                exportFlagAsFile(ctx, state.Flag)
+            }
             ui.OpenDropdown(ctx, &state.Dropdown, {
                 ui.CreateDropdownElement("Export to Image", exportToImage),
                 ui.CreateDropdownElement("Export to Clipboard", exportToClipboard),
+                ui.CreateDropdownElement("Export as script File", exportToFile),
             })
         }
         mu.layout_end_column(ctx)
 
+        // TODO: move to icon button in the sidebar
 //        mu.layout_begin_column(ctx)
 //        mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
 //        if .SUBMIT in mu.button(ctx, "Toggle Sidebar") {
