@@ -325,7 +325,7 @@ loadExistingFlags :: proc(database: ^Database) {
             continue
         }
 
-        flags := pdx.LoadCoaFile(info.fullpath)
+        flags := pdx.LoadCoaFile(info.fullpath, database.Settings.Name)
         for flag, index in flags {
             append(&database.Flags, flags[index])
         }

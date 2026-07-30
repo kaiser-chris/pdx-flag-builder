@@ -21,7 +21,7 @@ ATTRIBUTE_OFFSET: string: "offset"
 
 TYPE_TEMPLATE: string: "template"
 
-LoadCoaFile :: proc(path: string) -> []Flag {
+LoadCoaFile :: proc(path, source: string) -> []Flag {
     data, err := os.read_entire_file(path, context.allocator)
     if err != nil {
         fmt.eprintfln("could not read coat of arms file %s: %v", path, err)
@@ -51,7 +51,7 @@ LoadCoaFile :: proc(path: string) -> []Flag {
 
     flags := make([dynamic]Flag)
     for coa in coaList {
-        flag, ok := LoadCoa(coa)
+        flag, ok := LoadCoa(coa, path, source)
         if !ok {
             continue
         }
@@ -61,15 +61,16 @@ LoadCoaFile :: proc(path: string) -> []Flag {
     return flags[:]
 }
 
-LoadCoa :: proc(root: parser.Pair) -> (Flag, bool) {
-
+LoadCoa :: proc(root: parser.Pair, path, source: string) -> (Flag, bool) {
     if root.value.kind != .Object || root.key == TYPE_TEMPLATE {
         return Flag{}, false
     }
 
     attributes := root.value.data.([]parser.Pair)
 
-    flag := CreateFlag(root.key)
+    _, file := os.split_path(path)
+
+    flag := CreateFlag(root.key, source, file, path)
 
     for attribute in attributes {
         if attribute.key == ATTRIBUTE_PATTERN && attribute.value.kind == .String {

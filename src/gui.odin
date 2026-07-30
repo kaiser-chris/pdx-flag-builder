@@ -1130,6 +1130,16 @@ renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
     } else {
         ui.DrawAttributeRow(ctx, "Pattern", "None")
     }
+    if flag.File != "" {
+        ui.DrawAttributeRow(ctx, "File", flag.File)
+    } else {
+        ui.DrawAttributeRow(ctx, "File", "None")
+    }
+    if flag.Source != "" {
+        ui.DrawAttributeRow(ctx, "Database", flag.Source)
+    } else {
+        ui.DrawAttributeRow(ctx, "Database", "None")
+    }
     for _, index in flag.Colors {
         variant := flag.Colors[index]
         switch color in variant.Variant {

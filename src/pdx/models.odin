@@ -17,18 +17,23 @@ MAX_OFFSET: f32: 5
 
 Flag :: struct {
     Name: string,
+    File: string,
+    Path: string,
+    Source: string,
     Pattern: FlagTexture,
     Colors: [dynamic]FlagColor,
     Layers: [dynamic]FlagLayerVariant,
 }
 
-CreateFlag :: proc(name: string = "") -> Flag {
+CreateFlag :: proc(name: string = "", source: string = "", file: string = "", path: string = "") -> Flag {
     flag := Flag{
         Name = strings.clone(name),
+        File = strings.clone(file),
+        Path = strings.clone(path),
+        Source = strings.clone(source),
         Colors = make([dynamic]FlagColor),
         Layers = make([dynamic]FlagLayerVariant),
     }
-
     return flag
 }
 DestroyFlag :: proc(flag: ^Flag) {
@@ -42,9 +47,12 @@ DestroyFlag :: proc(flag: ^Flag) {
     }
     delete(flag.Layers)
     delete(flag.Name)
+    delete(flag.File)
+    delete(flag.Path)
+    delete(flag.Source)
 }
 CloneFlag :: proc(flag: Flag) -> Flag {
-    clonedflag := CreateFlag(flag.Name)
+    clonedflag := CreateFlag(flag.Name, flag.Source, flag.File, flag.Path)
     clonedflag.Pattern = CloneFlagTexture(flag.Pattern)
     for variant in flag.Colors {
         append(&clonedflag.Colors, CloneFlagColor(variant))
