@@ -652,9 +652,12 @@ checkColorMapping :: proc(name: string, targetColor: rl.Color, sourceColors: []r
 }
 
 renderSettings :: proc(ctx: ^mu.Context) {
-    if mu.window(ctx, WINDOM_SETTINGS, {10, 10 + TOOLBAR_HEIGHT, 700, 400}, {}) {
+    if mu.window(ctx, WINDOM_SETTINGS, { 10, 10 + TOOLBAR_HEIGHT, 670, 290 }, {}) {
+        windows := mu.get_current_container(ctx)
+        windows.rect.w = 670
         guranteeBounds(ctx)
-        mu.layout_row(ctx, {-1, -1}, 0)
+
+        mu.layout_row(ctx, { -1 }, 0)
         if .SUBMIT in mu.button(ctx, "Save Settings") {
             SaveSettings()
             ui.Toast(&state.Toast, "Settings", "Successfully saved settings.")
