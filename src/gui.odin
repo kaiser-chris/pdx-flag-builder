@@ -7,7 +7,6 @@ import mu "vendor:microui"
 import "texture"
 import "ui"
 import "pdx"
-import nfd "nativefiledialog"
 import os "core:os"
 
 WINDOM_PREVIEW: string: "Preview"
@@ -471,7 +470,7 @@ renderToolbar :: proc(ctx: ^mu.Context) {
         mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
         if .SUBMIT in mu.button(ctx, "File") {
             exportAsIs :: proc(ctx: ^mu.Context) {
-                exportFlagAsIs(ctx, state.Flag)
+                exportFlagAsIs(ctx, &state.Flag)
             }
             exportToImage :: proc(ctx: ^mu.Context) {
                 exportFlagImage(ctx, state.Flag)
@@ -486,7 +485,7 @@ renderToolbar :: proc(ctx: ^mu.Context) {
                 ui.CreateDropdownElement("Save Changes", exportAsIs),
                 ui.CreateDropdownElement("Export to Image", exportToImage),
                 ui.CreateDropdownElement("Export to Clipboard", exportToClipboard),
-                ui.CreateDropdownElement("Export as script File", exportToFile),
+                ui.CreateDropdownElement("Export as new Script File", exportToFile),
             })
         }
         mu.layout_end_column(ctx)
@@ -567,70 +566,74 @@ renderFlagPreview :: proc(ctx: ^mu.Context) {
     }
 }
 
-fillColorMapping :: proc(mappings: ^[dynamic]texture.ColorRecolor, variant: pdx.FlagColor, flag: pdx.Flag, sourceColors: []rl.Color) {
-    switch color in variant.Variant {
-    case pdx.FlagColorRgb:
-        targetColor := pdx.ToRenderColor(color)
-        mapping, ok := checkColorMapping(variant.Name, targetColor, sourceColors)
-        if ok {
-            append(mappings, mapping)
-        }
-    case pdx.FlagColorHsv:
-        targetColor := pdx.ToRenderColor(color)
-        mapping, ok := checkColorMapping(variant.Name, targetColor, sourceColors)
-        if ok {
-            append(mappings, mapping)
-        }
-    case pdx.FlagColorNamed:
-        retrieve, exists := getNamedColor(color.NamedColor)
-        if !exists {
-            return
-        }
-        targetColor := pdx.ToRenderColor(retrieve)
-        mapping, ok := checkColorMapping(variant.Name, targetColor, sourceColors)
-        if ok {
-            append(mappings, mapping)
-        }
-    case pdx.FlagColorReference:
-        for baseColorVariant in flag.Colors {
-            baseColorName: string
-            switch baseColor in baseColorVariant.Variant {
-            case pdx.FlagColorRgb:
-                if baseColorVariant.Name != color.Reference {
-                    continue
-                }
-                targetColor := pdx.ToRenderColor(baseColor)
-                mapping, ok := checkColorMapping(variant.Name, targetColor, sourceColors)
-                if ok {
-                    append(mappings, mapping)
-                }
-            case pdx.FlagColorHsv:
-                if baseColorVariant.Name != color.Reference {
-                    continue
-                }
-                targetColor := pdx.ToRenderColor(baseColor)
-                mapping, ok := checkColorMapping(variant.Name, targetColor, sourceColors)
-                if ok {
-                    append(mappings, mapping)
-                }
-            case pdx.FlagColorNamed:
-                if baseColorVariant.Name != color.Reference {
-                    continue
-                }
-                retrieve, exists := getNamedColor(baseColor.NamedColor)
-                if !exists {
-                    return
-                }
-                targetColor := pdx.ToRenderColor(retrieve)
-                mapping, ok := checkColorMapping(variant.Name, targetColor, sourceColors)
-                if ok {
-                    append(mappings, mapping)
-                }
-            case pdx.FlagColorReference:
+fillColorMapping :: proc(colors: []pdx.FlagColor, flag: pdx.Flag, sourceColors: []rl.Color) -> []texture.ColorRecolor {
+    colorMappings := make([dynamic]texture.ColorRecolor)
+    for variant in colors {
+        switch color in variant.Variant {
+        case pdx.FlagColorRgb:
+            targetColor := pdx.ToRenderColor(color)
+            mapping, ok := checkColorMapping(variant.Name, targetColor, sourceColors)
+            if ok {
+                append(&colorMappings, mapping)
+            }
+        case pdx.FlagColorHsv:
+            targetColor := pdx.ToRenderColor(color)
+            mapping, ok := checkColorMapping(variant.Name, targetColor, sourceColors)
+            if ok {
+                append(&colorMappings, mapping)
+            }
+        case pdx.FlagColorNamed:
+            retrieve, exists := getNamedColor(color.NamedColor)
+            if !exists {
+                continue
+            }
+            targetColor := pdx.ToRenderColor(retrieve)
+            mapping, ok := checkColorMapping(variant.Name, targetColor, sourceColors)
+            if ok {
+                append(&colorMappings, mapping)
+            }
+        case pdx.FlagColorReference:
+            for baseColorVariant in flag.Colors {
+                baseColorName: string
+                switch baseColor in baseColorVariant.Variant {
+                case pdx.FlagColorRgb:
+                    if baseColorVariant.Name != color.Reference {
+                        continue
+                    }
+                    targetColor := pdx.ToRenderColor(baseColor)
+                    mapping, ok := checkColorMapping(variant.Name, targetColor, sourceColors)
+                    if ok {
+                        append(&colorMappings, mapping)
+                    }
+                case pdx.FlagColorHsv:
+                    if baseColorVariant.Name != color.Reference {
+                        continue
+                    }
+                    targetColor := pdx.ToRenderColor(baseColor)
+                    mapping, ok := checkColorMapping(variant.Name, targetColor, sourceColors)
+                    if ok {
+                        append(&colorMappings, mapping)
+                    }
+                case pdx.FlagColorNamed:
+                    if baseColorVariant.Name != color.Reference {
+                        continue
+                    }
+                    retrieve, exists := getNamedColor(baseColor.NamedColor)
+                    if !exists {
+                        continue
+                    }
+                    targetColor := pdx.ToRenderColor(retrieve)
+                    mapping, ok := checkColorMapping(variant.Name, targetColor, sourceColors)
+                    if ok {
+                        append(&colorMappings, mapping)
+                    }
+                case pdx.FlagColorReference:
                 // Should not happen
+                }
             }
         }
     }
+    return colorMappings[:]
 }
 
 checkColorMapping :: proc(name: string, targetColor: rl.Color, sourceColors: []rl.Color) -> (texture.ColorRecolor, bool) {
@@ -781,7 +784,7 @@ renderFlagDatabase :: proc(ctx: ^mu.Context) {
                     if !strings.contains(searchName, state.SearchCache.FlagDatabaseSearch) {
                         continue
                     }
-                    mu.layout_row(ctx, {40, -136, 80, 40}, 24)
+                    mu.layout_row(ctx, {40, -139, 80, 50}, 24)
                     drawFlag(ctx, flag.Name, 36, 24)
                     mu.text(ctx, flag.Name)
                     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
