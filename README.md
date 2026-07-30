@@ -4,8 +4,19 @@
 
 ![Example Screenshot](docs/screenshot.png)
 
+## Status
+[![GitHub Release](https://img.shields.io/github/v/release/kaiser-chris/pdx-flag-builder?display_name=release&label=Current%20Version&color=blue)](https://github.com/kaiser-chris/pdx-flag-builder/releases)
+
 ## How to Use
-TODO
+Download the latest version from the [releases page](https://github.com/kaiser-chris/pdx-flag-builder/releases) and then simply extract and run it.
+
+### Setup
+1) Open the settings
+2) Add a new path
+3) Choose the game or a mod folder
+4) Save your settings
+
+![Setup Screenshot](docs/guide_settings.png)
 
 ## How To Build
 Download and install [odin](https://odin-lang.org/) including its requirements.
