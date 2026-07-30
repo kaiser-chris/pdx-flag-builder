@@ -7,6 +7,8 @@ import mu "vendor:microui"
 import "texture"
 import "ui"
 import "pdx"
+import nfd "nativefiledialog"
+import os "core:os"
 
 WINDOM_PREVIEW: string: "Preview"
 WINDOM_TOOLBAR: string: "Toolbar"
@@ -660,7 +662,7 @@ renderSettings :: proc(ctx: ^mu.Context) {
 
         if .ACTIVE in mu.header(ctx, "Paths", {.EXPANDED}) {
             mu.text(ctx, "These are paths to the root of your mod or the \"game\" folder for the base game.")
-            mu.layout_row(ctx, {100, -106, 100}, 0)
+            mu.layout_row(ctx, {100, -209, 100, 100}, 0)
             for _, index in state.Databases {
                 if .CHANGE in mu.textbox(ctx, state.Databases[index].BufferName[:], &state.Databases[index].BufferNameLength) {
                     name := strings.clone(string(state.Databases[index].BufferName[:state.Databases[index].BufferNameLength]))
@@ -673,15 +675,37 @@ renderSettings :: proc(ctx: ^mu.Context) {
                     state.Databases[index].Settings.Path = path
                 }
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-                if .SUBMIT in mu.button(ctx, "Delete") {
-                    DestroyDatabase(&state.Databases[index])
-                    ordered_remove(&state.Databases, index)
+                if .SUBMIT in ui.Button(ctx, "Choose Folder") {
+                    path, success := chooseFolder()
+                    if success {
+                        state.Databases[index].BufferPathLength = len(path)
+                        copy(state.Databases[index].BufferPath[:], path)
+                        delete(state.Databases[index].Settings.Path)
+                        state.Databases[index].Settings.Path = path
+
+                        _, file := os.split_path(path)
+                        state.Databases[index].BufferNameLength = len(file)
+                        copy(state.Databases[index].BufferName[:], file)
+                        delete(state.Databases[index].Settings.Name)
+                        state.Databases[index].Settings.Name = strings.clone(file)
+                    }
+                }
+                mu.pop_id(ctx)
+                ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+                if state.Databases[index].IsDeleted {
+                    if .SUBMIT in mu.button(ctx, "Undo") {
+                        state.Databases[index].IsDeleted = false
+                    }
+                } else {
+                    if .SUBMIT in ui.Button(ctx, "Delete", ui.ButtonStyle.Danger) {
+                        state.Databases[index].IsDeleted = true
+                    }
                 }
                 mu.pop_id(ctx)
             }
             mu.layout_row(ctx, {-1, -1}, 0)
             if .SUBMIT in mu.button(ctx, "Add new path") {
-                element := CreateDatabase("", "")
+                element := NewDatabase("", "")
                 append(&state.Databases, element)
             }
         }
@@ -709,7 +733,24 @@ renderSettings :: proc(ctx: ^mu.Context) {
 
     if state.SettingsWindowOpen && !is_open {
         state.SettingsWindowOpen = false
+        for _, index in state.Databases {
+            state.Databases[index].IsDeleted = false
+        }
     }
+}
+
+chooseFolder :: proc() -> (string, bool) {
+    path: cstring
+    result := nfd.PickFolderU8(&path, "")
+    defer nfd.FreePathU8(path)
+    if result == .Cancel {
+        return "", false
+    }
+    if result == .Error {
+        ui.Toast(&state.Toast, "Settings", fmt.tprintf("Folder selector dialog error: %s", nfd.GetError()), .Warning)
+        return "", false
+    }
+    return strings.clone_from_cstring(path), true
 }
 
 renderFlagDatabase :: proc(ctx: ^mu.Context) {

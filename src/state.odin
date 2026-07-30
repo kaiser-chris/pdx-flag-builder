@@ -63,6 +63,7 @@ SearchCache :: struct {
 
 Database :: struct {
     Settings: settings.Database,
+    IsDeleted: bool,
     BufferName: [128]byte,
     BufferNameLength: int,
     BufferPath: [512]byte,
@@ -194,8 +195,8 @@ DestroyState :: proc() {
     ui.DestroyToastContainer(&state.Toast)
 }
 
-CreateDatabase :: proc(name, path: string) -> Database {
-    database := Database{
+NewDatabase :: proc(name, path: string) -> Database {
+    return Database{
         Settings = settings.CreateDatabase(name, path),
         NamedColors = make([dynamic]pdx.FlagColor),
         Patterns = make([dynamic]pdx.FlagTexture),
@@ -203,6 +204,9 @@ CreateDatabase :: proc(name, path: string) -> Database {
         ColoredEmblems = make([dynamic]pdx.FlagTexture),
         Flags = make([dynamic]pdx.Flag),
     }
+}
+CreateDatabase :: proc(name, path: string) -> Database {
+    database := NewDatabase(name, path)
     if name != "" {
         database.BufferNameLength = len(name)
         copy(database.BufferName[:], name)
@@ -548,7 +552,9 @@ SaveSettings :: proc() {
     delete(state.Settings.Databases)
     state.Settings.Databases = make([dynamic]settings.Database)
     for database in state.Databases {
-        append(&state.Settings.Databases, settings.CreateDatabase(database.Settings.Name, database.Settings.Path))
+        if !database.IsDeleted {
+            append(&state.Settings.Databases, settings.CreateDatabase(database.Settings.Name, database.Settings.Path))
+        }
     }
     for _, index in state.Databases {
         DestroyDatabase(&state.Databases[index])
@@ -567,6 +573,14 @@ SaveSettings :: proc() {
             state.Flags[state.Databases[i].Flags[j].Name] = state.Databases[i].Flags[j]
         }
     }
+    for key in state.TextureMap {
+        delete(key)
+    }
+    for key in state.GuiFlagMap {
+        delete(key)
+    }
+    clear_map(&state.GuiFlagMap)
+    clear_map(&state.RenderFlagMap)
     settings.SaveSettings(settings.FILE_NAME_SETTINGS, state.Settings)
 }
 
