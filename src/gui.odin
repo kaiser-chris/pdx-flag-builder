@@ -470,6 +470,9 @@ renderToolbar :: proc(ctx: ^mu.Context) {
         mu.layout_begin_column(ctx)
         mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
         if .SUBMIT in mu.button(ctx, "File") {
+            exportAsIs :: proc(ctx: ^mu.Context) {
+                exportFlagAsIs(ctx, state.Flag)
+            }
             exportToImage :: proc(ctx: ^mu.Context) {
                 exportFlagImage(ctx, state.Flag)
             }
@@ -480,6 +483,7 @@ renderToolbar :: proc(ctx: ^mu.Context) {
                 exportFlagAsFile(ctx, state.Flag)
             }
             ui.OpenDropdown(ctx, &state.Dropdown, {
+                ui.CreateDropdownElement("Save Changes", exportAsIs),
                 ui.CreateDropdownElement("Export to Image", exportToImage),
                 ui.CreateDropdownElement("Export to Clipboard", exportToClipboard),
                 ui.CreateDropdownElement("Export as script File", exportToFile),
@@ -727,7 +731,12 @@ renderSettings :: proc(ctx: ^mu.Context) {
             r := mu.layout_next(ctx)
             mu.draw_rect(ctx, r, state.Settings.BackgroundColor)
             mu.draw_box(ctx, mu.expand_rect(r, 1), ctx.style.colors[.BORDER])
-            mu.draw_control_text(ctx, fmt.tprintf("#%02x%02x%02x", state.Settings.BackgroundColor.r, state.Settings.BackgroundColor.g, state.Settings.BackgroundColor.b), r, .TEXT, {.ALIGN_CENTER})
+            mu.draw_control_text(ctx, fmt.tprintf(
+                "#%02x%02x%02x",
+                state.Settings.BackgroundColor.r,
+                state.Settings.BackgroundColor.g,
+                state.Settings.BackgroundColor.b
+            ), r, .TEXT, { .ALIGN_CENTER })
         }
     }
 
@@ -740,20 +749,6 @@ renderSettings :: proc(ctx: ^mu.Context) {
             state.Databases[index].IsDeleted = false
         }
     }
-}
-
-chooseFolder :: proc() -> (string, bool) {
-    path: cstring
-    result := nfd.PickFolderU8(&path, "")
-    defer nfd.FreePathU8(path)
-    if result == .Cancel {
-        return "", false
-    }
-    if result == .Error {
-        ui.Toast(&state.Toast, "Settings", fmt.tprintf("Folder selector dialog error: %s", nfd.GetError()), .Warning)
-        return "", false
-    }
-    return strings.clone_from_cstring(path), true
 }
 
 renderFlagDatabase :: proc(ctx: ^mu.Context) {

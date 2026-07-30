@@ -357,7 +357,6 @@ loadTypedColor :: proc(name: string, type: string, numbers: []parser.Value) -> (
 
 WriteFlag :: proc(flag: Flag, lineBreak: string) -> string {
     builder, err := strings.builder_make(context.temp_allocator)
-    defer free_all(context.temp_allocator)
     if err != nil {
         fmt.eprintfln("could not init flag script builder: %v", err)
         return ""
@@ -501,10 +500,10 @@ writeColors :: proc(builder: ^strings.Builder, colors: []FlagColor, prefix, line
             strings.write_string(builder, fmt.tprintf("%s%s = %s", prefix, variant.Name, color.Reference))
             strings.write_string(builder, lineBreak)
         case FlagColorRgb:
-            strings.write_string(builder, fmt.tprintf("%s%s = %s{{ %i %i %i }}", prefix, COLOR_TYPE_RGB, variant.Name, color.R, color.G, color.B))
+            strings.write_string(builder, fmt.tprintf("%s%s = %s{{ %i %i %i }}", prefix, variant.Name, COLOR_TYPE_RGB, color.R, color.G, color.B))
             strings.write_string(builder, lineBreak)
         case FlagColorHsv:
-            strings.write_string(builder, fmt.tprintf("%s%s = %s{{ %.0f %.0f %.0f }}", prefix, COLOR_TYPE_HSV360, variant.Name, color.H, color.S, color.V))
+            strings.write_string(builder, fmt.tprintf("%s%s = %s{{ %.0f %.0f %.0f }}", prefix, variant.Name, COLOR_TYPE_HSV360, color.H, color.S, color.V))
             strings.write_string(builder, lineBreak)
         }
     }
