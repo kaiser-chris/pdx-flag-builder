@@ -22,7 +22,7 @@ setupAttributeRow :: proc(ctx: ^mu.Context, label: string, labelSize: f32) -> mu
     rowRect := mu.Rect{
         x = window.rect.x,
         y = originalRect.y - ctx.style.padding,
-        w = window.rect.w,
+        w = originalRect.w + 2 * ctx.style.padding,
         h = originalRect.h + (ctx.style.padding * 2),
     }
     mu.layout_set_next(ctx, rowRect, false)
@@ -118,7 +118,7 @@ drawColorAttributeRow :: proc(
         h = valueRect.h,
         w = buttonDeleteRect.x - ctx.style.spacing - (colorPreviewRect.x + colorPreviewRect.w + ctx.style.spacing),
     }
-    mu.draw_control_text(ctx, colorText, colorTextRect, .TEXT, {.ALIGN_CENTER})
+    mu.draw_control_text(ctx, colorText, colorTextRect, .TEXT)
     mu.draw_rect(ctx, colorPreviewRect, rgbColor)
     mu.layout_end_column(ctx)
 
@@ -171,7 +171,7 @@ drawNamedColorAttributeRow :: proc(
         h = valueRect.h,
         w = buttonDeleteRect.x - ctx.style.spacing - (colorPreviewRect.x + colorPreviewRect.w + ctx.style.spacing),
     }
-    mu.draw_control_text(ctx, colorText, colorTextRect, .TEXT, {.ALIGN_CENTER})
+    mu.draw_control_text(ctx, colorText, colorTextRect, .TEXT)
     mu.draw_rect(ctx, colorPreviewRect, renderColor)
     mu.layout_end_column(ctx)
 
@@ -224,7 +224,7 @@ drawReferenceColorAttributeRow :: proc(
         h = valueRect.h,
         w = buttonDeleteRect.x - ctx.style.spacing - (colorPreviewRect.x + colorPreviewRect.w + ctx.style.spacing),
     }
-    mu.draw_control_text(ctx, colorText, colorTextRect, .TEXT, {.ALIGN_CENTER})
+    mu.draw_control_text(ctx, colorText, colorTextRect, .TEXT)
     mu.draw_rect(ctx, colorPreviewRect, renderColor)
     mu.layout_end_column(ctx)
 

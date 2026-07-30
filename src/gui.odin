@@ -1130,9 +1130,9 @@ renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
         switch color in variant.Variant {
         case pdx.FlagColorNamed:
             targetColor, found := getNamedColor(color.NamedColor)
-            targetColorValue: mu.Color
+            targetColorValue := mu.Color{ 0, 0, 0, 255 }
             if found {
-                renderColorValue := pdx.ToRenderColor(variant)
+                renderColorValue := pdx.ToRenderColor(targetColor)
                 targetColorValue = mu.Color{ renderColorValue[0], renderColorValue[1], renderColorValue[2], 255 }
             }
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, variant.Name, color, targetColorValue)
@@ -1194,9 +1194,9 @@ renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagL
         switch color in variant.Variant {
         case pdx.FlagColorNamed:
             targetColor, found := getNamedColor(color.NamedColor)
-            targetColorValue: mu.Color
+            targetColorValue := mu.Color{ 0, 0, 0, 255 }
             if found {
-                renderColorValue := pdx.ToRenderColor(variant)
+                renderColorValue := pdx.ToRenderColor(targetColor)
                 targetColorValue = mu.Color{ renderColorValue[0], renderColorValue[1], renderColorValue[2], 255 }
             }
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, variant.Name, color, targetColorValue)
@@ -1209,9 +1209,9 @@ renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagL
             renderColorButtons(ctx, &layer.Colors[index], &layer.Colors, index, buttonEditRect, buttonDelRect)
         case pdx.FlagColorReference:
             targetColor, found := getReferencedColor(color.Reference, state.Flag)
-            targetColorValue: mu.Color
+            targetColorValue := mu.Color{ 0, 0, 0, 255 }
             if found {
-                renderColorValue := pdx.ToRenderColor(variant)
+                renderColorValue := pdx.ToRenderColor(targetColor)
                 targetColorValue = mu.Color{ renderColorValue[0], renderColorValue[1], renderColorValue[2], 255 }
             }
             buttonEditRect, buttonDelRect := ui.DrawAttributeRow(ctx, variant.Name, color, targetColorValue)

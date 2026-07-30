@@ -533,6 +533,9 @@ getReferencedColor :: proc(reference: string, flag: pdx.Flag) -> (pdx.FlagColor,
     case pdx.FlagColorNamed:
         referencedColor, found = getNamedColor(type.NamedColor)
     }
+    if found {
+        return referencedColor, true
+    }
     return pdx.FlagColor{}, false
 }
 
