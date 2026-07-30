@@ -588,6 +588,8 @@ loadIcons :: proc() {
     state.Icons[.Sub] = texture.LoadTexture(TEXTURE_ICON_SUB)
     state.Icons[.Edit] = texture.LoadTexture(TEXTURE_ICON_EDIT)
     state.Icons[.Delete] = texture.LoadTexture(TEXTURE_ICON_DELETE)
+    state.Icons[.ArrowUp] = texture.LoadTexture(TEXTURE_ICON_ARROW_UP)
+    state.Icons[.ArrowDown] = texture.LoadTexture(TEXTURE_ICON_ARROW_DOWN)
 }
 unloadIcons :: proc() {
     for key in state.Icons {

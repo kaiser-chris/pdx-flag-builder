@@ -35,3 +35,4 @@ The resulting binary as well as the needed assets can be found in the `bin` fold
 - waving flag by Suncheli Project from <a href="https://thenounproject.com/browse/icons/term/waving-flag/" target="_blank" title="waving flag Icons">Noun Project</a> (CC BY 3.0)
 - Delete by Chehuna from <a href="https://thenounproject.com/browse/icons/term/delete/" target="_blank" title="Delete Icons">Noun Project</a> (CC BY 3.0)
 - edit by etika ariatna from <a href="https://thenounproject.com/browse/icons/term/edit/" target="_blank" title="edit Icons">Noun Project</a> (CC BY 3.0)
+- Upload by Heztasia from <a href="https://thenounproject.com/browse/icons/term/upload/" target="_blank" title="Upload Icons">Noun Project</a> (CC BY 3.0)

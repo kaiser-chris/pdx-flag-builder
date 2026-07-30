@@ -3,9 +3,11 @@ package ui
 import mu "vendor:microui"
 
 IconType :: enum u32 {
-    Sub    = 10000,
-    Edit   = 10001,
-    Delete = 10002,
+    Sub       = 10000,
+    Edit      = 10001,
+    Delete    = 10002,
+    ArrowUp   = 10003,
+    ArrowDown = 10004,
 }
 
 COLOR_TINT_NONE: mu.Color: { 255, 255, 255, 255 }
