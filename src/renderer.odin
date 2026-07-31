@@ -142,7 +142,9 @@ executeExportFlagImage :: proc(request: FlagExportRequest) -> bool {
     destination := rl.Rectangle{0, 0, f32(request.Size[0]), f32(request.Size[1])}
     rl.BeginTextureMode(target)
     rl.ClearBackground(rl.WHITE)
+    rl.BeginScissorMode(i32(destination.x), i32(destination.y), i32(destination.width), i32(destination.height))
     renderFlag(request.Flag, destination)
+    rl.EndScissorMode()
     rl.EndTextureMode()
 
     image := rl.LoadImageFromTexture(target.texture)
@@ -252,6 +254,7 @@ main :: proc() {
 
     rl.SetConfigFlags({ .WINDOW_RESIZABLE })
     rl.InitWindow(1280, 800, APPLICATION_NAME)
+    rl.SetExitKey(rl.KeyboardKey.F10)
     rl.ClearWindowState({ .WINDOW_UNDECORATED, .WINDOW_TOPMOST })
     defer rl.CloseWindow()
 
@@ -592,17 +595,19 @@ renderFlagDraw :: proc(cmd: ^mu.Command_Rect) {
         return
     }
     destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
+    rl.BeginScissorMode(i32(destination.x), i32(destination.y), i32(destination.width), i32(destination.height))
     renderFlag(flag, destination)
+    rl.EndScissorMode()
 }
 
 renderFlagPreviewTexture :: proc(cmd: ^mu.Command_Rect) {
     destination := rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}
+    rl.BeginScissorMode(i32(destination.x), i32(destination.y), i32(destination.width), i32(destination.height))
     renderFlag(state.Flag, destination)
+    rl.EndScissorMode()
 }
 
 renderFlag :: proc(flag: pdx.Flag, destination: rl.Rectangle) {
-    rl.BeginScissorMode(i32(destination.x), i32(destination.y), i32(destination.width), i32(destination.height))
-
     if flag.Pattern.Name != "" {
         pattern, ok := state.RenderTextureMap[flag.Pattern.Path]
 
@@ -631,8 +636,6 @@ renderFlag :: proc(flag: pdx.Flag, destination: rl.Rectangle) {
             renderSubInstances(layer, destination)
         }
     }
-
-    rl.EndScissorMode()
 }
 
 renderColoredEmblemInstances :: proc(layer: ^pdx.FlagLayerColoredEmblem, flag: pdx.Flag, destination: rl.Rectangle) {
