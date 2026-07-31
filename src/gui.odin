@@ -40,6 +40,14 @@ TEXTURE_ICON_GAME_EU5: string: "assets/textures/icons/game_eu5.dds"
 
 SHADER_RECOLOR: string: "assets/shaders/recolor.fs"
 
+CLOSABLE_WINDOWS: []string: {
+    WINDOM_SETTINGS,
+    WINDOM_FLAG_DATABASE,
+    WINDOM_TEXTURE_DATABASE,
+    WINDOM_COLOR_PICKER,
+    WINDOM_INSTANCE_EDITOR,
+}
+
 TOOLBAR_HEIGHT: i32: 35
 FLAG_HEIGHT: i32: 512
 FLAG_WIDTH: i32: 768
@@ -120,10 +128,67 @@ renderGui :: proc(ctx: ^mu.Context) {
 
     rl.SetWindowMinSize(FLAG_WIDTH + state.SidebarWidth, FLAG_HEIGHT + TOOLBAR_HEIGHT)
 
+    handleStackedWindowClosing(ctx)
+
     @static alreadySaved: bool
     if (rl.IsKeyDown(rl.KeyboardKey.LEFT_CONTROL) || rl.IsKeyDown(rl.KeyboardKey.RIGHT_CONTROL)) && rl.IsKeyDown(rl.KeyboardKey.S) {
         exportFlagAsIs(ctx, &state.Flag)
         alreadySaved = true
+    }
+}
+
+handleStackedWindowClosing :: proc(ctx: ^mu.Context) {
+    if !rl.IsKeyPressed(rl.KeyboardKey.ESCAPE) {
+        return
+    }
+
+    highestZIndex: i32
+    for closable in CLOSABLE_WINDOWS {
+        window := mu.get_container(ctx, closable)
+        if window == nil {
+            continue
+        }
+        isOpen: b32
+        switch closable {
+        case WINDOM_SETTINGS:
+            isOpen = window.open && state.SettingsWindowOpen
+        case WINDOM_FLAG_DATABASE:
+            isOpen = window.open && state.FlagDatabaseWindowOpen
+        case WINDOM_TEXTURE_DATABASE:
+            isOpen = window.open && state.TextureDatabaseWindowOpen
+        case WINDOM_COLOR_PICKER:
+            isOpen = window.open && state.ColorPickerColor != nil
+        case WINDOM_INSTANCE_EDITOR:
+            isOpen = window.open && state.InstanceEditorInstance != nil
+        }
+        if !isOpen {
+            continue
+        }
+        if window.zindex > highestZIndex {
+            highestZIndex = window.zindex
+        }
+    }
+
+    for closable in CLOSABLE_WINDOWS {
+        closableWindow := mu.get_container(ctx, closable)
+
+        if closableWindow.zindex != highestZIndex {
+            continue
+        }
+
+        switch closable {
+        case WINDOM_SETTINGS:
+            state.SettingsWindowOpen = false
+        case WINDOM_FLAG_DATABASE:
+            state.FlagDatabaseWindowOpen = false
+        case WINDOM_TEXTURE_DATABASE:
+            state.TextureDatabaseWindowOpen = false
+        case WINDOM_COLOR_PICKER:
+            state.ColorPickerColor = nil
+        case WINDOM_INSTANCE_EDITOR:
+            state.InstanceEditorInstance = nil
+        }
+        break
     }
 }
 
@@ -427,7 +492,6 @@ renderInstanceEditor :: proc(ctx: ^mu.Context) {
     @static positionYBuf: [16]byte
     @static positionYBufLen: int
 
-
     if mu.window(ctx, WINDOM_INSTANCE_EDITOR, { x, y, width, height }, { .NO_RESIZE }) {
         guranteeBounds(ctx)
         window := mu.get_current_container(ctx)
@@ -452,6 +516,37 @@ renderInstanceEditor :: proc(ctx: ^mu.Context) {
             mu.label(ctx, "Position - Y:")
             ui.Slider(ctx, &type.Position.Y, -2, 3, "%.2f", step = 0.05)
             ui.NumberTextbox(ctx, &type.Position.Y, positionYBuf[:], &positionYBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f")
+
+            if rl.IsKeyDown(.DOWN) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+                type.Position.Y += 0.001
+            }
+            if rl.IsKeyDown(.UP) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+                type.Position.Y -= 0.001
+            }
+            if rl.IsKeyDown(.RIGHT) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+                type.Position.X += 0.001
+            }
+            if rl.IsKeyDown(.LEFT) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+                type.Position.X -= 0.001
+            }
+            if rl.IsKeyDown(.DOWN) && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+                type.Scale.Y += 0.001
+            }
+            if rl.IsKeyDown(.UP) && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+                type.Scale.Y -= 0.001
+            }
+            if rl.IsKeyDown(.RIGHT) && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+                type.Scale.X += 0.001
+            }
+            if rl.IsKeyDown(.LEFT) && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+                type.Scale.X -= 0.001
+            }
+            if rl.IsKeyDown(.RIGHT) && (rl.IsKeyDown(.LEFT_ALT) || rl.IsKeyDown(.RIGHT_ALT)) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) {
+                type.Rotation += 1
+            }
+            if rl.IsKeyDown(.LEFT) && (rl.IsKeyDown(.LEFT_ALT) || rl.IsKeyDown(.RIGHT_ALT)) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) {
+                type.Rotation -= 1
+            }
         case ^pdx.LayerInstanceSub:
             mu.label(ctx, "Scale - Width:")
             ui.Slider(ctx, &type.Scale.X, 0, 3, "%.2f", step = 0.05)
@@ -465,6 +560,31 @@ renderInstanceEditor :: proc(ctx: ^mu.Context) {
             mu.label(ctx, "Offset - Y:")
             ui.Slider(ctx, &type.Offset.Y, -2, 3, "%.2f", step = 0.05)
             ui.NumberTextbox(ctx, &type.Offset.Y, positionYBuf[:], &positionYBufLen, pdx.MAX_OFFSET, pdx.MIN_OFFSET, "%.3f")
+
+            if rl.IsKeyDown(.DOWN) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+                type.Offset.Y += 0.001
+            }
+            if rl.IsKeyDown(.UP) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+                type.Offset.Y -= 0.001
+            }
+            if rl.IsKeyDown(.RIGHT) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+                type.Offset.X += 0.001
+            }
+            if rl.IsKeyDown(.LEFT) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+                type.Offset.X -= 0.001
+            }
+            if rl.IsKeyDown(.DOWN) && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+                type.Scale.Y += 0.001
+            }
+            if rl.IsKeyDown(.UP) && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+                type.Scale.Y -= 0.001
+            }
+            if rl.IsKeyDown(.RIGHT) && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+                type.Scale.X += 0.001
+            }
+            if rl.IsKeyDown(.LEFT) && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+                type.Scale.X -= 0.001
+            }
         }
     }
 
