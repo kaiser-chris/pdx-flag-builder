@@ -119,6 +119,12 @@ renderGui :: proc(ctx: ^mu.Context) {
     ui.InitToast(ctx, &state.Toast, { 10, TOOLBAR_HEIGHT + 10, 200, rl.GetScreenHeight() - (TOOLBAR_HEIGHT + 20) }, &state.ButtonIdentifier)
 
     rl.SetWindowMinSize(FLAG_WIDTH + state.SidebarWidth, FLAG_HEIGHT + TOOLBAR_HEIGHT)
+
+    @static alreadySaved: bool
+    if (rl.IsKeyDown(rl.KeyboardKey.LEFT_CONTROL) || rl.IsKeyDown(rl.KeyboardKey.RIGHT_CONTROL)) && rl.IsKeyDown(rl.KeyboardKey.S) {
+        exportFlagAsIs(ctx, &state.Flag)
+        alreadySaved = true
+    }
 }
 
 renderAbsoluteColorPicker :: proc(ctx: ^mu.Context) {
@@ -491,7 +497,7 @@ renderToolbar :: proc(ctx: ^mu.Context) {
                 exportFlagAsFile(ctx, state.Flag)
             }
             ui.OpenDropdown(ctx, &state.Dropdown, {
-                ui.CreateDropdownElement("Save Changes", exportAsIs),
+                ui.CreateDropdownElement("Save Changes (CTRL + S)", exportAsIs),
                 ui.CreateDropdownElement("Export to Image", exportToImage),
                 ui.CreateDropdownElement("Export to Clipboard", exportToClipboard),
                 ui.CreateDropdownElement("Export as new Script File", exportToFile),
