@@ -509,16 +509,72 @@ renderSelectedLayerInstance :: proc(ctx: ^mu.Context, instance: pdx.LayerInstanc
     ui.DrawAttributeRow(ctx, "Type", "Layer Instance")
     switch type in instance {
     case ^pdx.LayerInstance:
-        ui.DrawAttributeRowNumberTextbox(ctx, "Rotation", &type.Rotation, rotationBuf[:], &rotationBufLen, 360, 0)
-        ui.DrawAttributeRowNumberTextbox(ctx, "Scale Width", &type.Scale.X, scaleXBuf[:], &scaleXBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
-        ui.DrawAttributeRowNumberTextbox(ctx, "Scale Height", &type.Scale.Y, scaleYBuf[:], &scaleYBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
-        ui.DrawAttributeRowNumberTextbox(ctx, "Position X", &type.Position.X, positionXBuf[:], &positionXBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f")
-        ui.DrawAttributeRowNumberTextbox(ctx, "Position Y", &type.Position.Y, positionYBuf[:], &positionYBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f")
+        ui.DrawAttributeRowNumberTextbox(ctx, "Rotation (ALT + LEFT/RIGHT)", &type.Rotation, rotationBuf[:], &rotationBufLen, 360, 0, "%i", 0.7)
+        ui.DrawAttributeRowNumberTextbox(ctx, "Scale Width (CTRL + LEFT/RIGHT)", &type.Scale.X, scaleXBuf[:], &scaleXBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f", 0.7)
+        ui.DrawAttributeRowNumberTextbox(ctx, "Scale Height (CTRL + UP/DOWN)", &type.Scale.Y, scaleYBuf[:], &scaleYBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f", 0.7)
+        ui.DrawAttributeRowNumberTextbox(ctx, "Position X (LEFT/RIGHT)", &type.Position.X, positionXBuf[:], &positionXBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f", 0.7)
+        ui.DrawAttributeRowNumberTextbox(ctx, "Position Y (UP/DOWN)", &type.Position.Y, positionYBuf[:], &positionYBufLen, pdx.MAX_POSITION, pdx.MIN_POSITION, "%.3f", 0.7)
+
+        if rl.IsKeyDown(.DOWN) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+            type.Position.Y += 0.001
+        }
+        if rl.IsKeyDown(.UP) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+            type.Position.Y -= 0.001
+        }
+        if rl.IsKeyDown(.RIGHT) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+            type.Position.X += 0.001
+        }
+        if rl.IsKeyDown(.LEFT) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+            type.Position.X -= 0.001
+        }
+        if rl.IsKeyDown(.DOWN) && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+            type.Scale.Y += 0.001
+        }
+        if rl.IsKeyDown(.UP) && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+            type.Scale.Y -= 0.001
+        }
+        if rl.IsKeyDown(.RIGHT) && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+            type.Scale.X += 0.001
+        }
+        if rl.IsKeyDown(.LEFT) && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+            type.Scale.X -= 0.001
+        }
+        if rl.IsKeyDown(.RIGHT) && (rl.IsKeyDown(.LEFT_ALT) || rl.IsKeyDown(.RIGHT_ALT)) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) {
+            type.Rotation += 1
+        }
+        if rl.IsKeyDown(.LEFT) && (rl.IsKeyDown(.LEFT_ALT) || rl.IsKeyDown(.RIGHT_ALT)) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) {
+            type.Rotation -= 1
+        }
     case ^pdx.LayerInstanceSub:
-        ui.DrawAttributeRowNumberTextbox(ctx, "Scale Width", &type.Scale.X, scaleXBuf[:], &scaleXBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
-        ui.DrawAttributeRowNumberTextbox(ctx, "Scale Height", &type.Scale.Y, scaleYBuf[:], &scaleYBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f")
-        ui.DrawAttributeRowNumberTextbox(ctx, "Offset X", &type.Offset.X, positionXBuf[:], &positionXBufLen, pdx.MAX_OFFSET, pdx.MIN_OFFSET, "%.3f")
-        ui.DrawAttributeRowNumberTextbox(ctx, "Offset Y", &type.Offset.Y, positionYBuf[:], &positionYBufLen, pdx.MAX_OFFSET, pdx.MIN_OFFSET, "%.3f")
+        ui.DrawAttributeRowNumberTextbox(ctx, "Scale Width (CTRL + LEFT/RIGHT)", &type.Scale.X, scaleXBuf[:], &scaleXBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f", 0.7)
+        ui.DrawAttributeRowNumberTextbox(ctx, "Scale Height (CTRL + UP/DOWN)", &type.Scale.Y, scaleYBuf[:], &scaleYBufLen, pdx.MAX_SCALE, pdx.MIN_SCALE, "%.3f", 0.7)
+        ui.DrawAttributeRowNumberTextbox(ctx, "Offset X (LEFT/RIGHT)", &type.Offset.X, positionXBuf[:], &positionXBufLen, pdx.MAX_OFFSET, pdx.MIN_OFFSET, "%.3f", 0.7)
+        ui.DrawAttributeRowNumberTextbox(ctx, "Offset Y (UP/DOWN)", &type.Offset.Y, positionYBuf[:], &positionYBufLen, pdx.MAX_OFFSET, pdx.MIN_OFFSET, "%.3f", 0.7)
+
+        if rl.IsKeyDown(.DOWN) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+            type.Offset.Y += 0.001
+        }
+        if rl.IsKeyDown(.UP) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+            type.Offset.Y -= 0.001
+        }
+        if rl.IsKeyDown(.RIGHT) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+            type.Offset.X += 0.001
+        }
+        if rl.IsKeyDown(.LEFT) && !rl.IsKeyDown(.LEFT_CONTROL) && !rl.IsKeyDown(.RIGHT_CONTROL) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+            type.Offset.X -= 0.001
+        }
+        if rl.IsKeyDown(.DOWN) && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+            type.Scale.Y += 0.001
+        }
+        if rl.IsKeyDown(.UP) && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+            type.Scale.Y -= 0.001
+        }
+        if rl.IsKeyDown(.RIGHT) && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+            type.Scale.X += 0.001
+        }
+        if rl.IsKeyDown(.LEFT) && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)) && !rl.IsKeyDown(.LEFT_ALT) && !rl.IsKeyDown(.RIGHT_ALT) {
+            type.Scale.X -= 0.001
+        }
     }
     mu.layout_row(ctx, { -1 }, 20)
     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
