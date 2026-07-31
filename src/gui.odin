@@ -1091,7 +1091,7 @@ popupWindow :: proc(
         }
         mu.layout_set_next(ctx, buttonOk, false)
         ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-        if .SUBMIT in ui.Button(ctx, "Ok", style, enabled = enabled) {
+        if .SUBMIT in ui.Button(ctx, "Ok (Enter)", style, enabled = enabled) {
             res += { .SUBMIT }
             state.PopupIdentifier = 0
         }
@@ -1105,10 +1105,19 @@ popupWindow :: proc(
         }
         mu.layout_set_next(ctx, buttonCancel, false)
         ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-        if .SUBMIT in ui.Button(ctx, "Cancel") {
+        if .SUBMIT in ui.Button(ctx, "Cancel (Esc)") {
             state.PopupIdentifier = 0
         }
         mu.pop_id(ctx)
+
+        if rl.IsKeyPressed(rl.KeyboardKey.ENTER) && enabled {
+            res += { .SUBMIT }
+            state.PopupIdentifier = 0
+        }
+
+        if rl.IsKeyPressed(rl.KeyboardKey.ESCAPE) {
+            state.PopupIdentifier = 0
+        }
     }
     return
 }
