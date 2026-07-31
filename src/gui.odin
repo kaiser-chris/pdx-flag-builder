@@ -679,15 +679,28 @@ renderSettings :: proc(ctx: ^mu.Context) {
         if hasUnsavedChanges {
             warn := mu.layout_next(ctx)
             next := mu.layout_next(ctx)
-            mu.draw_rect(ctx, warn, ui.COLOR_BUTTON_DANGER_BACKGROUND_DISABLED)
+            mu.draw_rect(ctx, warn, ui.COLOR_BUTTON_WARNING_BACKGROUND_DISABLED)
             mu.draw_control_text(ctx, "You have unsaved changes!", warn, .TEXT, { .ALIGN_CENTER })
             mu.layout_set_next(ctx, next, false)
         }
 
+        hasUnsavedChanges = false
         if .ACTIVE in mu.header(ctx, "Paths", {.EXPANDED}) {
             mu.text(ctx, "These are paths to the root of your mod or the \"game\" folder for the base game.")
             mu.layout_row(ctx, {20, 100, -209, 100, 100}, 20)
             for _, index in state.Databases {
+                if state.Databases[index].Name != state.Databases[index].Settings.Name {
+                    hasUnsavedChanges = true
+                }
+                if state.Databases[index].Path != state.Databases[index].Settings.Path {
+                    hasUnsavedChanges = true
+                }
+                if state.Databases[index].IsDeleted {
+                    hasUnsavedChanges = true
+                }
+                if state.Databases[index].IsNew {
+                    hasUnsavedChanges = true
+                }
                 switch state.Databases[index].Type {
                 case .Vic3:
                     drawTransparentTexture(ctx, TEXTURE_ICON_GAME_VIC3)
@@ -698,15 +711,13 @@ renderSettings :: proc(ctx: ^mu.Context) {
                 }
                 if .CHANGE in mu.textbox(ctx, state.Databases[index].BufferName[:], &state.Databases[index].BufferNameLength) {
                     name := strings.clone(string(state.Databases[index].BufferName[:state.Databases[index].BufferNameLength]))
-                    delete(state.Databases[index].Settings.Name)
-                    state.Databases[index].Settings.Name = name
-                    hasUnsavedChanges = true
+                    delete(state.Databases[index].Name)
+                    state.Databases[index].Name = name
                 }
                 if .CHANGE in mu.textbox(ctx, state.Databases[index].BufferPath[:], &state.Databases[index].BufferPathLength) {
                     path := strings.clone(string(state.Databases[index].BufferPath[:state.Databases[index].BufferPathLength]))
-                    delete(state.Databases[index].Settings.Path)
-                    state.Databases[index].Settings.Path = path
-                    hasUnsavedChanges = true
+                    delete(state.Databases[index].Path)
+                    state.Databases[index].Path = path
                 }
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
                 if .SUBMIT in ui.Button(ctx, "Choose Folder") {
@@ -714,17 +725,16 @@ renderSettings :: proc(ctx: ^mu.Context) {
                     if success {
                         state.Databases[index].BufferPathLength = len(path)
                         copy(state.Databases[index].BufferPath[:], path)
-                        delete(state.Databases[index].Settings.Path)
-                        state.Databases[index].Settings.Path = path
+                        delete(state.Databases[index].Path)
+                        state.Databases[index].Path = path
 
                         _, file := os.split_path(path)
                         state.Databases[index].BufferNameLength = len(file)
                         copy(state.Databases[index].BufferName[:], file)
-                        delete(state.Databases[index].Settings.Name)
-                        state.Databases[index].Settings.Name = strings.clone(file)
+                        delete(state.Databases[index].Name)
+                        state.Databases[index].Name = strings.clone(file)
 
                         determineDatabaseType(&state.Databases[index])
-                        hasUnsavedChanges = true
                     }
                 }
                 mu.pop_id(ctx)
@@ -732,6 +742,11 @@ renderSettings :: proc(ctx: ^mu.Context) {
                 if state.Databases[index].IsDeleted {
                     if .SUBMIT in mu.button(ctx, "Undo") {
                         state.Databases[index].IsDeleted = false
+                    }
+                } else if state.Databases[index].IsNew {
+                    if .SUBMIT in ui.Button(ctx, "Delete", ui.ButtonStyle.Danger) {
+                        DestroyDatabase(&state.Databases[index])
+                        ordered_remove(&state.Databases, index)
                     }
                 } else {
                     if .SUBMIT in ui.Button(ctx, "Delete", ui.ButtonStyle.Danger) {
@@ -743,8 +758,8 @@ renderSettings :: proc(ctx: ^mu.Context) {
             mu.layout_row(ctx, {-1, -1}, 0)
             if .SUBMIT in mu.button(ctx, "Add new path") {
                 element := NewDatabase("", "")
+                element.IsNew = true
                 append(&state.Databases, element)
-                hasUnsavedChanges = true
             }
         }
 

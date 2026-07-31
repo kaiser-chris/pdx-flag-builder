@@ -4,6 +4,7 @@ import mu "vendor:microui"
 
 ButtonStyle :: enum {
     Default,
+    Warning,
     Danger,
 }
 
@@ -11,6 +12,11 @@ COLOR_BUTTON_DANGER_BACKGROUND: mu.Color: { 100, 16, 0, 255 }
 COLOR_BUTTON_DANGER_BACKGROUND_HOVER: mu.Color: { 167, 16, 0, 255 }
 COLOR_BUTTON_DANGER_BACKGROUND_DISABLED: mu.Color: { 60, 16, 0, 255 }
 COLOR_BUTTON_DANGER_BORDER: mu.Color: { 62, 16, 0, 255 }
+
+COLOR_BUTTON_WARNING_BACKGROUND: mu.Color: { 122, 102, 0, 255 }
+COLOR_BUTTON_WARNING_BACKGROUND_HOVER: mu.Color: { 188, 154, 0, 255 }
+COLOR_BUTTON_WARNING_BACKGROUND_DISABLED: mu.Color: { 104, 87, 0, 255 }
+COLOR_BUTTON_WARNING_BORDER: mu.Color: { 112, 93, 0, 255 }
 
 Button :: proc{
     ButtonText,
@@ -102,6 +108,15 @@ drawButtonBox :: proc(ctx: ^mu.Context, id: mu.Id, style: ButtonStyle, rect: mu.
             if ctx.style.colors[.BORDER].a != 0 { /* draw border */
                 mu.draw_box(ctx, mu.expand_rect(rect, 1), ctx.style.colors[.BORDER])
             }
+        case .Warning:
+            if ctx.hover_id == id || ctx.focus_id == id {
+                mu.draw_rect(ctx, rect, COLOR_BUTTON_WARNING_BACKGROUND_HOVER)
+            } else {
+                mu.draw_rect(ctx, rect, COLOR_BUTTON_WARNING_BACKGROUND)
+            }
+            if ctx.style.colors[.BORDER].a != 0 { /* draw border */
+                mu.draw_box(ctx, mu.expand_rect(rect, 1), COLOR_BUTTON_WARNING_BORDER)
+            }
         case .Danger:
             if ctx.hover_id == id || ctx.focus_id == id {
                 mu.draw_rect(ctx, rect, COLOR_BUTTON_DANGER_BACKGROUND_HOVER)
@@ -122,6 +137,11 @@ drawButtonBox :: proc(ctx: ^mu.Context, id: mu.Id, style: ButtonStyle, rect: mu.
             mu.draw_rect(ctx, rect, color)
             if ctx.style.colors[.BORDER].a != 0 { /* draw border */
                 mu.draw_box(ctx, mu.expand_rect(rect, 1), ctx.style.colors[.BORDER])
+            }
+        case .Warning:
+            mu.draw_rect(ctx, rect, COLOR_BUTTON_WARNING_BACKGROUND_DISABLED)
+            if ctx.style.colors[.BORDER].a != 0 { /* draw border */
+                mu.draw_box(ctx, mu.expand_rect(rect, 1), COLOR_BUTTON_WARNING_BORDER)
             }
         case .Danger:
             mu.draw_rect(ctx, rect, COLOR_BUTTON_DANGER_BACKGROUND_DISABLED)

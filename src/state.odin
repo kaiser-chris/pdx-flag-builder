@@ -70,7 +70,10 @@ DatabaseType :: enum {
 Database :: struct {
     Type: DatabaseType,
     Settings: settings.Database,
+    Name: string,
+    Path: string,
     IsDeleted: bool,
+    IsNew: bool,
     BufferName: [128]byte,
     BufferNameLength: int,
     BufferPath: [512]byte,
@@ -205,6 +208,8 @@ DestroyState :: proc() {
 NewDatabase :: proc(name, path: string) -> Database {
     return Database{
         Type = .Unknown,
+        Name = strings.clone(name),
+        Path = strings.clone(path),
         Settings = settings.CreateDatabase(name, path),
         NamedColors = make([dynamic]pdx.FlagColor),
         Patterns = make([dynamic]pdx.FlagTexture),
@@ -215,14 +220,10 @@ NewDatabase :: proc(name, path: string) -> Database {
 }
 CreateDatabase :: proc(name, path: string) -> Database {
     database := NewDatabase(name, path)
-    if name != "" {
-        database.BufferNameLength = len(name)
-        copy(database.BufferName[:], name)
-    }
-    if path != "" {
-        database.BufferPathLength = len(path)
-        copy(database.BufferPath[:], path)
-    }
+    database.BufferNameLength = len(name)
+    copy(database.BufferName[:], name)
+    database.BufferPathLength = len(path)
+    copy(database.BufferPath[:], path)
     determineDatabaseType(&database)
     loadNamedColors(&database)
     loadDatabaseTextures(&database)
@@ -231,6 +232,8 @@ CreateDatabase :: proc(name, path: string) -> Database {
 }
 DestroyDatabase :: proc(database: ^Database) {
     settings.DestroyDatabase(&database.Settings)
+    delete(database.Name)
+    delete(database.Path)
     destroyNamedColors(database)
     destroyDatabaseFlags(database)
     destroyLoadedTextures(database)
@@ -641,9 +644,11 @@ SaveSettings :: proc() {
     delete(state.Settings.Databases)
     state.Settings.Databases = make([dynamic]settings.Database)
     for database in state.Databases {
-        if !database.IsDeleted {
-            append(&state.Settings.Databases, settings.CreateDatabase(database.Settings.Name, database.Settings.Path))
+        if database.IsDeleted {
+            continue
         }
+        newDatabase := settings.CreateDatabase(database.Name, database.Path)
+        append(&state.Settings.Databases, newDatabase)
     }
     for _, index in state.Databases {
         DestroyDatabase(&state.Databases[index])
