@@ -17,7 +17,7 @@ LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
 #define V1 1
 #endif
 #ifndef V2
-#define V2 0
+#define V2 1
 #endif
 #ifndef V3
 #define V3 0
