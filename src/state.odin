@@ -53,6 +53,7 @@ State :: struct {
     Toast: ui.ToastContainer,
     Icons: map[ui.IconType]rl.Texture2D,
     SearchCache: SearchCache,
+    PopupIdentifier: mu.Id,
 }
 
 SearchCache :: struct {

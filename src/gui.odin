@@ -29,6 +29,12 @@ TEXTURE_ICON_UNKNOWN: string: "assets/textures/icons/unknown.dds"
 TEXTURE_TRANSPARENCY: string: "assets/textures/transparency.dds"
 TEXTURE_INVALID: string: "assets/textures/invalid.dds"
 
+POPUP_MESSAGE_CLEAR_FLAG: string: "Are you sure you want to clear this flag? It will delete your current changes in the editor."
+POPUP_MESSAGE_DELETE_LAYER: string: "Are you sure you want to delete this layer?"
+POPUP_MESSAGE_DELETE_INSTANCE: string: "Are you sure you want to delete this layer instance?"
+POPUP_MESSAGE_OPEN_FLAG: string: "Are you sure you want to open this flag? It will overwrite your current flag."
+POPUP_MESSAGE_DELETE_COLOR: string: "Are you sure you want to delete this color?"
+
 TEXTURE_ICON_GAME_VIC3: string: "assets/textures/icons/game_vic3.dds"
 TEXTURE_ICON_GAME_EU5: string: "assets/textures/icons/game_eu5.dds"
 
@@ -631,7 +637,7 @@ fillColorMapping :: proc(colors: []pdx.FlagColor, flag: pdx.Flag, sourceColors: 
                         append(&colorMappings, mapping)
                     }
                 case pdx.FlagColorReference:
-                // Should not happen
+                    // Should not happen
                 }
             }
         }
@@ -662,11 +668,13 @@ checkColorMapping :: proc(name: string, targetColor: rl.Color, sourceColors: []r
 }
 
 renderSettings :: proc(ctx: ^mu.Context) {
+
     if mu.window(ctx, WINDOM_SETTINGS, { 10, 10 + TOOLBAR_HEIGHT, 670, 290 }, {}) {
         windows := mu.get_current_container(ctx)
-        windows.rect.w = 670
+        if windows.rect.w < 670 {
+            windows.rect.w = 670
+        }
         guranteeBounds(ctx)
-
         @static hasUnsavedChanges: bool
 
         mu.layout_row(ctx, { -1 }, 0)
@@ -756,7 +764,7 @@ renderSettings :: proc(ctx: ^mu.Context) {
                 mu.pop_id(ctx)
             }
             mu.layout_row(ctx, {-1, -1}, 0)
-            if .SUBMIT in mu.button(ctx, "Add new path") {
+            if .SUBMIT in ui.Button(ctx, "Add new path") {
                 element := NewDatabase("", "")
                 element.IsNew = true
                 append(&state.Databases, element)
@@ -837,7 +845,7 @@ renderFlagDatabase :: proc(ctx: ^mu.Context) {
                     }
                     mu.pop_id(ctx)
                     ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-                    if .SUBMIT in mu.button(ctx, "Open") {
+                    if .SUBMIT in ButtonTextConfirm(ctx, "Open", "Open Flag", POPUP_MESSAGE_OPEN_FLAG, ui.ButtonStyle.Danger) {
                         pdx.DestroyFlag(&state.Flag)
                         clonedFlag := pdx.CloneFlag(flag)
                         state.Flag = clonedFlag
@@ -988,4 +996,113 @@ renderTextureDatabaseItem :: proc(ctx: ^mu.Context, item: pdx.FlagTexture, type:
         mu.text(ctx, fmt.tprintf("%ix%i", texture.width, texture.height))
     }
     mu.layout_end_column(ctx)
+}
+
+ButtonTextConfirm :: proc(
+    ctx: ^mu.Context,
+    label: string,
+    confirmHeader, confirmText: string,
+    style: ui.ButtonStyle = .Default,
+    options: mu.Options = { .ALIGN_CENTER },
+    enabled := true,
+) -> (res: mu.Result_Set) {
+
+    isButtonEnabled := enabled && state.PopupIdentifier == 0
+
+    if .SUBMIT in ui.Button(ctx, label, style, options, isButtonEnabled) {
+        // our button did the popup
+        state.PopupIdentifier = ctx.last_id
+    }
+
+    // our button did the popup?
+    if state.PopupIdentifier == ctx.last_id {
+        return popupWindow(ctx, confirmHeader, confirmText, style, enabled)
+    }
+
+    return
+}
+
+ButtonIconConfirm :: proc(
+    ctx: ^mu.Context,
+    icon: ui.IconType,
+    confirmHeader, confirmText: string,
+    width: i32 = 0,
+    height: i32 = 0,
+    style: ui.ButtonStyle = .Default,
+    tint := ui.COLOR_TINT_NONE,
+    options: mu.Options = { .ALIGN_CENTER },
+    enabled := true,
+) -> (res: mu.Result_Set) {
+
+    isButtonEnabled := enabled && state.PopupIdentifier == 0
+
+    if .SUBMIT in ui.Button(ctx, icon, width, height, style, tint, options, isButtonEnabled) {
+        // our button activates the popup
+        state.PopupIdentifier = ctx.last_id
+    }
+
+    // our button activated the popup?
+    if state.PopupIdentifier == ctx.last_id {
+        return popupWindow(ctx, confirmHeader, confirmText, style, enabled)
+    }
+
+    return
+}
+
+popupWindow :: proc(
+    ctx: ^mu.Context,
+    confirmHeader, confirmText: string,
+    style: ui.ButtonStyle,
+    enabled: bool,
+) -> (res: mu.Result_Set) {
+    center := mu.Rect{
+        x = (rl.GetScreenWidth() - 300) / 2,
+        y = (rl.GetScreenHeight() - 200) / 2,
+        w = 300,
+        h = 100,
+    }
+    if mu.window(ctx, confirmHeader, center, { .NO_RESIZE, .NO_CLOSE, .AUTO_SIZE }) {
+        window := mu.get_current_container(ctx)
+
+        // always on top
+        window.zindex = ctx.last_zindex + 1
+
+        // always center
+        window.rect.x = (rl.GetScreenWidth() - window.rect.w) / 2
+        window.rect.y = (rl.GetScreenHeight() - window.rect.h) / 2
+
+        mu.layout_row(ctx, { 300 }, 0)
+        mu.text(ctx, confirmText)
+
+        mu.layout_row(ctx, { 300 }, 20)
+        row := mu.layout_next(ctx)
+
+        buttonOk := mu.Rect{
+            x = row.x + ((row.w - 200) / 2),
+            y = row.y,
+            w = 90,
+            h = row.h,
+        }
+        mu.layout_set_next(ctx, buttonOk, false)
+        ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+        if .SUBMIT in ui.Button(ctx, "Ok", style, enabled = enabled) {
+            res += { .SUBMIT }
+            state.PopupIdentifier = 0
+        }
+        mu.pop_id(ctx)
+
+        buttonCancel := mu.Rect{
+            x = row.x + ((row.w - 200) / 2) + 110,
+            y = row.y,
+            w = 90,
+            h = row.h,
+        }
+        mu.layout_set_next(ctx, buttonCancel, false)
+        ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+        if .SUBMIT in ui.Button(ctx, "Cancel") {
+            state.PopupIdentifier = 0
+        }
+        mu.pop_id(ctx)
+    }
+    return
 }
