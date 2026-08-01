@@ -131,9 +131,11 @@ renderGui :: proc(ctx: ^mu.Context) {
     handleStackedWindowClosing(ctx)
 
     @static alreadySaved: bool
-    if (rl.IsKeyDown(rl.KeyboardKey.LEFT_CONTROL) || rl.IsKeyDown(rl.KeyboardKey.RIGHT_CONTROL)) && rl.IsKeyDown(rl.KeyboardKey.S) {
+    if (rl.IsKeyDown(rl.KeyboardKey.LEFT_CONTROL) || rl.IsKeyDown(rl.KeyboardKey.RIGHT_CONTROL)) && rl.IsKeyDown(rl.KeyboardKey.S) && !alreadySaved {
         exportFlagAsIs(ctx, &state.Flag)
         alreadySaved = true
+    } else if (!rl.IsKeyDown(rl.KeyboardKey.LEFT_CONTROL) && !rl.IsKeyDown(rl.KeyboardKey.RIGHT_CONTROL)) || !rl.IsKeyDown(rl.KeyboardKey.S) {
+        alreadySaved = false
     }
 }
 
@@ -794,7 +796,6 @@ checkColorMapping :: proc(name: string, targetColor: rl.Color, sourceColors: []r
 }
 
 renderSettings :: proc(ctx: ^mu.Context) {
-
     if mu.window(ctx, WINDOM_SETTINGS, { 10, 10 + TOOLBAR_HEIGHT, 670, 290 }, {}) {
         windows := mu.get_current_container(ctx)
         if windows.rect.w < 670 {
