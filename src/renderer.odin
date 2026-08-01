@@ -114,7 +114,7 @@ handleFlagExportRequests :: proc() {
         if success {
             ui.Toast(&state.Toast, "Export", "Successfully exported image.")
         } else {
-            ui.Toast(&state.Toast, "Export", "Could not export flag image.", .Warning)
+            ui.Toast(&state.Toast, "Export", "Could not export flag image.", .Danger, 5000)
         }
     }
 }
@@ -129,6 +129,7 @@ executeExportFlagImage :: proc(request: FlagExportRequest) -> bool {
 
     result := nfd.SaveDialogU8_With(&path, &args)
     defer nfd.FreePathU8(path)
+    defer rl.SetWindowFocused()
     if result == .Cancel {
         return false
     }
@@ -868,12 +869,13 @@ drawFlag :: proc(ctx: ^mu.Context, flagName: string, width: i32 = 0, height: i32
 chooseFolder :: proc() -> (string, bool) {
     path: cstring
     result := nfd.PickFolderU8(&path, "")
+    rl.SetWindowFocused()
     defer nfd.FreePathU8(path)
     if result == .Cancel {
         return "", false
     }
     if result == .Error {
-        ui.Toast(&state.Toast, "Settings", fmt.tprintf("Folder selector dialog error: %s", nfd.GetError()), .Warning)
+        ui.Toast(&state.Toast, "Settings", fmt.tprintf("Folder selector dialog error: %s", nfd.GetError()), .Danger, 5000)
         return "", false
     }
     return strings.clone_from_cstring(path), true

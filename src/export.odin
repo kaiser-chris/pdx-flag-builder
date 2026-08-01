@@ -47,12 +47,13 @@ exportFlagAsFile :: proc(ctx: ^mu.Context, flag: pdx.Flag) {
     }
 
     result := nfd.SaveDialogU8_With(&path, &args)
+    defer rl.SetWindowFocused()
     defer nfd.FreePathU8(path)
     if result == .Cancel {
         return
     }
     if result == .Error {
-        ui.Toast(&state.Toast, "Export", fmt.tprintf("Export dialog error: %s", nfd.GetError()))
+        ui.Toast(&state.Toast, "Export", fmt.tprintf("Export dialog error:\n%s", nfd.GetError()), .Danger, 5000)
         return
     }
 
@@ -67,7 +68,7 @@ exportFlagAsFile :: proc(ctx: ^mu.Context, flag: pdx.Flag) {
 
     err := os.write_entire_file(normalPath, scriptWithBom)
     if err != nil {
-        ui.Toast(&state.Toast, "Export", fmt.tprintf("Could not write file: %v", err))
+        ui.Toast(&state.Toast, "Export", fmt.tprintf("Could not write file:\n%v", err), .Danger, 5000)
     }
     ui.Toast(&state.Toast, "Export", "Successfully saved the flag script.")
 }
@@ -81,12 +82,13 @@ exportFlagAsIs :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
             filter_count = len(filters),
         }
         result := nfd.OpenDialogU8_With(&path, &args)
+        defer rl.SetWindowFocused()
         defer nfd.FreePathU8(path)
         if result == .Cancel {
             return
         }
         if result == .Error {
-            ui.Toast(&state.Toast, "Export", fmt.tprintf("Export dialog error: %s", nfd.GetError()))
+            ui.Toast(&state.Toast, "Export", fmt.tprintf("Export dialog error:\n%s", nfd.GetError()), .Danger, 5000)
             return
         }
 
@@ -97,14 +99,14 @@ exportFlagAsIs :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
     }
 
     if !os.exists(flag.Path) {
-        ui.Toast(&state.Toast, "Export", "Target file does not exist.")
+        ui.Toast(&state.Toast, "Export", "Target file does not exist.", .Danger, 5000)
         return
     }
 
     data, err := os.read_entire_file(flag.Path, context.temp_allocator)
     defer free_all(context.temp_allocator)
     if err != nil {
-        ui.Toast(&state.Toast, "Export", fmt.tprintf("Could not open target file: %v", err))
+        ui.Toast(&state.Toast, "Export", fmt.tprintf("Could not open target file:\n%v", err), .Danger, 5000)
         return
     }
     content := string(data)
@@ -149,19 +151,20 @@ exportFlagAsIs :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
     }
 
     if foundStart && !foundEnd {
-        ui.Toast(&state.Toast, "Export", "Could not determine flag location: Found open brace but no end brace", .Danger)
+        ui.Toast(&state.Toast, "Export", "Could not determine flag location:\nFound open brace but no end\nbrace.", .Danger, 5000)
         return
     }
 
     script := pdx.WriteFlag(flag^, lineBreak)
     defer delete(script)
 
-    mergedScript: string
+    sb, bErr := strings.builder_make(context.temp_allocator)
     if !foundStart && !foundEnd {
-        ui.Toast(&state.Toast, "Export", "Flag not found in file, appending at the end", .Warning)
-        mergedScript := fmt.tprintf("%s%s%s", content, lineBreak, script)
+        ui.Toast(&state.Toast, "Export", "Flag not found in file,\nappending at the end.", .Warning, 3000)
+        strings.write_string(&sb, content)
+        strings.write_string(&sb, lineBreak)
+        strings.write_string(&sb, script)
     } else {
-        sb, bErr := strings.builder_make(context.temp_allocator)
         if lineStart == 0 {
         // we removed the first line so we need to fix the bom
             strings.write_rune(&sb, utf8.RUNE_BOM)
@@ -189,12 +192,11 @@ exportFlagAsIs :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
                 strings.write_string(&sb, lineBreak)
             }
         }
-        mergedScript = strings.to_string(sb)
     }
 
-    err = os.write_entire_file(flag.Path, mergedScript)
+    err = os.write_entire_file(flag.Path, strings.to_string(sb))
     if err != nil {
-        ui.Toast(&state.Toast, "Export", fmt.tprintf("Could not write file: %v", err))
+        ui.Toast(&state.Toast, "Export", fmt.tprintf("Could not write file: %v", err), .Danger, 5000)
     }
     ui.Toast(&state.Toast, "Export", "Successfully saved the flag script.")
 }
