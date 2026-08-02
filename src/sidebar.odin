@@ -9,7 +9,7 @@ import "pdx"
 
 SIDEBAR_HANDLE_WIDTH:i32: 10
 SIDEBAR_MIN_WIDTH: i32: 350
-SIDEBAR_MAX_WIDTH: i32: 600
+SIDEBAR_MAX_WIDTH: i32: 800
 
 renderSidebar :: proc(ctx: ^mu.Context) {
     renderFlagMenu(ctx)

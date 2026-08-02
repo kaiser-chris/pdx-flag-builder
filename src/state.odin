@@ -508,7 +508,15 @@ loadDatabaseFolderTextures :: proc(database: ^Database, path, type: string) {
             continue
         }
 
-        texture := pdx.CreateFlagTexture(info.name, info.fullpath)
+        dirtyName, err := os.get_relative_path(path, info.fullpath, context.allocator)
+        if err != nil {
+            fmt.eprintfln("failed building relative texture path %s: %s", info.fullpath, err)
+            continue
+        }
+        defer delete(dirtyName)
+        name, ok := strings.replace_all(dirtyName, "\\", "/")
+
+        texture := pdx.CreateFlagTexture(name, info.fullpath)
         switch type {
         case pdx.FOLDER_PATTERNS:
             append(&database.Patterns, texture)
@@ -516,6 +524,10 @@ loadDatabaseFolderTextures :: proc(database: ^Database, path, type: string) {
             append(&database.ColoredEmblems, texture)
         case pdx.FOLDER_TEXTURED_EMBLEMS:
             append(&database.TexturedEmblems, texture)
+        }
+
+        if ok {
+            delete(name)
         }
     }
 }
@@ -628,14 +640,6 @@ getReferencedColor :: proc(reference: string, flag: pdx.Flag) -> (pdx.FlagColor,
 }
 
 SaveSettings :: proc() {
-//    for key in state.TextureMap {
-//        delete(key)
-//    }
-//    for key in state.GuiFlagMap {
-//        delete(key)
-//    }
-//    clear_map(&state.GuiFlagMap)
-//    clear_map(&state.RenderFlagMap)
     state.FlagDatabaseWindowOpen = false
     state.TextureDatabaseWindowOpen = false
     for _, index in state.Settings.Databases {
