@@ -20,7 +20,7 @@ LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
 #define V2 1
 #endif
 #ifndef V3
-#define V3 2
+#define V3 3
 #endif
 
 VS_VERSION_INFO VERSIONINFO
