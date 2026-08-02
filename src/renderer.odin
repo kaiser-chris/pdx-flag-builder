@@ -121,8 +121,11 @@ handleFlagExportRequests :: proc() {
 
 executeExportFlagImage :: proc(request: FlagExportRequest) -> bool {
     path: cstring
+    defaultName := strings.clone_to_cstring(request.Flag.Name)
+    defer delete(defaultName)
     filters := [1]nfd.Filter_Item { { "Image", "png" } }
     args := nfd.Save_Dialog_Args {
+        default_name = defaultName,
         filter_list = raw_data(filters[:]),
         filter_count = len(filters),
     }
@@ -140,7 +143,7 @@ executeExportFlagImage :: proc(request: FlagExportRequest) -> bool {
 
     target := rl.LoadRenderTexture(request.Size[0], request.Size[1])
     defer rl.UnloadRenderTexture(target)
-    destination := rl.Rectangle{0, 0, f32(request.Size[0]), f32(request.Size[1])}
+    destination := rl.Rectangle{ 0, 0, f32(request.Size[0]), f32(request.Size[1]) }
     rl.BeginTextureMode(target)
     rl.ClearBackground(rl.WHITE)
     rl.BeginScissorMode(i32(destination.x), i32(destination.y), i32(destination.width), i32(destination.height))
