@@ -22,6 +22,10 @@ APPLICATION_NAME :: "PDX Flag Builder"
 APPLICATION_ICON :: "assets/icon.png"
 APPLICATION_SPLASH_LOGO :: "assets/textures/logo.dds"
 APPLICATION_SPLASH_SPINNER :: "assets/textures/spinner.dds"
+APPLICATION_FONT :: "assets/fonts/Inter_18pt-Regular.ttf"
+
+TEXT_HEIGHT: f32: 15
+TEXT_SPACING: f32: 0
 
 THREAD_IDENTIFIER_TEXTURE_LOADING: int: 1
 THREAD_IDENTIFIER_SPLASHSCREEN: int: 2
@@ -253,8 +257,9 @@ main :: proc() {
     showSplashScreen()
     defer DestroyState()
 
-    rl.SetConfigFlags({ .WINDOW_RESIZABLE })
+    rl.SetConfigFlags({ .WINDOW_RESIZABLE, .WINDOW_HIGHDPI })
     rl.InitWindow(1280, 800, APPLICATION_NAME)
+    rl.SetTargetFPS(60)
     rl.SetExitKey(rl.KeyboardKey.F10)
     rl.ClearWindowState({ .WINDOW_UNDECORATED, .WINDOW_TOPMOST })
     defer rl.CloseWindow()
@@ -263,6 +268,9 @@ main :: proc() {
     rl.ImageFormat(&icon, .UNCOMPRESSED_R8G8B8A8)
     rl.SetWindowIcon(icon)
     rl.UnloadImage(icon)
+
+    state.Font = rl.LoadFontEx(APPLICATION_FONT, i32(TEXT_HEIGHT), nil, 0)
+    defer rl.UnloadFont(state.Font)
 
     state.RecolorShader = texture.LoadRecolorShader(SHADER_RECOLOR)
     defer rl.UnloadShader(state.RecolorShader.Shader)
@@ -289,19 +297,24 @@ main :: proc() {
     state.InvalidTexture = texture.LoadTexture(TEXTURE_INVALID)
     defer rl.UnloadTexture(state.InvalidTexture)
 
+    defer if state.RenderTarget.id != 0 {
+        rl.UnloadRenderTexture(state.RenderTarget)
+    }
+
     loadIcons()
     defer unloadIcons()
 
     ctx := &state.Context
     mu.init(ctx, set_clipboard, get_clipboard)
 
-    ctx.text_width = mu.default_atlas_text_width
-    ctx.text_height = mu.default_atlas_text_height
+    ctx.text_width = scaledAtlasTextWidth
+    ctx.text_height = scaledAtlasTextHeight
 
     thread.start(state.TextureLoadingThread)
 
-    rl.SetTargetFPS(120)
     main_loop: for !rl.WindowShouldClose() {
+        updateUiScale()
+
         { // text input
             text_input: [512]byte = ---
             text_input_offset := 0
@@ -317,8 +330,10 @@ main :: proc() {
             mu.input_text(ctx, string(text_input[:text_input_offset]))
         }
 
+        ensureRenderTarget()
+
         // mouse coordinates
-        mouse_pos := [2]i32{rl.GetMouseX(), rl.GetMouseY()}
+        mouse_pos := [2]i32{ i32(f32(rl.GetMouseX())/state.UIScale), i32(f32(rl.GetMouseY())/state.UIScale) }
         mu.input_mouse_move(ctx, mouse_pos.x, mouse_pos.y)
         mu.input_scroll(ctx, 0, i32(rl.GetMouseWheelMove() * -30))
 
@@ -393,29 +408,21 @@ render :: proc(ctx: ^mu.Context) {
             f32(rect.w),
             f32(rect.h),
         }
-        position := rl.Vector2{f32(pos.x), f32(pos.y)}
-
-        rl.DrawTextureRec(state.AtlasTexture, source, position, transmute(rl.Color)color)
+        rl.DrawTextureRec(state.AtlasTexture, source, { f32(pos.x), f32(pos.y) }, transmute(rl.Color)color)
     }
 
+    rl.BeginTextureMode(state.RenderTarget)
     rl.ClearBackground(transmute(rl.Color)state.Settings.BackgroundColor)
 
-    rl.BeginDrawing()
-
-    rl.BeginScissorMode(0, 0, rl.GetScreenWidth(), rl.GetScreenHeight())
-    defer rl.EndScissorMode()
+    rl.BeginScissorMode(0, 0, state.RenderTarget.texture.width, state.RenderTarget.texture.height)
 
     command_backing: ^mu.Command
     for variant in mu.next_command_iterator(ctx, &command_backing) {
         switch cmd in variant {
         case ^mu.Command_Text:
-            pos := [2]i32{cmd.pos.x, cmd.pos.y}
-            for ch in cmd.str do if ch&0xc0 != 0x80 {
-                r := min(int(ch), 127)
-                rect := mu.default_atlas[mu.DEFAULT_ATLAS_FONT + r]
-                render_texture(rect, pos, cmd.color)
-                pos.x += rect.w
-            }
+            text := strings.clone_to_cstring(cmd.str)
+            defer delete(text)
+            rl.DrawTextEx(state.Font, text, { f32(cmd.pos.x), f32(cmd.pos.y) }, TEXT_HEIGHT, TEXT_SPACING, transmute(rl.Color)cmd.color)
         case ^mu.Command_Rect:
             switch {
             case isTextureRect(cmd.color):
@@ -445,7 +452,15 @@ render :: proc(ctx: ^mu.Context) {
         }
     }
 
-    defer rl.EndDrawing()
+    rl.EndScissorMode()
+    rl.EndTextureMode()
+
+    rl.BeginDrawing()
+    rl.ClearBackground(rl.BLACK)
+    source := rl.Rectangle{ 0, 0, f32(state.RenderTarget.texture.width), -f32(state.RenderTarget.texture.height) }
+    destination := rl.Rectangle{ 0, 0, f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight()) }
+    rl.DrawTexturePro(state.RenderTarget.texture, source, destination, { 0, 0 }, 0, rl.WHITE)
+    rl.EndDrawing()
 }
 
 renderIcon :: proc(cmd: ^mu.Command_Icon) -> bool {
@@ -545,20 +560,20 @@ guranteeBounds :: proc(ctx: ^mu.Context) {
     window := mu.get_current_container(ctx)
     sidebarWidth := state.SidebarWidth + SIDEBAR_HANDLE_WIDTH
 
-    if (window.rect.h + TOOLBAR_HEIGHT) > rl.GetScreenHeight() {
-        window.rect.h = rl.GetScreenHeight() - TOOLBAR_HEIGHT
+    if (window.rect.h + TOOLBAR_HEIGHT) > screenHeight() {
+        window.rect.h = screenHeight() - TOOLBAR_HEIGHT
     }
-    if (window.rect.w + sidebarWidth) > rl.GetScreenWidth() {
-        window.rect.w = rl.GetScreenWidth() - sidebarWidth
+    if (window.rect.w + sidebarWidth) > screenWidth() {
+        window.rect.w = screenWidth() - sidebarWidth
     }
-    if (window.rect.x + window.rect.w) > rl.GetScreenWidth() {
-        window.rect.x = rl.GetScreenWidth() - window.rect.w
+    if (window.rect.x + window.rect.w) > screenWidth() {
+        window.rect.x = screenWidth() - window.rect.w
     }
-    if (window.rect.y + window.rect.h) > rl.GetScreenHeight() {
-        window.rect.y = rl.GetScreenHeight() - window.rect.h
+    if (window.rect.y + window.rect.h) > screenHeight() {
+        window.rect.y = screenHeight() - window.rect.h
     }
-    if window.rect.x > (rl.GetScreenWidth() - sidebarWidth - window.rect.w - 2) {
-        window.rect.x = rl.GetScreenWidth() - sidebarWidth - window.rect.w - 2
+    if window.rect.x > (screenWidth() - sidebarWidth - window.rect.w - 2) {
+        window.rect.x = screenWidth() - sidebarWidth - window.rect.w - 2
     }
     if window.rect.x < 0 {
         window.rect.x = 0
@@ -879,4 +894,45 @@ chooseFolder :: proc() -> (string, bool) {
         return "", false
     }
     return strings.clone_from_cstring(path), true
+}
+
+updateUiScale :: proc() {
+    height := rl.GetMonitorHeight(rl.GetCurrentMonitor())
+    state.UIScale = clamp(f32(height) / 1080.0, 1.0, 3.0)
+    state.VirtualWidth = i32(f32(rl.GetScreenWidth()) / state.UIScale)
+    state.VirtualHeight = i32(f32(rl.GetScreenHeight()) / state.UIScale)
+}
+
+getUiScale :: proc() -> f32 {
+    return state.UIScale
+}
+
+screenWidth :: proc() -> i32 {
+    return state.VirtualWidth
+}
+
+screenHeight :: proc() -> i32 {
+    return state.VirtualHeight
+}
+
+ensureRenderTarget :: proc() {
+    w := screenWidth()
+    h := screenHeight()
+    if state.RenderTarget.texture.width != w || state.RenderTarget.texture.height != h {
+        if state.RenderTarget.id != 0 {
+            rl.UnloadRenderTexture(state.RenderTarget)
+        }
+        state.RenderTarget = rl.LoadRenderTexture(w, h)
+        rl.SetTextureFilter(state.RenderTarget.texture, .BILINEAR)
+    }
+}
+
+scaledAtlasTextWidth :: proc(font: mu.Font, text: string) -> (width: i32) {
+    temp := strings.clone_to_cstring(text)
+    defer delete(temp)
+    width = i32(rl.MeasureTextEx(state.Font, temp, TEXT_HEIGHT, TEXT_SPACING).x)
+    return
+}
+scaledAtlasTextHeight :: proc(font: mu.Font) -> i32 {
+    return i32(TEXT_HEIGHT)
 }

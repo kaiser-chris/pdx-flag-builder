@@ -124,9 +124,10 @@ renderGui :: proc(ctx: ^mu.Context) {
     }
 
     ui.InitDropdown(ctx, &state.Dropdown, &state.ButtonIdentifier)
-    ui.InitToast(ctx, &state.Toast, { 10, TOOLBAR_HEIGHT + 10, 200, rl.GetScreenHeight() - (TOOLBAR_HEIGHT + 20) }, &state.ButtonIdentifier)
+    ui.InitToast(ctx, &state.Toast, { 10, TOOLBAR_HEIGHT + 10, 200, screenHeight() - (TOOLBAR_HEIGHT + 20) }, &state.ButtonIdentifier)
 
-    rl.SetWindowMinSize(FLAG_WIDTH + state.SidebarWidth, FLAG_HEIGHT + TOOLBAR_HEIGHT)
+    scale := getUiScale()
+    rl.SetWindowMinSize(i32(f32(FLAG_WIDTH + state.SidebarWidth) * scale), i32(f32(FLAG_HEIGHT + TOOLBAR_HEIGHT) * scale))
 
     handleStackedWindowClosing(ctx)
 
@@ -208,8 +209,8 @@ renderAbsoluteColorPicker :: proc(ctx: ^mu.Context) {
     color := mu.Color{ red, green, blue, 255 }
     width: i32 = 400
     height: i32 = 110
-    x: i32 = (rl.GetScreenWidth() - width - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH) / 2
-    y: i32 = (rl.GetScreenHeight() - height) / 2
+    x: i32 = (screenWidth() - width - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH) / 2
+    y: i32 = (screenHeight() - height) / 2
 
     if mu.window(ctx, WINDOM_COLOR_PICKER, { x, y, width, height }, { .NO_RESIZE }) {
         guranteeBounds(ctx)
@@ -277,8 +278,8 @@ renderAbsoluteColorPicker :: proc(ctx: ^mu.Context) {
 renderNamedColorPicker :: proc(ctx: ^mu.Context) {
     width: i32 = 300
     height: i32 = 500
-    x: i32 = (rl.GetScreenWidth() - width - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH) / 2
-    y: i32 = (rl.GetScreenHeight() - height) / 2
+    x: i32 = (screenWidth() - width - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH) / 2
+    y: i32 = (screenHeight() - height) / 2
 
     if mu.window(ctx, WINDOM_COLOR_PICKER, { x, y, width, height }, { .NO_RESIZE }) {
         guranteeBounds(ctx)
@@ -390,8 +391,8 @@ renderNamedColorPicker :: proc(ctx: ^mu.Context) {
 renderReferenceColorPicker :: proc(ctx: ^mu.Context) {
     width: i32 = 300
     height: i32 = 300
-    x: i32 = (rl.GetScreenWidth() - width - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH) / 2
-    y: i32 = (rl.GetScreenHeight() - height) / 2
+    x: i32 = (screenWidth() - width - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH) / 2
+    y: i32 = (screenHeight() - height) / 2
 
     if mu.window(ctx, WINDOM_COLOR_PICKER, { x, y, width, height }, { .NO_RESIZE }) {
         guranteeBounds(ctx)
@@ -480,8 +481,8 @@ renderReferenceColorPicker :: proc(ctx: ^mu.Context) {
 renderInstanceEditor :: proc(ctx: ^mu.Context) {
     width: i32 = 400
     height: i32 = 160
-    x: i32 = (rl.GetScreenWidth() - width - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH) / 2
-    y: i32 = (rl.GetScreenHeight() - height) / 2
+    x: i32 = (screenWidth() - width - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH) / 2
+    y: i32 = (screenHeight() - height) / 2
 
     @static rotationBuf: [16]byte
     @static rotationBufLen: int
@@ -599,12 +600,12 @@ renderInstanceEditor :: proc(ctx: ^mu.Context) {
 }
 
 renderToolbar :: proc(ctx: ^mu.Context) {
-    if mu.window(ctx, WINDOM_TOOLBAR, { 0, 0, rl.GetScreenWidth(), TOOLBAR_HEIGHT }, { .NO_CLOSE, .NO_TITLE, .NO_RESIZE, .NO_SCROLL }) {
-        mu.get_current_container(ctx).rect.w = rl.GetScreenWidth()
+    if mu.window(ctx, WINDOM_TOOLBAR, { 0, 0, screenWidth(), TOOLBAR_HEIGHT }, { .NO_CLOSE, .NO_TITLE, .NO_RESIZE, .NO_SCROLL }) {
+        mu.get_current_container(ctx).rect.w = screenWidth()
         mu.layout_row_items(ctx, 6, TOOLBAR_HEIGHT - 8)
 
         mu.layout_begin_column(ctx)
-        mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
+        mu.layout_row(ctx, {200, -1}, TOOLBAR_HEIGHT - 8)
         if .SUBMIT in mu.button(ctx, "File") {
             exportAsIs :: proc(ctx: ^mu.Context) {
                 exportFlagAsIs(ctx, &state.Flag)
@@ -640,7 +641,7 @@ renderToolbar :: proc(ctx: ^mu.Context) {
 //        mu.layout_end_column(ctx)
 
         mu.layout_begin_column(ctx)
-        mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
+        mu.layout_row(ctx, {200, -1}, TOOLBAR_HEIGHT - 8)
         if .SUBMIT in mu.button(ctx, "Texture Database") {
             if state.TextureDatabaseWindowOpen {
                 state.TextureDatabaseWindowOpen = false
@@ -651,7 +652,7 @@ renderToolbar :: proc(ctx: ^mu.Context) {
         mu.layout_end_column(ctx)
 
         mu.layout_begin_column(ctx)
-        mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
+        mu.layout_row(ctx, {200, -1}, TOOLBAR_HEIGHT - 8)
         if .SUBMIT in mu.button(ctx, "Flag Database") {
             if state.FlagDatabaseWindowOpen {
                 state.FlagDatabaseWindowOpen = false
@@ -662,7 +663,7 @@ renderToolbar :: proc(ctx: ^mu.Context) {
         mu.layout_end_column(ctx)
 
         mu.layout_begin_column(ctx)
-        mu.layout_row(ctx, {150, -1}, TOOLBAR_HEIGHT - 8)
+        mu.layout_row(ctx, {200, -1}, TOOLBAR_HEIGHT - 8)
         if .SUBMIT in mu.button(ctx, "Settings") {
             if state.SettingsWindowOpen {
                 state.SettingsWindowOpen = false
@@ -678,15 +679,15 @@ renderFlagPreview :: proc(ctx: ^mu.Context) {
     destination: mu.Rect
     if state.SidebarOpen {
         destination = mu.Rect{
-            x = (rl.GetScreenWidth() - FLAG_WIDTH - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH - 10) / 2,
-            y = TOOLBAR_HEIGHT + ((rl.GetScreenHeight() - FLAG_HEIGHT - TOOLBAR_HEIGHT - 6) / 2),
+            x = (screenWidth() - FLAG_WIDTH - state.SidebarWidth - SIDEBAR_HANDLE_WIDTH - 10) / 2,
+            y = TOOLBAR_HEIGHT + ((screenHeight() - FLAG_HEIGHT - TOOLBAR_HEIGHT - 6) / 2),
             w = FLAG_WIDTH,
             h = FLAG_HEIGHT,
         }
     } else {
         destination = mu.Rect{
-            x = (rl.GetScreenWidth() - FLAG_WIDTH) / 2,
-            y = TOOLBAR_HEIGHT + ((rl.GetScreenHeight() - FLAG_HEIGHT - TOOLBAR_HEIGHT - 6) / 2),
+            x = (screenWidth() - FLAG_WIDTH) / 2,
+            y = TOOLBAR_HEIGHT + ((screenHeight() - FLAG_HEIGHT - TOOLBAR_HEIGHT - 6) / 2),
             w = FLAG_WIDTH,
             h = FLAG_HEIGHT,
         }
@@ -933,7 +934,7 @@ renderSettings :: proc(ctx: ^mu.Context) {
 }
 
 renderFlagDatabase :: proc(ctx: ^mu.Context) {
-    if mu.window(ctx, WINDOM_FLAG_DATABASE, {10, 10 + TOOLBAR_HEIGHT, 500, rl.GetScreenHeight() - 20 - TOOLBAR_HEIGHT}, {}) {
+    if mu.window(ctx, WINDOM_FLAG_DATABASE, {10, 10 + TOOLBAR_HEIGHT, 500, screenHeight() - 20 - TOOLBAR_HEIGHT}, {}) {
         guranteeBounds(ctx)
 
         mu.layout_row(ctx, { -1 }, 15)
@@ -993,7 +994,7 @@ renderFlagDatabase :: proc(ctx: ^mu.Context) {
 }
 
 renderTextureDatabase :: proc(ctx: ^mu.Context) {
-    if mu.window(ctx, WINDOM_TEXTURE_DATABASE, {10, 10 + TOOLBAR_HEIGHT, 500, rl.GetScreenHeight() - 20 - TOOLBAR_HEIGHT}, {}) {
+    if mu.window(ctx, WINDOM_TEXTURE_DATABASE, {10, 10 + TOOLBAR_HEIGHT, 500, screenHeight() - 20 - TOOLBAR_HEIGHT}, {}) {
         guranteeBounds(ctx)
 
         mu.layout_row(ctx, {-1, -1}, 15)
@@ -1183,8 +1184,8 @@ popupWindow :: proc(
     enabled: bool,
 ) -> (res: mu.Result_Set) {
     center := mu.Rect{
-        x = (rl.GetScreenWidth() - 300) / 2,
-        y = (rl.GetScreenHeight() - 200) / 2,
+        x = (screenWidth() - 300) / 2,
+        y = (screenHeight() - 200) / 2,
         w = 300,
         h = 100,
     }
@@ -1195,8 +1196,8 @@ popupWindow :: proc(
         window.zindex = ctx.last_zindex + 1
 
         // always center
-        window.rect.x = (rl.GetScreenWidth() - window.rect.w) / 2
-        window.rect.y = (rl.GetScreenHeight() - window.rect.h) / 2
+        window.rect.x = (screenWidth() - window.rect.w) / 2
+        window.rect.y = (screenHeight() - window.rect.h) / 2
 
         mu.layout_row(ctx, { 300 }, 0)
         mu.text(ctx, confirmText)

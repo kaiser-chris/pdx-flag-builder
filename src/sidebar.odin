@@ -36,8 +36,8 @@ renderSidebar :: proc(ctx: ^mu.Context) {
 
 renderSidebarHandle :: proc(ctx: ^mu.Context) {
     width := SIDEBAR_HANDLE_WIDTH
-    height := rl.GetScreenHeight() - (TOOLBAR_HEIGHT + 1)
-    x := rl.GetScreenWidth() - width - state.SidebarWidth
+    height := screenHeight() - (TOOLBAR_HEIGHT + 1)
+    x := screenWidth() - width - state.SidebarWidth
     y := TOOLBAR_HEIGHT + 1
 
     if mu.window(ctx, WINDOM_SIDEBAR, { x, y, width, height }, {.NO_RESIZE, .NO_CLOSE, .NO_TITLE, .NO_SCROLL}) {
@@ -79,7 +79,7 @@ renderSidebarHandle :: proc(ctx: ^mu.Context) {
 renderFlagMenu :: proc(ctx: ^mu.Context) {
     width := state.SidebarWidth
     height: i32 = 300
-    x := rl.GetScreenWidth() - width
+    x := screenWidth() - width
     y := TOOLBAR_HEIGHT + 1
 
     if mu.window(ctx, WINDOM_FLAG, { x, y, width, height }, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT}) {
@@ -248,8 +248,8 @@ renderLayerSubInstances :: proc(ctx: ^mu.Context, instances: [dynamic]^pdx.Layer
 renderSelectedElementMenu :: proc(ctx: ^mu.Context) {
     flagWindow := mu.get_container(ctx, WINDOM_FLAG)
     width := state.SidebarWidth
-    height := rl.GetScreenHeight() - (flagWindow.rect.y + flagWindow.rect.h + 1)
-    x :=  rl.GetScreenWidth() - width
+    height := screenHeight() - (flagWindow.rect.y + flagWindow.rect.h + 1)
+    x :=  screenWidth() - width
     y := flagWindow.rect.y + flagWindow.rect.h + 1
 
     if mu.window(ctx, WINDOM_SELECTED, { x, y, width, height }, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT}) {

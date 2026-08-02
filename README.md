@@ -1,6 +1,6 @@
 # Overview
 
-**pdx-flag-builder** is a tool to build flags for Victoria 3 and Europa Universalis 5.
+**PDX Flag Builder** is a tool to build flags for Victoria 3 and Europa Universalis 5.
 
 ![Example Screenshot](docs/screenshot.png)
 

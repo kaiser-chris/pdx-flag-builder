@@ -54,6 +54,11 @@ State :: struct {
     Icons: map[ui.IconType]rl.Texture2D,
     SearchCache: SearchCache,
     PopupIdentifier: mu.Id,
+    Font: rl.Font,
+    RenderTarget: rl.RenderTexture2D,
+    UIScale: f32,
+    VirtualWidth: i32,
+    VirtualHeight: i32,
 }
 
 SearchCache :: struct {
