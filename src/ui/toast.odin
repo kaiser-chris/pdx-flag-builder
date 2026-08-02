@@ -3,7 +3,6 @@ package ui
 import "core:time"
 import mu "vendor:microui"
 import strings "core:strings"
-import fmt "core:fmt"
 
 WINDOW_TOAST: string: "toast-layer"
 
@@ -64,12 +63,12 @@ InitToast :: proc(ctx: ^mu.Context, toast: ^ToastContainer, destination: mu.Rect
         window.rect.y -= ctx.style.padding
 
         for message, index in toast.Messages {
-//            msToExpirary := time.duration_milliseconds(time.diff(message.Expirary, time.now()))
-//            if (msToExpirary > 0) {
-//                DestroyToast(toast.Messages[index])
-//                ordered_remove(&toast.Messages, index)
-//                continue
-//            }
+            msToExpirary := time.duration_milliseconds(time.diff(message.Expirary, time.now()))
+            if (msToExpirary > 0) {
+                DestroyToast(toast.Messages[index])
+                ordered_remove(&toast.Messages, index)
+                continue
+            }
 
             mu.layout_row(ctx, { -1 }, 20)
 
