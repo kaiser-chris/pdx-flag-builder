@@ -153,6 +153,7 @@ executeExportFlagImage :: proc(request: FlagExportRequest) -> bool {
 
     image := rl.LoadImageFromTexture(target.texture)
     defer rl.UnloadImage(image)
+    rl.ImageFlipVertical(&image)
     return rl.ExportImage(image, path)
 }
 
