@@ -29,9 +29,9 @@ PATTERN_REPLACE_COLORS: []rl.Color: {
 }
 
 COLORED_EMBLEM_REPLACE_COLORS: []rl.Color: {
-    rl.Color{0, 0, 123, 255},
-    rl.Color{0, 255, 123, 255},
-    rl.Color{255, 0, 123, 255},
+    rl.Color{0, 0, 128, 255},
+    rl.Color{0, 255, 128, 255},
+    rl.Color{255, 0, 128, 255},
 }
 
 COLOR_NAMES: []string: {

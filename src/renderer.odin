@@ -663,6 +663,7 @@ renderColoredEmblemInstances :: proc(layer: ^pdx.FlagLayerColoredEmblem, flag: p
             state.RecolorShader,
             calculateInstanceOrigin(emblem, instance, target),
             f32(instance.Rotation),
+            blueChannelShading = true,
         )
     }
 
@@ -681,6 +682,7 @@ renderColoredEmblemInstances :: proc(layer: ^pdx.FlagLayerColoredEmblem, flag: p
             state.RecolorShader,
             calculateInstanceOrigin(emblem, &instance, target),
             f32(instance.Rotation),
+            blueChannelShading = true,
         )
     }
 }

@@ -18,6 +18,7 @@ RecolorShader :: struct {
     ReplacementColorsLocation: c.int,
     ToleranceLocation: c.int,
     PreserveShadingLocation: c.int,
+    BlueChannelShadingLocation: c.int,
 }
 
 LoadRecolorShader :: proc(path: string) -> RecolorShader {
@@ -32,6 +33,7 @@ LoadRecolorShader :: proc(path: string) -> RecolorShader {
         ReplacementColorsLocation = rl.GetShaderLocation(shader, "replacementColors[0]"),
         ToleranceLocation = rl.GetShaderLocation(shader, "tolerance"),
         PreserveShadingLocation = rl.GetShaderLocation(shader, "preserveShading"),
+        BlueChannelShadingLocation = rl.GetShaderLocation(shader, "blueChannelShading"),
     }
 }
 
@@ -50,6 +52,7 @@ configureRecolorTextureShader :: proc(
     mappings: []ColorRecolor,
     tolerance: f32 = 0.8,
     preserveShading: f32 = 0,
+    blueChannelShading: bool = false,
 ) {
     count := min(len(mappings), MAX_RECOLORS)
 
@@ -114,6 +117,14 @@ configureRecolorTextureShader :: proc(
         &preserveShadingValue,
         .FLOAT,
     )
+
+    blueChannelShadingValue: c.int = blueChannelShading ? 1 : 0
+    rl.SetShaderValue(
+        recolor.Shader,
+        recolor.BlueChannelShadingLocation,
+        &blueChannelShadingValue,
+        .INT,
+    )
 }
 
 DrawRecoloredTexture :: proc(
@@ -123,11 +134,13 @@ DrawRecoloredTexture :: proc(
     shader: RecolorShader,
     origin: rl.Vector2 = { 0, 0 },
     rotation: f32 = 0,
-    tint: rl.Color = rl.WHITE
+    tint: rl.Color = rl.WHITE,
+    blueChannelShading: bool = false,
 ) {
     configureRecolorTextureShader(
         shader,
         colorMappings,
+        blueChannelShading = blueChannelShading,
     )
     rl.BeginShaderMode(shader.Shader)
     rl.DrawTexturePro(texture, source, destination, origin, rotation, tint)
