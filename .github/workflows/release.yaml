@@ -1,0 +1,148 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release-type:
+        description: 'Release Type'
+        default: 'feature'
+        required: false
+        type: choice
+        options:
+          - major
+          - feature
+          - patch
+
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - { runner: ubuntu-latest, os: linux, arch: amd64 }
+          - { runner: windows-latest, os: windows, arch: amd64 }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          submodules: recursive
+          lfs: true
+
+      - name: Checkout submodule LFS objects
+        run: git submodule foreach --recursive git lfs pull
+
+      - name: Checkout tags
+        run: |
+          git config --global user.name 'Chris Kaiser'
+          git config --global user.email 'kaiser-chris@users.noreply.github.com'
+          git fetch --prune --unshallow --tags
+
+      - name: Get latest version
+        id: project
+        shell: bash
+        run: |
+          echo "last-version=$(git describe --tags $(git rev-list --tags --max-count=1))" >> $GITHUB_OUTPUT
+
+      - name: Increment release version
+        id: increment-version
+        uses: christian-draeger/increment-semantic-version@1.2.3
+        with:
+          current-version: ${{ steps.project.outputs.last-version }}
+          version-fragment: ${{ inputs.release-type }}
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev \
+            libwayland-dev libxkbcommon-dev libasound2-dev \
+            libgtk-3-dev libdbus-1-dev
+
+      - name: Setup Odin
+        uses: laytan/setup-odin@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup MSVC Developer Prompt
+        if: matrix.os == 'windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build (Linux)
+        if: matrix.os == 'linux'
+        run: bash build.sh
+
+      - name: Build (Windows)
+        if: matrix.os == 'windows'
+        shell: cmd
+        run: build.bat
+
+      - name: Rename release archive
+        shell: bash
+        run: |
+          mv "bin/${{ matrix.os }}/pdx-flag-builder_x.x.x_${{ matrix.os }}_${{ matrix.arch }}.zip" \
+             "bin/${{ matrix.os }}/pdx-flag-builder_${{ steps.increment-version.outputs.next-version }}_${{ matrix.os }}_${{ matrix.arch }}.zip"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: pdx-flag-builder_${{ steps.increment-version.outputs.next-version }}_${{ matrix.os }}_${{ matrix.arch }}.zip
+          path: bin/${{ matrix.os }}/pdx-flag-builder_${{ steps.increment-version.outputs.next-version }}_${{ matrix.os }}_${{ matrix.arch }}.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Checkout tags
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --prune --unshallow --tags
+
+      - name: Get latest version
+        id: project
+        run: |
+          echo "last-version=$(git describe --tags $(git rev-list --tags --max-count=1))" >> $GITHUB_OUTPUT
+
+      - name: Increment release version
+        id: increment-version
+        uses: christian-draeger/increment-semantic-version@1.2.3
+        with:
+          current-version: ${{ steps.project.outputs.last-version }}
+          version-fragment: ${{ inputs.release-type }}
+
+      - name: Get changes since last tag
+        id: commits
+        run: |
+          {
+            echo 'markdown<<EOF'
+            echo "$(git log ${{ steps.project.outputs.last-version }}..HEAD --no-merges --pretty=format:' - %s')"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: "*64.zip"
+          merge-multiple: true
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v3.0.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          prerelease: false
+          files: "*64.zip"
+          tag_name: ${{ steps.increment-version.outputs.next-version }}
+          name: ${{ steps.increment-version.outputs.next-version }}
+          body: |
+            Released a new version of **pdx-flag-builder**.
+            
+            ### Changes:
+            ${{ steps.commits.outputs.markdown }}
