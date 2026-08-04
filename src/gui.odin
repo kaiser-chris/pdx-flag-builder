@@ -32,7 +32,7 @@ TEXTURE_INVALID: string: "assets/textures/invalid.dds"
 POPUP_MESSAGE_CLEAR_FLAG: string: "Are you sure you want to clear this flag? It will delete your current changes in the editor."
 POPUP_MESSAGE_DELETE_LAYER: string: "Are you sure you want to delete this layer?"
 POPUP_MESSAGE_DELETE_INSTANCE: string: "Are you sure you want to delete this layer instance?"
-POPUP_MESSAGE_OPEN_FLAG: string: "Are you sure you want to open this flag? It will overwrite your current flag."
+POPUP_MESSAGE_OPEN_FLAG: string: "Are you sure you want to open %s? It will overwrite the flag currently in your editor."
 POPUP_MESSAGE_DELETE_COLOR: string: "Are you sure you want to delete this color?"
 
 TEXTURE_ICON_GAME_VIC3: string: "assets/textures/icons/game_vic3.dds"
@@ -935,6 +935,10 @@ renderSettings :: proc(ctx: ^mu.Context) {
 renderFlagDatabase :: proc(ctx: ^mu.Context) {
     if mu.window(ctx, WINDOM_FLAG_DATABASE, {10, 10 + TOOLBAR_HEIGHT, 500, rl.GetScreenHeight() - 20 - TOOLBAR_HEIGHT}, {}) {
         guranteeBounds(ctx)
+        window := mu.get_current_container(ctx)
+        if window.rect.w < 400 {
+            window.rect.w = 400
+        }
 
         mu.layout_row(ctx, { -1 }, 15)
         mu.text(ctx, "Search:")
@@ -962,22 +966,28 @@ renderFlagDatabase :: proc(ctx: ^mu.Context) {
                     if !strings.contains(searchName, state.SearchCache.FlagDatabaseSearch) {
                         continue
                     }
-                    mu.layout_row(ctx, {40, -139, 80, 50}, 24)
-                    drawFlag(ctx, flag.Name, 36, 24)
-                    mu.text(ctx, flag.Name)
-                    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-                    if .SUBMIT in mu.button(ctx, "Add as sub") {
-                        sub := pdx.CreateLayerSub(flag.Name)
-                        append(&state.Flag.Layers, sub)
+                    mu.layout_row(ctx, {60, -64}, 48)
+                    drawFlag(ctx, flag.Name, 60, 40)
+                    mu.layout_begin_column(ctx)
+                    {
+                        mu.layout_row(ctx, {-42, 100}, 20)
+                        mu.text(ctx, flag.Name)
+                        ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+                        if .SUBMIT in ButtonTextConfirm(ctx, "Open", "Open Flag", fmt.tprintf(POPUP_MESSAGE_OPEN_FLAG, flag.Name), ui.ButtonStyle.Danger) {
+                            pdx.DestroyFlag(&state.Flag)
+                            clonedFlag := pdx.CloneFlag(flag)
+                            state.Flag = clonedFlag
+                        }
+                        mu.pop_id(ctx)
+                        mu.text(ctx, flag.File)
+                        ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+                        if .SUBMIT in mu.button(ctx, "Add as sub") {
+                            sub := pdx.CreateLayerSub(flag.Name)
+                            append(&state.Flag.Layers, sub)
+                        }
+                        mu.pop_id(ctx)
                     }
-                    mu.pop_id(ctx)
-                    ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-                    if .SUBMIT in ButtonTextConfirm(ctx, "Open", "Open Flag", POPUP_MESSAGE_OPEN_FLAG, ui.ButtonStyle.Danger) {
-                        pdx.DestroyFlag(&state.Flag)
-                        clonedFlag := pdx.CloneFlag(flag)
-                        state.Flag = clonedFlag
-                    }
-                    mu.pop_id(ctx)
+                    mu.layout_end_column(ctx)
                 }
             }
             mu.pop_id(ctx)
