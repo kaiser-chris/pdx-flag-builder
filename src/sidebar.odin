@@ -370,9 +370,13 @@ renderSelectedFlag :: proc(ctx: ^mu.Context, flag: ^pdx.Flag) {
 }
 
 renderSelectedFlagLayerColoredEmblem :: proc(ctx: ^mu.Context, layer: ^pdx.FlagLayerColoredEmblem) {
+    @static maskBuf: [16]byte
+    @static maskBufLen: int
+
     ui.DrawAttributeRow(ctx, "Type", "Colored Emblem")
     ui.DrawAttributeRow(ctx, "Texture", layer.Texture.Name)
     ui.DrawAttributeRow(ctx, "Instances", fmt.tprintf("%i", len(layer.Instances)))
+    ui.DrawAttributeRowNumberTextbox(ctx, "Mask (0 = off)", &layer.Mask, maskBuf[:], &maskBufLen, pdx.MAX_MASK, pdx.MIN_MASK, "%i", 0.3)
     for _, index in layer.Colors {
         variant := layer.Colors[index]
         switch color in variant.Variant {

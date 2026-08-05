@@ -9,6 +9,9 @@ DEFAULT_OFFSET: LayerVector: { 0, 0 }
 MIN_SCALE: f32: 0
 MAX_SCALE: f32: 10
 
+MIN_MASK: i32: 0
+MAX_MASK: i32: 3
+
 MIN_POSITION: f32: -4
 MAX_POSITION: f32: 5
 
@@ -97,6 +100,7 @@ FlagLayer :: struct {
 FlagLayerColoredEmblem :: struct {
     using Layer: FlagLayer,
     Colors: [dynamic]FlagColor,
+    Mask: i32,
 }
 FlagLayerTexturedEmblem :: struct {
     using Layer: FlagLayer,
@@ -158,6 +162,7 @@ CloneFlagLayer :: proc(variant: FlagLayerVariant) -> FlagLayerVariant {
     switch layer in variant {
     case ^FlagLayerColoredEmblem:
         clonedLayer := CreateLayerColoredEmblem(layer.Texture.Name, layer.Texture.Path)
+        clonedLayer.Mask = layer.Mask
         for instance in layer.Instances {
             append(&clonedLayer.Instances, CloneLayerInstance(instance))
         }

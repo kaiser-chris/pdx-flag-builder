@@ -16,6 +16,7 @@ ATTRIBUTE_PARENT: string: "parent"
 ATTRIBUTE_INSTANCE: string: "instance"
 ATTRIBUTE_SCALE: string: "scale"
 ATTRIBUTE_POSITION: string: "position"
+ATTRIBUTE_MASK: string: "mask"
 ATTRIBUTE_ROTATION: string: "rotation"
 ATTRIBUTE_OFFSET: string: "offset"
 
@@ -99,10 +100,28 @@ LoadCoa :: proc(root: parser.Pair, path, source: string) -> (Flag, bool) {
 
 loadLayer :: proc(type: string, attributes: []parser.Pair) -> (FlagLayerVariant, bool) {
     textureOrParent: string
+    mask: i32
 
     for attribute in attributes {
         if (attribute.key == ATTRIBUTE_TEXTURE || attribute.key == ATTRIBUTE_PARENT) && attribute.value.kind == .String {
             textureOrParent = attribute.value.data.(string)
+        }
+        if attribute.key == ATTRIBUTE_MASK && attribute.value.kind == .List && type == ATTRIBUTE_COLORED_EMBLEM {
+            values := attribute.value.data.([]parser.Value)
+            if len(values) != 1 {
+                fmt.eprintfln("invalid number of values for colored emblem mask: %v", values)
+                continue
+            }
+            for value, index in values {
+                if value.kind != .Number {
+                    fmt.eprintfln("non numeric value for colored emblem mask: %v", value.data)
+                    continue
+                }
+                number := value.data.(f64)
+                if index == 0 {
+                    mask = i32(number)
+                }
+            }
         }
     }
 
@@ -110,6 +129,9 @@ loadLayer :: proc(type: string, attributes: []parser.Pair) -> (FlagLayerVariant,
         instances := loadInstances(attributes)
         defer delete(instances)
         layer := CreateLayerColoredEmblem(textureOrParent, "")
+        if mask > 0 {
+            layer.Mask = mask
+        }
         colors := loadColors(attributes)
         for &color in colors {
             append(&layer.Colors, color)
@@ -406,6 +428,11 @@ writeColoredEmblemLayer :: proc(builder: ^strings.Builder, layer: ^FlagLayerColo
 
     strings.write_string(builder, fmt.tprintf("\t\t%s = \"%s\"", ATTRIBUTE_TEXTURE, layer.Texture.Name))
     strings.write_string(builder, lineBreak)
+
+    if layer.Mask != 0 {
+        strings.write_string(builder, lineBreak)
+        strings.write_string(builder, fmt.tprintf("\t\t\t%s = {{ %i }}", ATTRIBUTE_MASK, layer.Mask))
+    }
 
     writeColors(builder, layer.Colors[:], "\t\t", lineBreak)
 
