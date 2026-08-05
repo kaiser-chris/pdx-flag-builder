@@ -19,6 +19,24 @@ RecolorShader :: struct {
     ToleranceLocation: c.int,
     PreserveShadingLocation: c.int,
     BlueChannelShadingLocation: c.int,
+    UseMaskLocation: c.int,
+    MaskTextureLocation: c.int,
+    MaskColorLocation: c.int,
+    MaskUVOffsetLocation: c.int,
+    MaskUVAxisXLocation: c.int,
+    MaskUVAxisYLocation: c.int,
+}
+
+// Describes how a colored emblem is restricted to the flag pattern pixels
+// that match a specific PATTERN_REPLACE_COLORS entry (see coa mask attribute).
+MaskParams :: struct {
+    Texture: rl.Texture2D,
+    Color: rl.Color,
+    // Affine mapping from the emblem's own [0,1] texcoord to the pattern
+    // texture's [0,1] UV space: maskUV = UVOffset + u*UVAxisX + v*UVAxisY.
+    UVOffset: [2]f32,
+    UVAxisX: [2]f32,
+    UVAxisY: [2]f32,
 }
 
 LoadRecolorShader :: proc(path: string) -> RecolorShader {
@@ -34,6 +52,12 @@ LoadRecolorShader :: proc(path: string) -> RecolorShader {
         ToleranceLocation = rl.GetShaderLocation(shader, "tolerance"),
         PreserveShadingLocation = rl.GetShaderLocation(shader, "preserveShading"),
         BlueChannelShadingLocation = rl.GetShaderLocation(shader, "blueChannelShading"),
+        UseMaskLocation = rl.GetShaderLocation(shader, "useMask"),
+        MaskTextureLocation = rl.GetShaderLocation(shader, "maskTexture"),
+        MaskColorLocation = rl.GetShaderLocation(shader, "maskColor"),
+        MaskUVOffsetLocation = rl.GetShaderLocation(shader, "maskUVOffset"),
+        MaskUVAxisXLocation = rl.GetShaderLocation(shader, "maskUVAxisX"),
+        MaskUVAxisYLocation = rl.GetShaderLocation(shader, "maskUVAxisY"),
     }
 }
 
@@ -47,13 +71,42 @@ colorToVec3 :: proc(color: rl.Color) -> [3]f32 {
 }
 
 @private
+configureMaskShader :: proc(recolor: RecolorShader, mask: Maybe(MaskParams)) {
+    params, hasMask := mask.?
+
+    useMaskValue: c.int = hasMask ? 1 : 0
+    rl.SetShaderValue(recolor.Shader, recolor.UseMaskLocation, &useMaskValue, .INT)
+
+    if !hasMask {
+        return
+    }
+
+    rl.SetShaderValueTexture(recolor.Shader, recolor.MaskTextureLocation, params.Texture)
+
+    maskColorValue := colorToVec3(params.Color)
+    rl.SetShaderValue(recolor.Shader, recolor.MaskColorLocation, &maskColorValue, .VEC3)
+
+    uvOffsetValue := params.UVOffset
+    rl.SetShaderValue(recolor.Shader, recolor.MaskUVOffsetLocation, &uvOffsetValue, .VEC2)
+
+    uvAxisXValue := params.UVAxisX
+    rl.SetShaderValue(recolor.Shader, recolor.MaskUVAxisXLocation, &uvAxisXValue, .VEC2)
+
+    uvAxisYValue := params.UVAxisY
+    rl.SetShaderValue(recolor.Shader, recolor.MaskUVAxisYLocation, &uvAxisYValue, .VEC2)
+}
+
+@private
 configureRecolorTextureShader :: proc(
     recolor: RecolorShader,
     mappings: []ColorRecolor,
     tolerance: f32 = 0.8,
     preserveShading: f32 = 0,
     blueChannelShading: bool = false,
+    mask: Maybe(MaskParams) = nil,
 ) {
+    configureMaskShader(recolor, mask)
+
     count := min(len(mappings), MAX_RECOLORS)
 
     if count <= 0 {
@@ -136,13 +189,18 @@ DrawRecoloredTexture :: proc(
     rotation: f32 = 0,
     tint: rl.Color = rl.WHITE,
     blueChannelShading: bool = false,
+    mask: Maybe(MaskParams) = nil,
 ) {
+    // BeginShaderMode must run before configuring the shader: SetShaderValueTexture
+    // (used for the mask sampler) targets whichever shader program is currently
+    // bound, unlike SetShaderValue which enables its own shader internally.
+    rl.BeginShaderMode(shader.Shader)
     configureRecolorTextureShader(
         shader,
         colorMappings,
         blueChannelShading = blueChannelShading,
+        mask = mask,
     )
-    rl.BeginShaderMode(shader.Shader)
     rl.DrawTexturePro(texture, source, destination, origin, rotation, tint)
     rl.EndShaderMode()
 }

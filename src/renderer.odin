@@ -653,17 +653,26 @@ renderColoredEmblemInstances :: proc(layer: ^pdx.FlagLayerColoredEmblem, flag: p
     colorMappings := fillColorMapping(layer.Colors[:], flag, pdx.COLORED_EMBLEM_REPLACE_COLORS)
     defer delete(colorMappings)
 
+    maskTexture, maskColor, hasMask := getLayerMaskTexture(layer, flag)
+
     for instance in layer.Instances {
         target := calculateInstanceDestination(emblem, instance, destination)
+        origin := calculateInstanceOrigin(emblem, instance, target)
+        rotation := f32(instance.Rotation)
+        mask: Maybe(texture.MaskParams)
+        if hasMask {
+            mask = calculateMaskParams(maskTexture, maskColor, destination, target, origin, rotation)
+        }
         texture.DrawRecoloredTexture(
             emblem,
             source,
             target,
             colorMappings,
             state.RecolorShader,
-            calculateInstanceOrigin(emblem, instance, target),
-            f32(instance.Rotation),
+            origin,
+            rotation,
             blueChannelShading = true,
+            mask = mask,
         )
     }
 
@@ -674,16 +683,94 @@ renderColoredEmblemInstances :: proc(layer: ^pdx.FlagLayerColoredEmblem, flag: p
             Scale = pdx.DEFAULT_SCALE,
         }
         target := calculateInstanceDestination(emblem, &instance, destination)
+        origin := calculateInstanceOrigin(emblem, &instance, target)
+        rotation := f32(instance.Rotation)
+        mask: Maybe(texture.MaskParams)
+        if hasMask {
+            mask = calculateMaskParams(maskTexture, maskColor, destination, target, origin, rotation)
+        }
         texture.DrawRecoloredTexture(
             emblem,
             source,
             target,
             colorMappings[:],
             state.RecolorShader,
-            calculateInstanceOrigin(emblem, &instance, target),
-            f32(instance.Rotation),
+            origin,
+            rotation,
             blueChannelShading = true,
+            mask = mask,
         )
+    }
+}
+
+getLayerMaskTexture :: proc(layer: ^pdx.FlagLayerColoredEmblem, flag: pdx.Flag) -> (texture: rl.Texture2D, color: rl.Color, ok: bool) {
+    patternReplaceColors := pdx.PATTERN_REPLACE_COLORS
+    if layer.Mask <= 0 || int(layer.Mask) > len(patternReplaceColors) {
+        return {}, {}, false
+    }
+    if flag.Pattern.Path == "" {
+        return {}, {}, false
+    }
+    pattern, exists := state.RenderTextureMap[flag.Pattern.Path]
+    if !exists {
+        return {}, {}, false
+    }
+    return pattern, patternReplaceColors[layer.Mask - 1], true
+}
+
+// Computes the affine mapping from an emblem instance's own [0,1] texcoord
+// space to the flag pattern's [0,1] UV space, so the recolor shader can
+// sample the pattern to test the colored-emblem mask (see coa mask
+// attribute). The emblem and the pattern are drawn as separate quads with
+// their own transforms, so a fragment's texcoord must be projected into
+// world space (matching raylib's own DrawTexturePro quad construction)
+// before it can be converted into the pattern's UV space.
+calculateMaskParams :: proc(
+    maskTexture: rl.Texture2D,
+    maskColor: rl.Color,
+    patternDestination: rl.Rectangle,
+    target: rl.Rectangle,
+    origin: rl.Vector2,
+    rotationDeg: f32,
+) -> texture.MaskParams {
+    topLeft: [2]f32
+    dirX: [2]f32
+    dirY: [2]f32
+
+    if rotationDeg == 0 {
+        topLeft = { target.x - origin.x, target.y - origin.y }
+        dirX = { target.width, 0 }
+        dirY = { 0, target.height }
+    } else {
+        rad := rotationDeg * rl.DEG2RAD
+        sinR := math.sin(rad)
+        cosR := math.cos(rad)
+        dx := -origin.x
+        dy := -origin.y
+
+        topLeft = {
+            target.x + dx * cosR - dy * sinR,
+            target.y + dx * sinR + dy * cosR,
+        }
+        dirX = { target.width * cosR, target.width * sinR }
+        dirY = { -target.height * sinR, target.height * cosR }
+    }
+
+    return texture.MaskParams{
+        Texture = maskTexture,
+        Color = maskColor,
+        UVOffset = {
+            (topLeft.x - patternDestination.x) / patternDestination.width,
+            (topLeft.y - patternDestination.y) / patternDestination.height,
+        },
+        UVAxisX = {
+            dirX.x / patternDestination.width,
+            dirX.y / patternDestination.height,
+        },
+        UVAxisY = {
+            dirY.x / patternDestination.width,
+            dirY.y / patternDestination.height,
+        },
     }
 }
 

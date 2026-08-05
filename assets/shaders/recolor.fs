@@ -25,6 +25,19 @@ uniform float preserveShading;
 // used to identify which color slot a pixel belongs to.
 uniform bool blueChannelShading;
 
+// Pattern masking restricts a colored emblem to the pixels of the flag
+// pattern that match a specific PATTERN_REPLACE_COLORS entry. maskTexture
+// is the flag's unrecolored pattern texture; the mask UV of a fragment is
+// reconstructed from its own texcoord via the affine mapping
+// (maskUVOffset, maskUVAxisX, maskUVAxisY) since the emblem and the
+// pattern are drawn as separate, differently transformed quads.
+uniform bool useMask;
+uniform sampler2D maskTexture;
+uniform vec3 maskColor;
+uniform vec2 maskUVOffset;
+uniform vec2 maskUVAxisX;
+uniform vec2 maskUVAxisY;
+
 out vec4 finalColor;
 
 // 128/255: the neutral shading value where the replacement color is used as-is.
@@ -46,6 +59,17 @@ vec3 applyBlueShading(vec3 replacement, float shade)
 
 void main()
 {
+    if (useMask)
+    {
+        vec2 maskUV = maskUVOffset + fragTexCoord.x * maskUVAxisX + fragTexCoord.y * maskUVAxisY;
+        vec3 maskTexel = texture(maskTexture, maskUV).rgb;
+
+        if (distance(maskTexel, maskColor) > tolerance)
+        {
+            discard;
+        }
+    }
+
     vec4 texel = texture(texture0, fragTexCoord) * fragColor;
 
     for (int i = 0; i < MAX_RECOLORS; i++)
