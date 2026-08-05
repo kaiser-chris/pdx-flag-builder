@@ -952,14 +952,10 @@ renderFlagDatabase :: proc(ctx: ^mu.Context) {
         r := mu.layout_next(ctx)
         mu.draw_rect(ctx, r, ctx.style.colors[.WINDOW_BG])
 
-        options: mu.Options
-        if state.SearchCache.FlagDatabaseSearch != "" {
-            options = { .EXPANDED }
-        }
-
         for database in state.Databases {
             ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-            if .ACTIVE in mu.header(ctx, database.Settings.Name, options) {
+            headerResult := mu.header(ctx, database.Settings.Name, {})
+            if .ACTIVE in headerResult || state.SearchCache.FlagDatabaseSearch != "" {
                 for flag in database.Flags {
                     searchName := strings.to_lower(flag.Name)
                     defer delete(searchName)
@@ -1019,16 +1015,15 @@ renderTextureDatabase :: proc(ctx: ^mu.Context) {
         r := mu.layout_next(ctx)
         mu.draw_rect(ctx, r, ctx.style.colors[.WINDOW_BG])
 
-        options: mu.Options
-        if state.SearchCache.TextureDatabaseSearch != "" {
-            options = { .EXPANDED }
-        }
-
         for database in state.Databases {
             ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
+            mu.get_layout(ctx).indent = 0
             if .ACTIVE in mu.header(ctx, database.Settings.Name, {.EXPANDED}) {
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-                if .ACTIVE in mu.treenode(ctx, "Patterns", options) {
+                mu.get_layout(ctx).indent = 0
+                patternResult := mu.treenode(ctx, "Patterns", {})
+                if .ACTIVE in patternResult || state.SearchCache.TextureDatabaseSearch != "" {
+                    mu.get_layout(ctx).indent = ctx.style.indent
                     for texture in database.Patterns {
                         name := strings.to_lower(texture.Name)
                         defer delete(name)
@@ -1045,7 +1040,10 @@ renderTextureDatabase :: proc(ctx: ^mu.Context) {
                 }
                 mu.pop_id(ctx)
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-                if .ACTIVE in mu.treenode(ctx, "Colored Emblems", options) {
+                mu.get_layout(ctx).indent = 0
+                ceResult := mu.treenode(ctx, "Colored Emblems", {})
+                if .ACTIVE in ceResult || state.SearchCache.TextureDatabaseSearch != "" {
+                    mu.get_layout(ctx).indent = ctx.style.indent
                     for texture in database.ColoredEmblems {
                         name := strings.to_lower(texture.Name)
                         defer delete(name)
@@ -1062,7 +1060,10 @@ renderTextureDatabase :: proc(ctx: ^mu.Context) {
                 }
                 mu.pop_id(ctx)
                 ui.SetButtonIdentifier(ctx, &state.ButtonIdentifier)
-                if .ACTIVE in mu.treenode(ctx, "Textured Emblems", options) {
+                mu.get_layout(ctx).indent = 0
+                teResult := mu.treenode(ctx, "Textured Emblems", {})
+                if .ACTIVE in teResult || state.SearchCache.TextureDatabaseSearch != "" {
+                    mu.get_layout(ctx).indent = ctx.style.indent
                     for texture in database.TexturedEmblems {
                         name := strings.to_lower(texture.Name)
                         defer delete(name)
