@@ -62,3 +62,20 @@ func MustRead(path string) []byte {
 	}
 	return data
 }
+
+// The interface fonts are embedded as strings rather than through the file
+// system above on purpose. Dear ImGui keeps the pointer to the font data for as
+// long as its atlas lives, because it rasterises glyphs on demand. A string
+// declared with go:embed is backed by memory in the binary itself, which is
+// never moved and never freed; FS.ReadFile would hand out a garbage collected
+// copy instead, and the atlas would end up reading freed memory.
+//
+// Only the two weights the interface uses are embedded. The rest of the family
+// is kept in the repository for later use.
+var (
+	//go:embed fonts/roboto/Roboto-Regular.ttf
+	FontRegular string
+
+	//go:embed fonts/roboto/Roboto-Medium.ttf
+	FontMedium string
+)
