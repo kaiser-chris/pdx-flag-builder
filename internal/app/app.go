@@ -14,12 +14,14 @@ import (
 	"image/color"
 	"image/png"
 	"os"
+	"time"
 
 	"github.com/AllenDang/cimgui-go/imgui"
 
 	"github.com/kaiser-chris/pdx-flag-builder-go/assets"
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/config"
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/gui"
+	"github.com/kaiser-chris/pdx-flag-builder-go/internal/pdx"
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/render"
 )
 
@@ -96,6 +98,11 @@ func Run() error {
 		application.dockWindowClass.Destroy()
 	})
 
+	// Reading the configured folders starts right away and finishes in the
+	// background, so the window is up while the game files are still being read.
+	application.state.library.reload(settings.Databases)
+	application.state.status = "Reading the configured folders"
+
 	application.window.Run(gui.Frame{
 		Offscreen: application.preview.Draw,
 		UI:        application.frame,
@@ -104,11 +111,55 @@ func Run() error {
 	return nil
 }
 
+// openFlag puts a copy of a coat of arms into the editor.
+func (a *App) openFlag(flag pdx.Flag) {
+	opened := flag.Clone()
+
+	a.state.flag = &opened
+	a.state.selectedLayer = noLayer
+	a.state.showLayers = true
+
+	a.setStatus("Opened %s from %s", flag.Name, flag.Origin.Database)
+}
+
+// reportLoad summarises a finished read of the configured folders.
+func (a *App) reportLoad() {
+	library := &a.state.library
+
+	// A flag held open in the editor is a copy, so it survives the reload; what
+	// is thrown away is the search, which now points at a different list.
+	a.state.flagRows.invalidate()
+	a.state.textureRows.invalidate()
+
+	if len(library.set) == 0 {
+		a.setStatus("No folders configured")
+
+		return
+	}
+
+	message := fmt.Sprintf("Read %s and %s in %s",
+		plural(len(library.flags), "flag", "flags"),
+		plural(len(library.textures), "texture", "textures"),
+		library.took.Round(time.Millisecond))
+
+	if count := len(library.problems); count > 0 {
+		message += ", " + plural(count, "problem", "problems")
+	}
+
+	a.setStatus("%s", message)
+}
+
 // frame builds one frame of the interface.
 //
 // The order matters: the menu bar and the status bar claim their strip of the
 // viewport first, so the dock space that follows covers exactly what is left.
 func (a *App) frame() {
+	// A finished folder read is picked up here, which is the only place the
+	// data it produced crosses onto the interface goroutine.
+	if a.state.library.poll(a.settings.Databases) {
+		a.reportLoad()
+	}
+
 	a.menuBar()
 	a.statusBar()
 	a.dockSpace()

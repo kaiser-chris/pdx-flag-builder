@@ -1,6 +1,9 @@
 package app
 
-import "github.com/kaiser-chris/pdx-flag-builder-go/internal/config"
+import (
+	"github.com/kaiser-chris/pdx-flag-builder-go/internal/config"
+	"github.com/kaiser-chris/pdx-flag-builder-go/internal/pdx"
+)
 
 // Panel and window titles.
 //
@@ -18,6 +21,9 @@ const (
 
 	popupAbout = "About"
 )
+
+// noLayer is what selectedLayer holds when nothing is selected.
+const noLayer = -1
 
 // databaseEntry is one row of the settings window's folder table. The settings
 // window edits these copies and only writes them back when the user saves, so
@@ -52,15 +58,31 @@ type state struct {
 	backgroundColor [4]float32
 	databases       []databaseEntry
 
+	// Everything read from the configured folders.
+	library library
+
+	// The two database windows, and the rows their search boxes match.
+	flagSearch    string
+	flagRows      filteredRows
+	textureSearch string
+	textureRows   filteredRows
+
+	// flag is the coat of arms open in the editor, a copy of the one in the
+	// database so that editing it leaves the database alone. selectedLayer is
+	// the index of the layer being looked at, or noLayer.
+	flag          *pdx.Flag
+	selectedLayer int
+
 	// status is the message shown in the status bar.
 	status string
 }
 
 func newState(settings *config.Settings) state {
 	current := state{
-		showLayers:   true,
-		showSelected: true,
-		status:       "Ready",
+		showLayers:    true,
+		showSelected:  true,
+		selectedLayer: noLayer,
+		status:        "Ready",
 	}
 
 	current.loadFrom(settings)
@@ -81,4 +103,13 @@ func (s *state) loadFrom(settings *config.Settings) {
 	for _, database := range settings.Databases {
 		s.databases = append(s.databases, databaseEntry{Name: database.Name, Path: database.Path})
 	}
+}
+
+// selectedLayerValue returns the layer being looked at.
+func (s *state) selectedLayerValue() (pdx.Layer, bool) {
+	if s.flag == nil || s.selectedLayer < 0 || s.selectedLayer >= len(s.flag.Layers) {
+		return nil, false
+	}
+
+	return s.flag.Layers[s.selectedLayer], true
 }

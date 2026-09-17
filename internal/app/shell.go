@@ -128,9 +128,7 @@ func (a *App) statusBar() {
 		if imgui.BeginMenuBar() {
 			imgui.TextUnformatted(a.state.status)
 
-			width, height := a.preview.Size()
-			right := fmt.Sprintf("%d x %d  |  %d folders  |  %.0f FPS",
-				width, height, len(a.settings.Databases), imgui.CurrentIO().Framerate())
+			right := a.diagnostics()
 
 			// Right align the diagnostics.
 			imgui.SameLine()
@@ -177,4 +175,18 @@ func (a *App) closeFocusedWindow() {
 	}
 
 	a.state.focusedWindow = ""
+}
+
+// diagnostics is the right hand side of the status bar: what has been read, and
+// how the interface itself is doing.
+func (a *App) diagnostics() string {
+	library := &a.state.library
+
+	if library.loading {
+		return fmt.Sprintf("reading folders...  |  %.0f FPS", imgui.CurrentIO().Framerate())
+	}
+
+	return fmt.Sprintf("%d flags  |  %d textures  |  %d colours  |  %.0f FPS",
+		len(library.flags), len(library.textures), len(library.palette),
+		imgui.CurrentIO().Framerate())
 }
