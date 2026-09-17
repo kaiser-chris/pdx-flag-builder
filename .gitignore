@@ -1,0 +1,21 @@
+# Build output
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.syso
+
+# Test / profiling output
+*.test
+*.out
+/coverage.*
+
+# IDE
+/.vscode/
+/.idea/
+/.run/
+
+# Local application data
+/settings.json

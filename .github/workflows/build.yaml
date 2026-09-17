@@ -1,0 +1,44 @@
+name: Build
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest ]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # raylib links against X11 and OpenGL, and Dear ImGui needs a C++ compiler.
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xorg-dev libgl1-mesa-dev libasound2-dev
+
+      # The Windows runner ships MinGW with MSYS2 but does not put it on PATH.
+      - name: Add MinGW to PATH
+        if: runner.os == 'Windows'
+        run: echo "C:\msys64\mingw64\bin" >> $env:GITHUB_PATH
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: go build -trimpath -o bin/ ./cmd/pdx-flag-builder
