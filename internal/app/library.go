@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"maps"
 	"slices"
 	"strings"
@@ -119,10 +120,16 @@ type filteredRows struct {
 	version int
 	valid   bool
 	rows    []int
+
+	// order is what the rows are sorted by, once sorted is true.
+	order  tableOrder
+	sorted bool
 }
 
-// rows returns the indexes matching the query. matches is asked only about rows
-// that have to be reconsidered, and is given the query already lowercased.
+// get returns the indexes matching the query. matches is asked only about rows
+// that have to be reconsidered, and is given the query already lowercased and
+// trimmed. It is asked even for an empty query, which a list narrowed down by
+// something besides the search still has to apply.
 func (f *filteredRows) get(query string, version, count int, matches func(index int, query string) bool) []int {
 	if f.valid && f.query == query && f.version == version {
 		return f.rows
@@ -132,11 +139,12 @@ func (f *filteredRows) get(query string, version, count int, matches func(index 
 	f.version = version
 	f.valid = true
 	f.rows = f.rows[:0]
+	f.sorted = false
 
 	lowered := strings.ToLower(strings.TrimSpace(query))
 
 	for index := range count {
-		if lowered == "" || matches(index, lowered) {
+		if matches(index, lowered) {
 			f.rows = append(f.rows, index)
 		}
 	}
@@ -151,4 +159,43 @@ func (f *filteredRows) invalidate() {
 
 func containsFold(haystack, lowercaseNeedle string) bool {
 	return strings.Contains(strings.ToLower(haystack), lowercaseNeedle)
+}
+
+// inOrder sorts the rows found by the last get. compare compares two rows by
+// a column. Rows that compare equal keep the order they were found in, which
+// for every list here is by name. Like the filtering, the sorting is kept
+// until the order or the rows change.
+func (f *filteredRows) inOrder(order tableOrder, compare func(first, second, column int) int) []int {
+	if f.sorted && f.order == order {
+		return f.rows
+	}
+
+	f.order = order
+	f.sorted = true
+
+	if order.column < 0 {
+		slices.Sort(f.rows)
+
+		return f.rows
+	}
+
+	slices.SortFunc(f.rows, func(first, second int) int {
+		result := compare(first, second, order.column)
+		if order.descending {
+			result = -result
+		}
+
+		if result == 0 {
+			return cmp.Compare(first, second)
+		}
+
+		return result
+	})
+
+	return f.rows
+}
+
+// compareFold compares two strings the way a user reads them, ignoring case.
+func compareFold(first, second string) int {
+	return strings.Compare(strings.ToLower(first), strings.ToLower(second))
 }

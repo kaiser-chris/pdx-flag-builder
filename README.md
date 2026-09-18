@@ -79,6 +79,11 @@ resize them, which has not been checked against the games yet. Textures are read
 on a background goroutine and uploaded a few per frame, so opening a flag never
 stalls the window.
 
+The previews in the lists are drawn once each into cells of one large render
+target rather than every frame, from a texture cache of their own that only
+keeps the most recently used textures. Scrolling through all 1700 flags of a
+game therefore never keeps every texture they use on the GPU.
+
 The shader picks the marker colour a pixel is *closest* to, where the Odin
 version took the first one within tolerance. That difference removes a line of
 raw marker colour that used to show along seams in the pattern.
@@ -143,12 +148,17 @@ usual tasks (`make build`, `make run`, `make release`, `make vet`).
 3. Save
 
 The flags and textures it found are then in **Databases → Flag Database** and
-**Databases → Texture Database**. Picking a flag opens it and shows its layers.
-
+**Databases → Texture Database**, each with a small preview: the rendered flag,
+or the texture as the file has it. Clicking a column header sorts the list,
+and the part of each name a search matched is marked. Picking a flag opens it
+and shows its layers.
 Layers are added, reordered and removed in the **Layers** panel, and the
 selected one is edited in the panel next to it: its texture, colours, mask and
 placements. **File → New Flag** starts from an empty one, and a texture can be
 used straight from the texture database as the pattern or as a new layer.
+Wherever a texture or a coat of arms is chosen, the list says which folder each
+one comes from, so a texture a mod replaces shows up once for the game and once
+for the mod.
 **Ctrl+Z** and **Ctrl+Y** undo and redo, one step per edit: a whole drag of a
 slider is one step, not one per frame. Opening another flag over unsaved changes
 asks first.

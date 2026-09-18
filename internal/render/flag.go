@@ -67,6 +67,44 @@ func (p *Painter) Draw(flag pdx.Flag, destination rl.Rectangle) {
 	p.draw(flag, destination, 0)
 }
 
+// Ready reports whether every texture a coat of arms needs, its sub flags'
+// included, has arrived or failed for good, and asks for any that have not
+// been wanted yet. Once it is ready, drawing it again would draw the same.
+func (p *Painter) Ready(flag pdx.Flag) bool {
+	return p.ready(flag, 0)
+}
+
+func (p *Painter) ready(flag pdx.Flag, depth int) bool {
+	if depth > maxSubFlagDepth {
+		return true
+	}
+
+	// Every texture is asked for before answering, rather than stopping at
+	// the first one missing, so that they are all read at the same time.
+	ready := p.textures.Settled(flag.Pattern)
+
+	for _, layer := range flag.Layers {
+		switch typed := layer.(type) {
+		case *pdx.ColoredEmblem:
+			ready = p.textures.Settled(typed.Texture) && ready
+
+		case *pdx.TexturedEmblem:
+			ready = p.textures.Settled(typed.Texture) && ready
+
+		case *pdx.SubFlag:
+			if p.subFlag == nil {
+				continue
+			}
+
+			if parent, found := p.subFlag(typed.Parent); found {
+				ready = p.ready(parent, depth+1) && ready
+			}
+		}
+	}
+
+	return ready
+}
+
 func (p *Painter) draw(flag pdx.Flag, destination rl.Rectangle, depth int) {
 	if depth > maxSubFlagDepth {
 		return

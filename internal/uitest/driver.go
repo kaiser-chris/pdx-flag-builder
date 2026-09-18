@@ -44,11 +44,26 @@ const clickInset = 16
 // middle of a wide widget is not safe. A table row spans every column, and its
 // middle can land on the border between two columns, which a resizable table
 // hands to the column resizer instead of the row.
+//
+// Only the part of the widget that is visible counts. A row that spans every
+// column of a table reports the whole row as its rectangle but is clipped to
+// the cell it was created in, and the click has to land in that cell.
 func (i Item) ClickPoint() imgui.Vec2 {
+	low, high := i.visible()
+
 	return imgui.Vec2{
-		X: i.Min.X + min((i.Max.X-i.Min.X)/2, clickInset),
-		Y: (i.Min.Y + i.Max.Y) / 2,
+		X: low.X + min((high.X-low.X)/2, clickInset),
+		Y: (low.Y + high.Y) / 2,
 	}
+}
+
+// visible is the part of the widget inside its clip rectangle. It is empty,
+// with low past high, for a widget scrolled out of view.
+func (i Item) visible() (low, high imgui.Vec2) {
+	low = imgui.Vec2{X: max(i.Min.X, i.ClipMin.X), Y: max(i.Min.Y, i.ClipMin.Y)}
+	high = imgui.Vec2{X: min(i.Max.X, i.ClipMax.X), Y: min(i.Max.Y, i.ClipMax.Y)}
+
+	return low, high
 }
 
 // Reachable reports whether a point lies in the part of the widget's window

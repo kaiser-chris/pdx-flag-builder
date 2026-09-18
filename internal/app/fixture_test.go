@@ -86,8 +86,9 @@ func newFixtureGame(t *testing.T) string {
 }
 
 // startApp runs the real application in a hidden window, configured with the
-// fixture game folder, and hands back a driver for it.
-func startApp(t *testing.T) (*App, *uitest.Driver) {
+// fixture game folder, and hands back a driver for it. configure can change
+// the settings it starts with.
+func startApp(t *testing.T, configure ...func(settings *config.Settings)) (*App, *uitest.Driver) {
 	t.Helper()
 
 	// raylib and OpenGL belong to the thread that created the window, and a
@@ -103,6 +104,10 @@ func startApp(t *testing.T) (*App, *uitest.Driver) {
 	// A fixed scale, so that what the layout tests see does not depend on the
 	// display of the machine running them.
 	settings.InterfaceScale = 1
+
+	for _, change := range configure {
+		change(settings)
+	}
 
 	data, err := json.Marshal(settings)
 	if err != nil {

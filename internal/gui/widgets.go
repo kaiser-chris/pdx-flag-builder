@@ -1,6 +1,11 @@
 package gui
 
-import "github.com/AllenDang/cimgui-go/imgui"
+import (
+	"math"
+	"strings"
+
+	"github.com/AllenDang/cimgui-go/imgui"
+)
 
 // The interactive widgets the application uses.
 //
@@ -152,7 +157,7 @@ func Selectable(label string, selected bool, flags imgui.SelectableFlags) bool {
 
 // InputText is a text field with a hint shown while it is empty.
 func InputText(label, hint string, text *string) bool {
-	changed := imgui.InputTextWithHint(label, hint, text, 0, nil)
+	changed := imgui.InputTextWithHint(fieldLabel(label), hint, text, 0, nil)
 	record(label, false)
 
 	return changed
@@ -160,7 +165,7 @@ func InputText(label, hint string, text *string) bool {
 
 // ColorEdit is imgui.ColorEdit4.
 func ColorEdit(label string, value *[4]float32) bool {
-	changed := imgui.ColorEdit4(label, value)
+	changed := imgui.ColorEdit4(fieldLabel(label), value)
 	record(label, false)
 
 	return changed
@@ -194,7 +199,7 @@ func ArrowButton(id string, direction imgui.Dir) bool {
 
 // DragFloat edits a number by dragging, or by typing after a double click.
 func DragFloat(label string, value *float32, speed, low, high float32, format string) bool {
-	changed := imgui.DragFloatV(label, value, speed, low, high, format, imgui.SliderFlagsAlwaysClamp)
+	changed := imgui.DragFloatV(fieldLabel(label), value, speed, low, high, format, imgui.SliderFlagsAlwaysClamp)
 	record(label, false)
 
 	return changed
@@ -204,7 +209,7 @@ func DragFloat(label string, value *float32, speed, low, high float32, format st
 func DragPair(label string, x, y *float32, speed, low, high float32, format string) bool {
 	pair := [2]float32{*x, *y}
 
-	changed := imgui.DragFloat2V(label, &pair, speed, low, high, format, imgui.SliderFlagsAlwaysClamp)
+	changed := imgui.DragFloat2V(fieldLabel(label), &pair, speed, low, high, format, imgui.SliderFlagsAlwaysClamp)
 	record(label, false)
 
 	if changed {
@@ -230,8 +235,67 @@ func BeginCombo(label, preview string) bool {
 		where = currentPlace()
 	}
 
-	open := imgui.BeginCombo(label, preview)
+	open := imgui.BeginCombo(fieldLabel(label), preview)
 	recordIn(where, label, false)
 
 	return open
+}
+
+// labelColumn is how far in from the left the fields of a form start, in the
+// units the interface was designed in. Labels longer than that push their own
+// field further right.
+const labelColumn = 110
+
+// fieldLabel lays out a form row: the label on the left, in a column shared
+// by every row, and the field filling the rest of the line. Dear ImGui puts
+// labels to the right of their field by default, which reads backwards in a
+// form. It returns the id the field is created with, which hides the label
+// Dear ImGui would otherwise draw a second time.
+//
+// A label with no visible text, such as "##search", is left alone.
+func fieldLabel(label string) string {
+	visible, _, _ := strings.Cut(label, "##")
+	if visible == "" {
+		return label
+	}
+
+	Label(visible)
+
+	// -FLT_MIN is Dear ImGui's way of saying "up to the right edge".
+	imgui.SetNextItemWidth(-math.SmallestNonzeroFloat32)
+
+	return "##" + label
+}
+
+// Label draws the label of a form row and moves the cursor to where the row's
+// value starts, for a row whose value is not a single field.
+func Label(text string) {
+	start := imgui.CursorPosX()
+
+	imgui.AlignTextToFramePadding()
+	imgui.TextUnformatted(text)
+
+	spacing := imgui.CurrentStyle().ItemSpacing().X
+	imgui.SameLineV(start+max(Scaled(labelColumn), imgui.CalcTextSize(text).X+spacing), 0)
+}
+
+// TableHeadersRow is imgui.TableHeadersRow, with every header recorded under
+// its column's name. Clicking a header sorts the table by that column.
+func TableHeadersRow() {
+	imgui.TableNextRowV(imgui.TableRowFlagsHeaders, 0)
+
+	for column := range imgui.TableGetColumnCount() {
+		if !imgui.TableSetColumnIndex(column) {
+			continue
+		}
+
+		name := imgui.TableGetColumnNameIntV(column)
+
+		// Dear ImGui's own version pushes the column, so that two columns of
+		// the same name still have headers of their own.
+		imgui.PushIDInt(column)
+		imgui.TableHeader(name)
+		record(name, false)
+		imgui.PopID()
+	}
 }

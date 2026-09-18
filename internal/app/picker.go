@@ -1,8 +1,6 @@
 package app
 
 import (
-	"strings"
-
 	"github.com/AllenDang/cimgui-go/imgui"
 
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/database"
@@ -31,6 +29,9 @@ type picker struct {
 	layer int
 
 	search string
+
+	// rows are the flags or textures on offer that the search matches.
+	rows filteredRows
 }
 
 // choose opens the picker.
@@ -51,42 +52,6 @@ func (p picker) title() string {
 	}
 
 	return "Choose"
-}
-
-// choices lists the names the picker offers, already filtered by the search.
-func (a *App) choices() []string {
-	query := strings.ToLower(strings.TrimSpace(a.state.picker.search))
-	library := &a.state.library
-
-	var names []string
-
-	add := func(name string) {
-		if query == "" || strings.Contains(strings.ToLower(name), query) {
-			names = append(names, name)
-		}
-	}
-
-	switch a.state.picker.target {
-	case pickNewSubFlag, pickLayerParent:
-		for index := range library.flags {
-			add(library.flags[index].Name)
-		}
-
-		return names
-	}
-
-	kind, ok := a.pickerTextureKind()
-	if !ok {
-		return nil
-	}
-
-	for index := range library.textures {
-		if library.textures[index].Kind == kind {
-			add(library.textures[index].Name)
-		}
-	}
-
-	return names
 }
 
 // pickerTextureKind is the kind of texture the picker offers.
@@ -117,8 +82,22 @@ func (a *App) pickerTextureKind() (database.TextureKind, bool) {
 	return 0, false
 }
 
+// listsFlags reports whether the picker offers coats of arms rather than
+// textures.
+func (p picker) listsFlags() bool {
+	return p.target == pickNewSubFlag || p.target == pickLayerParent
+}
+
+// Columns of the picker.
+const (
+	pickerColumnPreview = iota
+	pickerColumnName
+	pickerColumnFolder
+	pickerColumns
+)
+
 func (a *App) pickerPopup() {
-	imgui.SetNextWindowSizeV(gui.ScaledVec2(520, 520), imgui.CondAppearing)
+	imgui.SetNextWindowSizeV(gui.ScaledVec2(600, 560), imgui.CondAppearing)
 
 	// The part after ### keeps the popup's id stable while its title changes.
 	if !imgui.BeginPopupModalV(a.state.picker.title()+"###picker", nil, 0) {
@@ -127,30 +106,41 @@ func (a *App) pickerPopup() {
 	defer imgui.EndPopup()
 
 	imgui.SetNextItemWidth(-1)
-	gui.InputText("##picker-search", "Search", &a.state.picker.search)
+	gui.InputText("##picker-search", "Search by name or folder", &a.state.picker.search)
 
-	names := a.choices()
-	imgui.TextDisabled(plural(len(names), "match", "matches"))
+	query := a.state.picker.search
+	listsFlags := a.state.picker.listsFlags()
+	rows := a.pickerRows(query, listsFlags)
+
+	imgui.TextDisabled(plural(len(rows), "match", "matches"))
 
 	chosen := ""
 
-	listHeight := -imgui.FrameHeightWithSpacing()
-	if imgui.BeginChildStrV("##choices", imgui.Vec2{Y: listHeight}, imgui.ChildFlagsBorders, 0) {
-		clipper := imgui.NewListClipper()
-		clipper.Begin(int32(len(names)))
+	// The list takes the height the Cancel button below leaves it.
+	size := imgui.Vec2{Y: -imgui.FrameHeightWithSpacing()}
 
-		for clipper.Step() {
-			for row := clipper.DisplayStart(); row < clipper.DisplayEnd(); row++ {
-				if gui.Selectable(names[row], false, 0) {
-					chosen = names[row]
-				}
+	if imgui.BeginTableV("##choices", pickerColumns, tableFlags, size, 0) {
+		setupThumbnailColumn()
+		imgui.TableSetupColumnV("Name", imgui.TableColumnFlagsWidthStretch|imgui.TableColumnFlagsDefaultSort, 0, 0)
+		imgui.TableSetupColumnV("Folder", imgui.TableColumnFlagsWidthFixed, gui.Scaled(110), 0)
+		imgui.TableSetupScrollFreeze(0, 1)
+		gui.TableHeadersRow()
+
+		rows = a.state.picker.rows.inOrder(currentOrder(), func(first, second, column int) int {
+			firstName, firstFolder := a.pickerChoice(first, listsFlags)
+			secondName, secondFolder := a.pickerChoice(second, listsFlags)
+
+			if column == pickerColumnFolder {
+				return compareFold(firstFolder, secondFolder)
 			}
-		}
 
-		clipper.End()
-		clipper.Destroy()
+			return compareFold(firstName, secondName)
+		})
+
+		chosen = a.pickerTable(rows, query, listsFlags)
+
+		imgui.EndTable()
 	}
-	imgui.EndChild()
 
 	if gui.Button("Cancel") {
 		imgui.CloseCurrentPopup()
@@ -160,6 +150,90 @@ func (a *App) pickerPopup() {
 		a.applyChoice(chosen)
 		imgui.CloseCurrentPopup()
 	}
+}
+
+// pickerRows lists the flags or textures on offer that the search matches, as
+// indexes into the library.
+func (a *App) pickerRows(query string, listsFlags bool) []int {
+	library := &a.state.library
+
+	if listsFlags {
+		return a.state.picker.rows.get(query, library.version, len(library.flags),
+			func(index int, query string) bool {
+				flag := &library.flags[index]
+
+				return containsFold(flag.Name, query) || containsFold(flag.Origin.Database, query)
+			})
+	}
+
+	kind, ok := a.pickerTextureKind()
+
+	return a.state.picker.rows.get(query, library.version, len(library.textures),
+		func(index int, query string) bool {
+			texture := &library.textures[index]
+
+			return ok && texture.Kind == kind &&
+				(containsFold(texture.Name, query) || containsFold(texture.Database, query))
+		})
+}
+
+// pickerChoice is the name and the folder of one of the picker's rows.
+func (a *App) pickerChoice(index int, listsFlags bool) (name, folder string) {
+	library := &a.state.library
+
+	if listsFlags {
+		return library.flags[index].Name, library.flags[index].Origin.Database
+	}
+
+	return library.textures[index].Name, library.textures[index].Database
+}
+
+// pickerTable fills in the picker's rows and returns the name of the one
+// clicked, if any. A texture a mod replaces is listed once for the game and
+// once for the mod, so that the folder column shows where each comes from;
+// either way it is the name that is chosen.
+func (a *App) pickerTable(rows []int, query string, listsFlags bool) string {
+	library := &a.state.library
+	height := rowHeight()
+	chosen := ""
+
+	clipper := imgui.NewListClipper()
+	defer clipper.Destroy()
+
+	clipper.Begin(int32(len(rows)))
+
+	for clipper.Step() {
+		for row := clipper.DisplayStart(); row < clipper.DisplayEnd(); row++ {
+			index := rows[row]
+			name, folder := a.pickerChoice(index, listsFlags)
+
+			imgui.TableNextRow()
+			imgui.PushIDInt(int32(index))
+
+			imgui.TableSetColumnIndex(pickerColumnPreview)
+
+			if listsFlags {
+				a.flagThumbnail(&library.flags[index])
+			} else {
+				a.textureThumbnail(library.textures[index].Path)
+			}
+
+			imgui.TableSetColumnIndex(pickerColumnName)
+
+			if gui.HighlightedSelectable(name, query, false, imgui.SelectableFlagsSpanAllColumns, height) {
+				chosen = name
+			}
+
+			imgui.TableSetColumnIndex(pickerColumnFolder)
+			highlightedCell(folder, query, height)
+
+			imgui.PopID()
+		}
+	}
+
+	clipper.End()
+
+	return chosen
 }
 
 // applyChoice does what the picker was opened for.

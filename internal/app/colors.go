@@ -100,7 +100,7 @@ func (a *App) colorEditor(id string, colors *pdx.Colors, slots pdx.Colors) {
 		imgui.SameLine()
 		style := imgui.CurrentStyle()
 		removeWidth := imgui.CalcTextSize("Remove").X + style.FramePadding().X*2
-		width := max(imgui.ContentRegionAvail().X-removeWidth-style.ItemSpacing().X, minColorValueWidth)
+		width := max(imgui.ContentRegionAvail().X-removeWidth-style.ItemSpacing().X, gui.Scaled(minColorValueWidth))
 		a.colorValueEditor(entry, slots, width)
 
 		imgui.SameLine()
@@ -161,7 +161,7 @@ func (a *App) swatch(entry pdx.Color, slots pdx.Colors) {
 func (a *App) kindCombo(entry *pdx.Color, slots pdx.Colors) {
 	current := kindOf(entry.Value)
 
-	imgui.SetNextItemWidth(kindComboWidth)
+	imgui.SetNextItemWidth(gui.Scaled(kindComboWidth))
 
 	if !gui.BeginCombo("##kind", current.String()) {
 		return

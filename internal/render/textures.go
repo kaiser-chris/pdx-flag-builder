@@ -1,7 +1,9 @@
 package render
 
 import (
+	"cmp"
 	"os"
+	"slices"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
@@ -29,6 +31,11 @@ type Textures struct {
 	failed  map[string]error
 	pending map[string]struct{}
 
+	// used records when each texture was last asked for, counted in calls to
+	// Trim, so that Trim knows which ones have gone unused the longest.
+	used       map[string]uint64
+	generation uint64
+
 	requests chan textureRequest
 	results  chan textureResult
 }
@@ -51,6 +58,7 @@ func NewTextures(resolve func(name string) (string, bool)) *Textures {
 		loaded:   map[string]rl.Texture2D{},
 		failed:   map[string]error{},
 		pending:  map[string]struct{}{},
+		used:     map[string]uint64{},
 		requests: make(chan textureRequest, 256),
 		results:  make(chan textureResult, 256),
 	}
@@ -67,6 +75,8 @@ func (t *Textures) Get(name string) (rl.Texture2D, bool) {
 	if name == "" {
 		return rl.Texture2D{}, false
 	}
+
+	t.used[name] = t.generation
 
 	if loaded, ok := t.loaded[name]; ok {
 		return loaded, true
@@ -158,6 +168,7 @@ func (t *Textures) Forget() {
 	}
 
 	clear(t.failed)
+	clear(t.used)
 }
 
 // Unload releases every texture. The OpenGL context has to still be alive.
@@ -188,4 +199,52 @@ type errNotFound struct {
 
 func (e errNotFound) Error() string {
 	return e.name + " was not found in the configured folders"
+}
+
+// Settled reports whether a texture has either arrived or failed for good,
+// asking for it if it has not been wanted before. A texture that is settled
+// either way will not change what gets drawn any more. No texture at all is
+// settled too.
+func (t *Textures) Settled(name string) bool {
+	if name == "" {
+		return true
+	}
+
+	if _, ok := t.Get(name); ok {
+		return true
+	}
+
+	_, failed := t.failed[name]
+
+	return failed
+}
+
+// Trim unloads the textures that have gone unused the longest until no more
+// than keep are left. A texture asked for since the last Trim is never
+// unloaded, however many that leaves, since something is still drawing it.
+func (t *Textures) Trim(keep int) {
+	defer func() { t.generation++ }()
+
+	excess := len(t.loaded) - keep
+	if excess <= 0 {
+		return
+	}
+
+	var idle []string
+
+	for name := range t.loaded {
+		if t.used[name] < t.generation {
+			idle = append(idle, name)
+		}
+	}
+
+	slices.SortFunc(idle, func(first, second string) int {
+		return cmp.Compare(t.used[first], t.used[second])
+	})
+
+	for _, name := range idle[:min(excess, len(idle))] {
+		rl.UnloadTexture(t.loaded[name])
+		delete(t.loaded, name)
+		delete(t.used, name)
+	}
 }

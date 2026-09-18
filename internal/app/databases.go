@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 
@@ -11,13 +12,29 @@ import (
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/pdx"
 )
 
-// tableFlags are shared by both database listings: scrollable, striped, and
-// with columns the user can resize.
-const tableFlags = imgui.TableFlagsRowBg |
-	imgui.TableFlagsBordersInnerV |
-	imgui.TableFlagsScrollY |
-	imgui.TableFlagsResizable |
-	imgui.TableFlagsSizingStretchProp
+// Columns of the flag database.
+const (
+	flagColumnPreview = iota
+	flagColumnName
+	flagColumnLayers
+	flagColumnFolder
+	flagColumnFile
+	flagColumnUse
+	flagColumns
+)
+
+// Columns of the texture database.
+const (
+	textureColumnPreview = iota
+	textureColumnName
+	textureColumnKind
+	textureColumnFolder
+	textureColumnUse
+	textureColumns
+)
+
+// labelAddAsSubFlag is the flag database's row action.
+const labelAddAsSubFlag = "Add as Sub Flag"
 
 // flagDatabaseWindow lists every coat of arms found in the configured folders.
 func (a *App) flagDatabaseWindow() {
@@ -25,7 +42,7 @@ func (a *App) flagDatabaseWindow() {
 		return
 	}
 
-	imgui.SetNextWindowSizeV(gui.ScaledVec2(760, 560), imgui.CondFirstUseEver)
+	imgui.SetNextWindowSizeV(gui.ScaledVec2(860, 560), imgui.CondFirstUseEver)
 
 	if imgui.BeginV(windowFlagDatabase, &a.state.showFlagDatabase, 0) {
 		a.trackFocus(windowFlagDatabase)
@@ -56,8 +73,9 @@ func (a *App) flagDatabaseBody() {
 	imgui.SetNextItemWidth(-1)
 	gui.InputText("##flag-search", "Search by name, folder or file", &a.state.flagSearch)
 
+	query := a.state.flagSearch
 	rows := a.state.flagRows.get(
-		a.state.flagSearch,
+		query,
 		library.version,
 		len(library.flags),
 		func(index int, query string) bool {
@@ -71,17 +89,38 @@ func (a *App) flagDatabaseBody() {
 
 	imgui.TextDisabled(fmt.Sprintf("%d of %d flags", len(rows), len(library.flags)))
 
-	if !imgui.BeginTableV("flags", 4, tableFlags, imgui.Vec2{}, 0) {
+	if !imgui.BeginTableV("flags", flagColumns, tableFlags, imgui.Vec2{}, 0) {
 		return
 	}
 	defer imgui.EndTable()
 
-	imgui.TableSetupColumnV("Name", imgui.TableColumnFlagsWidthStretch, 0, 0)
+	setupThumbnailColumn()
+	imgui.TableSetupColumnV("Name", imgui.TableColumnFlagsWidthStretch|imgui.TableColumnFlagsDefaultSort, 0, 0)
 	imgui.TableSetupColumnV("Layers", imgui.TableColumnFlagsWidthFixed, gui.Scaled(60), 0)
 	imgui.TableSetupColumnV("Folder", imgui.TableColumnFlagsWidthFixed, gui.Scaled(110), 0)
 	imgui.TableSetupColumnV("File", imgui.TableColumnFlagsWidthStretch, 0, 0)
+	imgui.TableSetupColumnV("##use", imgui.TableColumnFlagsWidthFixed|imgui.TableColumnFlagsNoSort, gui.Scaled(120), 0)
 	imgui.TableSetupScrollFreeze(0, 1)
-	imgui.TableHeadersRow()
+	gui.TableHeadersRow()
+
+	rows = a.state.flagRows.inOrder(currentOrder(), func(first, second, column int) int {
+		one, other := &library.flags[first], &library.flags[second]
+
+		switch column {
+		case flagColumnName:
+			return compareFold(one.Name, other.Name)
+		case flagColumnLayers:
+			return cmp.Compare(len(one.Layers), len(other.Layers))
+		case flagColumnFolder:
+			return compareFold(one.Origin.Database, other.Origin.Database)
+		case flagColumnFile:
+			return compareFold(one.Origin.File, other.Origin.File)
+		}
+
+		return 0
+	})
+
+	height := rowHeight()
 
 	// The list runs to thousands of rows, so only the visible ones are built.
 	clipper := imgui.NewListClipper()
@@ -91,28 +130,49 @@ func (a *App) flagDatabaseBody() {
 
 	for clipper.Step() {
 		for row := clipper.DisplayStart(); row < clipper.DisplayEnd(); row++ {
-			flag := &library.flags[rows[row]]
+			index := rows[row]
+			flag := &library.flags[index]
 
 			imgui.TableNextRow()
+			imgui.PushIDInt(int32(index))
 
-			imgui.TableSetColumnIndex(0)
+			imgui.TableSetColumnIndex(flagColumnPreview)
+			a.flagThumbnail(flag)
+
+			imgui.TableSetColumnIndex(flagColumnName)
 
 			open := a.state.flag != nil &&
 				a.state.flag.Name == flag.Name &&
 				a.state.flag.Origin.Path == flag.Origin.Path
 
-			if gui.Selectable(flag.Name, open, imgui.SelectableFlagsSpanAllColumns) {
+			// The whole row opens the flag, except for the button at its end.
+			rowFlags := imgui.SelectableFlagsSpanAllColumns | imgui.SelectableFlagsAllowOverlap
+			if gui.HighlightedSelectable(flag.Name, query, open, rowFlags, height) {
 				a.requestOpen(*flag)
 			}
 
-			imgui.TableSetColumnIndex(1)
-			imgui.TextUnformatted(strconv.Itoa(len(flag.Layers)))
+			imgui.TableSetColumnIndex(flagColumnLayers)
+			plainCell(strconv.Itoa(len(flag.Layers)), height)
 
-			imgui.TableSetColumnIndex(2)
-			imgui.TextUnformatted(flag.Origin.Database)
+			imgui.TableSetColumnIndex(flagColumnFolder)
+			highlightedCell(flag.Origin.Database, query, height)
 
-			imgui.TableSetColumnIndex(3)
-			imgui.TextUnformatted(flag.Origin.File)
+			imgui.TableSetColumnIndex(flagColumnFile)
+			highlightedCell(flag.Origin.File, query, height)
+
+			// Adding a sub flag needs a flag to add it to.
+			imgui.TableSetColumnIndex(flagColumnUse)
+			centredCell(height, imgui.TextLineHeight())
+			imgui.BeginDisabledV(a.state.flag == nil)
+
+			if gui.SmallButton(labelAddAsSubFlag) {
+				a.addLayer(pdx.NewSubFlag(flag.Name))
+				a.changed()
+				a.setStatus("Added %s as a sub flag", flag.Name)
+			}
+
+			imgui.EndDisabled()
+			imgui.PopID()
 		}
 	}
 
@@ -125,7 +185,7 @@ func (a *App) textureDatabaseWindow() {
 		return
 	}
 
-	imgui.SetNextWindowSizeV(gui.ScaledVec2(700, 560), imgui.CondFirstUseEver)
+	imgui.SetNextWindowSizeV(gui.ScaledVec2(760, 560), imgui.CondFirstUseEver)
 
 	if imgui.BeginV(windowTextureDatabase, &a.state.showTextureDatabase, 0) {
 		a.trackFocus(windowTextureDatabase)
@@ -154,10 +214,11 @@ func (a *App) textureDatabaseBody() {
 	}
 
 	imgui.SetNextItemWidth(-1)
-	gui.InputText("##texture-search", "Search by name or kind", &a.state.textureSearch)
+	gui.InputText("##texture-search", "Search by name, kind or folder", &a.state.textureSearch)
 
+	query := a.state.textureSearch
 	rows := a.state.textureRows.get(
-		a.state.textureSearch,
+		query,
 		library.version,
 		len(library.textures),
 		func(index int, query string) bool {
@@ -171,18 +232,35 @@ func (a *App) textureDatabaseBody() {
 
 	imgui.TextDisabled(fmt.Sprintf("%d of %d textures", len(rows), len(library.textures)))
 
-	// TODO: show a thumbnail of each texture next to its name.
-	if !imgui.BeginTableV("textures", 4, tableFlags, imgui.Vec2{}, 0) {
+	if !imgui.BeginTableV("textures", textureColumns, tableFlags, imgui.Vec2{}, 0) {
 		return
 	}
 	defer imgui.EndTable()
 
-	imgui.TableSetupColumnV("Name", imgui.TableColumnFlagsWidthStretch, 0, 0)
+	setupThumbnailColumn()
+	imgui.TableSetupColumnV("Name", imgui.TableColumnFlagsWidthStretch|imgui.TableColumnFlagsDefaultSort, 0, 0)
 	imgui.TableSetupColumnV("Kind", imgui.TableColumnFlagsWidthFixed, gui.Scaled(130), 0)
 	imgui.TableSetupColumnV("Folder", imgui.TableColumnFlagsWidthFixed, gui.Scaled(110), 0)
-	imgui.TableSetupColumnV("##use", imgui.TableColumnFlagsWidthFixed, gui.Scaled(110), 0)
+	imgui.TableSetupColumnV("##use", imgui.TableColumnFlagsWidthFixed|imgui.TableColumnFlagsNoSort, gui.Scaled(110), 0)
 	imgui.TableSetupScrollFreeze(0, 1)
-	imgui.TableHeadersRow()
+	gui.TableHeadersRow()
+
+	rows = a.state.textureRows.inOrder(currentOrder(), func(first, second, column int) int {
+		one, other := &library.textures[first], &library.textures[second]
+
+		switch column {
+		case textureColumnName:
+			return compareFold(one.Name, other.Name)
+		case textureColumnKind:
+			return compareFold(one.Kind.String(), other.Kind.String())
+		case textureColumnFolder:
+			return compareFold(one.Database, other.Database)
+		}
+
+		return 0
+	})
+
+	height := rowHeight()
 
 	clipper := imgui.NewListClipper()
 	defer clipper.Destroy()
@@ -191,22 +269,27 @@ func (a *App) textureDatabaseBody() {
 
 	for clipper.Step() {
 		for row := clipper.DisplayStart(); row < clipper.DisplayEnd(); row++ {
-			texture := &library.textures[rows[row]]
+			index := rows[row]
+			texture := &library.textures[index]
 
 			imgui.TableNextRow()
+			imgui.PushIDInt(int32(index))
 
-			imgui.TableSetColumnIndex(0)
-			imgui.TextUnformatted(texture.Name)
+			imgui.TableSetColumnIndex(textureColumnPreview)
+			a.textureThumbnail(texture.Path)
 
-			imgui.TableSetColumnIndex(1)
-			imgui.TextUnformatted(texture.Kind.String())
+			imgui.TableSetColumnIndex(textureColumnName)
+			highlightedCell(texture.Name, query, height)
 
-			imgui.TableSetColumnIndex(2)
-			imgui.TextUnformatted(texture.Database)
+			imgui.TableSetColumnIndex(textureColumnKind)
+			highlightedCell(texture.Kind.String(), query, height)
+
+			imgui.TableSetColumnIndex(textureColumnFolder)
+			highlightedCell(texture.Database, query, height)
 
 			// Using a texture needs a flag to use it on.
-			imgui.TableSetColumnIndex(3)
-			imgui.PushIDInt(int32(rows[row]))
+			imgui.TableSetColumnIndex(textureColumnUse)
+			centredCell(height, imgui.TextLineHeight())
 			imgui.BeginDisabledV(a.state.flag == nil)
 
 			if gui.SmallButton(textureAction(texture.Kind)) {

@@ -54,6 +54,11 @@ type App struct {
 	painter  *render.Painter
 	preview  *render.Preview
 
+	// thumbnails are the small previews in the lists, drawn into an atlas that
+	// is handed to Dear ImGui once, the first time a list shows one.
+	thumbnails     *render.Thumbnails
+	thumbnailAtlas *imgui.TextureRef
+
 	// dockWindowClass is handed to the dock space every frame. cimgui-go
 	// dereferences that argument even when it is nil, so one default instance
 	// is allocated for the lifetime of the application instead.
@@ -145,10 +150,13 @@ func New(options Options) (*App, error) {
 	application.painter.SetSubFlagLookup(application.subFlag)
 
 	application.preview = render.NewPreview(render.FlagWidth, render.FlagHeight, application.painter)
+	application.thumbnails = render.NewThumbnails(shader, application.texturePath)
+	application.thumbnails.SetSubFlagLookup(application.subFlag)
 	application.dockWindowClass = imgui.NewWindowClass()
 
 	application.window.OnShutdown(func() {
 		application.preview.Unload()
+		application.thumbnails.Unload()
 		application.textures.Unload()
 		application.shader.Unload()
 		application.dockWindowClass.Destroy()
@@ -196,10 +204,12 @@ func openStore(dir string) (config.Store, error) {
 
 // drawOffscreen does the raylib drawing for a frame: it hands the GPU whatever
 // artwork has finished loading, then paints the flag into the preview target
-// the interface samples further down the same frame.
+// and any newly wanted thumbnails into theirs, both of which the interface
+// samples further down the same frame.
 func (a *App) drawOffscreen() {
 	a.textures.Upload()
 	a.preview.Draw(a.state.flag)
+	a.thumbnails.Draw()
 }
 
 // texturePath turns the file name a coat of arms refers to into a path on disk.
@@ -252,6 +262,8 @@ func (a *App) reportLoad() {
 
 	a.painter.SetPalette(library.palette)
 	a.textures.Forget()
+	a.thumbnails.SetPalette(library.palette)
+	a.thumbnails.Forget()
 
 	if len(library.set) == 0 {
 		a.setStatus("No folders configured")

@@ -241,9 +241,7 @@ func (a *App) coatOfArmsEditor(flag *pdx.Flag) {
 // texture is not in any configured folder, since that is why a layer would
 // not show up.
 func (a *App) textureField(label, texture string, target pickerTarget) {
-	imgui.AlignTextToFramePadding()
-	imgui.TextUnformatted(label)
-	imgui.SameLine()
+	gui.Label(label)
 
 	if texture == "" {
 		imgui.TextDisabled("none")
@@ -265,9 +263,7 @@ func (a *App) textureField(label, texture string, target pickerTarget) {
 }
 
 func (a *App) parentField(sub *pdx.SubFlag) {
-	imgui.AlignTextToFramePadding()
-	imgui.TextUnformatted("Parent")
-	imgui.SameLine()
+	gui.Label("Parent")
 	imgui.TextDisabled(or(sub.Parent, "none"))
 	imgui.SameLine()
 
@@ -284,8 +280,6 @@ func (a *App) parentField(sub *pdx.SubFlag) {
 
 // maskField restricts a coloured emblem to one colour of the pattern.
 func (a *App) maskField(emblem *pdx.ColoredEmblem) {
-	imgui.SetNextItemWidth(gui.Scaled(200))
-
 	if !gui.BeginCombo("Mask", maskLabel(emblem.Mask)) {
 		return
 	}

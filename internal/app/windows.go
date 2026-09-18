@@ -218,8 +218,6 @@ func (a *App) scaleField() {
 		preview = scaleLabel(current)
 	}
 
-	imgui.SetNextItemWidth(imgui.FontSize() * 12)
-
 	if !gui.BeginCombo("Interface Scale", preview) {
 		return
 	}
