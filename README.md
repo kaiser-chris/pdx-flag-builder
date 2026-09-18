@@ -1,281 +1,153 @@
-# pdx-flag-builder (Go)
+# PDX Flag Builder
 
-A rewrite of [pdx-flag-builder](https://github.com/kaiser-chris/pdx-flag-builder) in Go.
-The original is written in Odin; this repository ports it while keeping the parts
-that were worth keeping and replacing the parts that were not.
+A tool for building flags for Victoria 3 and Europa Universalis 5. It reads the
+coats of arms, patterns and emblems of the game and of your mods, draws a flag
+exactly as its script describes it, and lets you edit it and save it back to the
+game's script files.
 
-> **Status:** early. The application runs on Windows and Linux, reads the coat
-> of arms files of a configured game or mod folder, lets you browse the flags and
-> textures it found, draws the flag you open, edits it with undo, and saves it
-> back to script files or exports it as an image.
+It runs on Windows and Linux.
 
-## How it is put together
+## Usage
 
-Two decisions shape the whole code base.
+### Installation
 
-**raylib keeps drawing the flag.** Flags are composed on the GPU from pattern and
-emblem textures with a recolouring fragment shader (`assets/shaders/recolor.fs`).
-That pipeline is the valuable part of the original and it ports across almost
-unchanged, so the Go version keeps using raylib through
-[raylib-go](https://github.com/gen2brain/raylib-go).
+Download the zip for your system from the
+[releases page](https://github.com/kaiser-chris/pdx-flag-builder/releases),
+extract it anywhere and run `pdx-flag-builder`.
 
-**The interface was rewritten rather than ported.** The Odin version used
-microui, which meant hand writing dropdowns, tables, toasts and colour pickers.
-The Go version uses [Dear ImGui](https://github.com/ocornut/imgui) through
-[cimgui-go](https://github.com/AllenDang/cimgui-go), which brings docking,
-sortable tables, modal dialogs and a real colour picker along for free.
+On Linux the file dialogs need `zenity` or `kdialog`, one of which most desktops
+already have.
 
-Dear ImGui and raylib share one window: cimgui-go ships a raylib backend, so
-raylib owns the window, the OpenGL context and the input queue, and Dear ImGui
-draws through raylib's immediate mode layer. The flag is rendered into an
-offscreen target each frame and the preview panel samples it as an image.
+### Setup
 
-```
-cmd/pdx-flag-builder   entry point
-assets                 files bundled into the binary with go:embed
-internal/app           the shell: panels, menus, windows and the state they share
-internal/gui           window bootstrap, theme, fonts, scaling and recorded widgets
-internal/uitest        the driver the interface tests click through
-internal/render        flag rendering with raylib
-internal/texture       reading the games' image files, including Targa and BC7
-internal/config        settings and layout persistence
-internal/database      reading a game or mod folder
-internal/pdx           the coat of arms model
-internal/pdx/script    the parser for Paradox script files
-```
+The tool reads its flags and textures from the game and from your mods:
 
-### Reading the game files
+1. Open **Settings** (`Ctrl+,`).
+2. Click **Add Folder** and then **Browse...**, and pick the game's `game` folder
+   or the root folder of a mod.
+3. Add as many folders as you like. A folder further down the list overrides
+   the ones above it, the way a mod overrides the game.
+4. Click **Save**.
 
-`internal/pdx/script` parses the script language the games store their data in:
-blocks, lists, repeated keys, tagged values such as `hsv360 { 0 0 5 }`, and the
-variables and arithmetic that coat of arms files use to keep proportions
-readable (`@third = @[1/3]`, `scale = { @third 0.5 }`).
+### Finding a flag
 
-Two things about it are worth knowing. It **evaluates** variables and
-expressions rather than treating them as zero, which the flags with
-variable-driven scales depend on. And it is **lenient about junk**: the shipped
-game files contain the odd typo, such as a stray bracket in the middle of a
-position, and the games read those files anyway, so an unreadable character is
-skipped and reported instead of costing every flag in the file.
+**Databases → Flag Database** lists every coat of arms that was found, with a
+preview. **Databases → Texture Database** lists the patterns and emblems. Type
+into the search box to narrow a list down, and click a column header to sort it.
 
-Reading a folder happens on its own goroutine and the result is handed to the
-interface through a channel, so a full game folder — around 1700 flags and 1000
-textures — loads without the window ever stalling.
+Click a flag to open it. **File → New Flag** starts from an empty one.
 
-### Drawing a flag
+### Editing
 
-`internal/texture` turns the game's image files into textures. raylib reads PNG
-and the older DDS compressions itself and uploads them to the GPU still
-compressed. Two formats are decoded in Go instead: Targa, because the raylib
-build raylib-go ships leaves that reader out, and BC7, which raylib has no pixel
-format for at all. The BC7 partition tables are generated from the `bcdec`
-header the Odin version vendored.
+The **Layers** panel lists the coat of arms and its layers. Click one to edit it
+in the **Selected Layer** panel:
 
-`internal/render` composes the flag: the pattern first, then each layer over
-it, through a fragment shader that swaps the marker colours the textures are
-painted in for the colours the coat of arms asks for, including masks and sub
-flags. Rotated emblems reuse the Odin version's approximation of how the games
-resize them, which has not been checked against the games yet. Textures are read
-on a background goroutine and uploaded a few per frame, so opening a flag never
-stalls the window.
+- The coat of arms has its name, its pattern and its colours.
+- An emblem has its texture, its colours, a mask that limits it to one colour of
+  the pattern, and its placements: position, scale and rotation.
+- A sub flag draws another coat of arms, with an offset and a scale.
 
-The previews in the lists are drawn once each into cells of one large render
-target rather than every frame, from a texture cache of their own that only
-keeps the most recently used textures. Scrolling through all 1700 flags of a
-game therefore never keeps every texture they use on the GPU.
+Add layers with **Add Layer**, or straight from the texture database with
+**Add as Layer** and **Set as Pattern**, or from the flag database with
+**Add as Sub Flag**. The arrows next to a layer move it up and down; the layers
+further down are drawn on top.
 
-The shader picks the marker colour a pixel is *closest* to, where the Odin
-version took the first one within tolerance. That difference removes a line of
-raw marker colour that used to show along seams in the pattern.
+Number fields are changed by dragging across them. Double-click one to type a
+number instead. Hold **Shift** while dragging for bigger steps, **Alt** for
+finer ones.
 
-Settings live in the user's configuration directory
-(`%AppData%\pdx-flag-builder` on Windows, `~/.config/pdx-flag-builder` on Linux)
-in the same format the Odin version wrote, so an existing installation keeps its
-configured folders. The window layout is stored next to it and can be reset from
-**View → Reset Layout**.
+To move a placement with the keyboard, click the flag and use the arrow keys:
 
-### Scaling
+| Keys                       | Effect                      |
+|----------------------------|-----------------------------|
+| Arrow keys                 | Move the selected placement |
+| **Ctrl** + arrow keys      | Scale it                    |
+| **Alt** + left and right   | Turn it                     |
+| **Shift** with any of them | Ten times bigger steps      |
 
-On a high resolution display the whole interface is drawn larger: text, padding,
-windows and the flag preview alike. **Settings → Interface Scale** follows the
-monitor's scale by default (**Automatic**, which tracks the window from one
-monitor to another) or can be fixed anywhere from 100% to 300%. A change shows
-straight away and is kept once the settings are saved.
-
-Text stays sharp at any scale, because Dear ImGui 1.92 rasterises glyphs at the
-size they are drawn at. Sizes are always worked out from the unscaled style, so
-switching back and forth does not make the layout drift.
-
-Two lists Dear ImGui keeps, its textures and its windows, are read through a
-small cgo file (`internal/gui/cvector.go`) rather than cimgui-go's generated
-accessors. Those wrap only the first element of a list of pointers, and the
-raylib backend crashes on them the moment the font atlas grows, which is what
-changing the scale does. The window services the textures itself instead.
-
-## Building
-
-Both dependencies use cgo, so a C and C++ compiler is required.
-
-### Windows
-
-Install [Go](https://go.dev/dl/) and a MinGW-w64 toolchain (for example
-[w64devkit](https://github.com/skeeto/w64devkit) or MSYS2), make sure `gcc` is on
-`PATH`, then run:
-
-```bat
-build.bat
-```
-
-### Linux
-
-Install Go, a compiler and the OpenGL, X11 and Wayland development headers.
-raylib builds GLFW with both of its Linux backends, so it needs both:
-
-```bash
-sudo apt-get install build-essential libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
-./build.sh
-```
-
-The binary, with all assets bundled in, lands in `bin/`. A `Makefile` wraps the
-usual tasks (`make build`, `make run`, `make release`, `make vet`).
-
-> The first build compiles raylib and Dear ImGui from source and takes a few
-> minutes. Later builds use the Go build cache and take seconds.
-
-## Using it
-
-1. Open **Settings** (`Ctrl+,`)
-2. Add a folder and point it at a game or mod folder
-3. Save
-
-The flags and textures it found are then in **Databases → Flag Database** and
-**Databases → Texture Database**, each with a small preview: the rendered flag,
-or the texture as the file has it, along with its size. Clicking a column
-header sorts the list, and the part of each name a search matched is marked.
-Picking a flag opens it and shows its layers.
-
-Layers are added, reordered and removed in the **Layers** panel, and the
-selected one is edited in the panel next to it: its texture, colours, mask and
-placements. **File → New Flag** starts from an empty one, and a texture can be
-used straight from the texture database as the pattern or as a new layer.
-Wherever a texture or a coat of arms is chosen, the list says which folder each
-one comes from, so a texture a mod replaces shows up once for the game and once
-for the mod.
-A placement is changed by dragging its fields, or by typing into them after a
-double click. Clicking the flag hands it the arrow keys, as in the Odin
-version: they move the selected placement, with Ctrl they scale it and with
-Alt, left and right turn it; Shift makes each step ten times bigger. The
-placements of a layer can be put in a different order, which decides which is
-drawn on top where they overlap.
-
-**Ctrl+Z** and **Ctrl+Y** undo and redo, one step per edit: a whole drag of a
-slider is one step, not one per frame. Holding an arrow key down is one step too.
+**Ctrl+Z** undoes and **Ctrl+Y** redoes.
 
 ### Saving and exporting
 
-- **File → Save** (`Ctrl+S`) writes the flag back into the file it was read
-  from. Only its own definition is replaced, where it stands: comments,
-  variables, the other flags, line breaks and the byte order mark are left as
-  they were. A renamed flag replaces its old definition.
-- **File → Save To File...** (`Ctrl+Shift+S`) puts the flag into a file of
-  your choosing: in place of a definition of the same name if the file has
-  one, at its end otherwise, and a new file is created with a byte order mark,
-  as the games expect. The flag belongs to that file from then on. Saving a
-  flag that never had a file does the same.
-- **File → Copy Script** puts the flag's script on the clipboard.
-- **File → Export Image...** writes the flag as a 768 by 512 PNG with a
-  transparent background.
+| Menu entry                                   | Effect |
+|----------------------------------------------|--------|
+| **File → Save** (`Ctrl+S`)                   | Writes the flag back into the file it came from. Only its own definition changes; the rest of the file stays as it is. |
+| **File → Save To File...** (`Ctrl+Shift+S`)  | Puts the flag into a file of your choosing, replacing a flag of the same name in it or adding it at the end. |
+| **File → Copy Script**                       | Copies the flag's script to the clipboard. |
+| **File → Export Image...**                   | Saves the flag as a 768 × 512 PNG image. |
 
-The script is laid out the way the games' files are, one placement per line.
-Values the file spelled with `@variables` or `@[expressions]` are written as the
-numbers they came to, since that is all that is left of them once read.
+Values a file wrote with `@variables` or `@[expressions]` are saved as the
+numbers they came to.
 
-Opening another flag, **File → Exit** and closing the window all ask first
-when there are unsaved changes, and offer to save them when the flag already
-has a file. Files and folders are
-picked in the system's own dialogs through
-[zenity](https://github.com/ncruces/zenity), which needs no C libraries: on
-Linux it runs `zenity` or `kdialog`, whichever the desktop has.
+The tool asks before it throws away unsaved changes.
 
-## Testing
+### Settings
+
+**Settings → Interface Scale** makes the whole interface larger for high
+resolution displays. **View → Reset Layout** puts the panels back where they
+started.
+
+Settings are stored in `%AppData%\pdx-flag-builder` on Windows and in
+`~/.config/pdx-flag-builder` on Linux.
+
+## Building
+
+The tool is written in Go and draws with [raylib](https://www.raylib.com/) and
+[Dear ImGui](https://github.com/ocornut/imgui). Both are C and C++ libraries that
+are compiled along with it, so a C and C++ compiler is needed as well as Go.
+
+The first build compiles raylib and Dear ImGui and takes a few minutes. Later
+builds use Go's build cache and take seconds.
+
+### Windows
+
+1. Install [Go](https://go.dev/dl/), in the version `go.mod` asks for or newer.
+2. Install a MinGW-w64 toolchain, for example
+   [w64devkit](https://github.com/skeeto/w64devkit) or the one that comes with
+   [MSYS2](https://www.msys2.org/), and put its `bin` folder on `PATH` so that
+   `gcc` can be found.
+3. Build:
+
+   ```bat
+   build.bat
+   ```
+
+   The executable lands in `bin\windows`.
+
+### Linux
+
+1. Install [Go](https://go.dev/dl/), in the version `go.mod` asks for or newer.
+2. Install a compiler and the OpenGL, X11 and Wayland development files. On
+   Debian and Ubuntu:
+
+   ```bash
+   sudo apt-get install build-essential libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
+   ```
+
+3. Build:
+
+   ```bash
+   ./build.sh
+   ```
+
+   The executable lands in `bin/linux`.
+
+### Makefile
+
+With `make` installed, the `Makefile` covers the everyday tasks:
+
+| Command        | Effect |
+|----------------|--------|
+| `make build`   | Builds a development executable into `bin/` |
+| `make run`     | Builds it and starts it |
+| `make release` | Builds an optimised executable, without a console window on Windows |
+| `make test`    | Runs the tests |
+| `make uitest`  | Runs the interface tests as well, which open a hidden window and so need a display |
+| `make vet`     | Checks the code with `go vet` |
+
+The tests that read a real installation run when `PDX_GAME_DIR` points at a game
+or mod folder:
 
 ```bash
-go test ./...
+PDX_GAME_DIR="/path/to/Victoria 3/game" go test ./...
 ```
-
-Five of the tests read a real installation instead of a fixture, because the
-only way to find out what the files really contain is to read the real ones:
-they parse, decode, write back and merge every coat of arms, and decode every
-coat of arms texture. They are skipped unless you point them at a game or mod
-folder of either game:
-
-```bash
-PDX_GAME_DIR="/path/to/Victoria 3/game" go test ./... -v
-```
-
-Setting `PDX_DUMP_DIR` as well makes the texture test write every Targa and BC7
-file it decodes out as a PNG, which is the only way to see whether the decoders
-are right.
-
-### Interface tests
-
-```bash
-make uitest
-```
-
-runs the real application in a hidden window and drives it the way a user
-would: it opens menus, clicks buttons, types, drags sliders and presses
-shortcuts, then checks the application's state and the pixels of the rendered
-flag. The same tag covers the renderer's tests that need an OpenGL context,
-such as the thumbnail atlas and the texture cache. They sit behind the
-`uitest` build tag (`go test -tags uitest ./...`) because they need a display,
-which a headless CI runner does not have; on Linux, `xvfb-run` provides one.
-
-The widgets the application uses come from `internal/gui`, which reports each
-one it lays out (its label, window, rectangle and visible area) to the
-driver in `internal/uitest`. That is how a test finds "Save" in the settings
-window without knowing where it is, and how it notices when a widget has been
-scrolled out of view or pushed off the edge of the window. Like a user, the
-driver scrolls a widget into view before it clicks it.
-
-## Continuous integration and releases
-
-Every push to `main` and every pull request is vetted, tested and built on
-Linux. Windows takes around ten minutes to compile raylib and Dear ImGui with
-MinGW, so it only runs when the **Build** workflow is started by hand, and for
-every release.
-
-A release is started by hand from the **Release** workflow in the Actions tab,
-choosing whether it is a major, minor or patch release. The workflow:
-
-1. takes the latest release tag, or 0.1.0 when there is none yet, and
-   increases the chosen part of it;
-2. writes the new version into `internal/app/version.go`, then vets, tests and
-   builds on Linux and Windows;
-3. commits the version, tags the commit with it and pushes both, together or
-   not at all, so that a release never tags a `main` that moved on meanwhile;
-4. creates the GitHub release, with a zip of each build and the commits since
-   the last release as its notes.
-
-Nothing is committed, tagged or published unless both builds pass. Tags are
-plain versions such as `1.2.3`.
-
-## What still has to be ported
-
-- A Windows resource `.syso` so the executable carries `icon.ico`, replacing the
-  `resources.rc` the Odin build used
-
-## Credit
-
-The application shows these in **Help → About** as well.
-
-- The application icon is waving flag by Suncheli Project from
-  [Noun Project](https://thenounproject.com/browse/icons/term/waving-flag/)
-  (CC BY 3.0).
-- The interface is set in [Roboto](https://github.com/googlefonts/roboto-classic),
-  designed by Christian Robertson, copyright 2011 The Roboto Project Authors,
-  under the SIL Open Font License 1.1, which is in
-  [assets/fonts/roboto/OFL.txt](assets/fonts/roboto/OFL.txt). Roboto is a
-  trademark of Google.
-- The BC7 decoder follows [bcdec](https://github.com/iOrange/bcdec) by iOrange,
-  which the Odin version vendored.
