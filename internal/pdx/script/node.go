@@ -69,6 +69,12 @@ type Field struct {
 	Key   string
 	Value Node
 	Line  int
+
+	// Start and End are byte offsets into the input the document was parsed
+	// from: the first byte of the key and just past the last byte of the
+	// value. They are what lets a definition be replaced in its file without
+	// touching anything around it.
+	Start, End int
 }
 
 // Document is a parsed file.
@@ -174,4 +180,11 @@ func (n Node) Numbers() ([]float64, bool) {
 	}
 
 	return numbers, true
+}
+
+// IsBlock reports whether a value can be read as a block of fields. An empty
+// pair of braces is as much an empty block as an empty list, and the file has
+// no way of saying which it meant, so it counts as both.
+func (n Node) IsBlock() bool {
+	return n.Kind == KindBlock || n.Kind == KindList && len(n.Items) == 0
 }

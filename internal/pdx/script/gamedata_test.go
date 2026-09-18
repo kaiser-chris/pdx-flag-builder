@@ -21,7 +21,7 @@ func TestParseInstalledGameFiles(t *testing.T) {
 
 	var parsed, failed int
 
-	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+	visit := func(path string, entry os.DirEntry, err error) error {
 		if err != nil || entry.IsDir() || !strings.EqualFold(filepath.Ext(path), ".txt") {
 			return nil //nolint:nilerr // an unreadable folder is not this test's problem
 		}
@@ -39,10 +39,36 @@ func TestParseInstalledGameFiles(t *testing.T) {
 		}
 
 		return nil
-	})
-	if err != nil {
-		t.Fatalf("walk %s: %v", root, err)
+	}
+
+	for _, folder := range readFolders(root) {
+		if err := filepath.WalkDir(folder, visit); err != nil {
+			t.Fatalf("walk %s: %v", folder, err)
+		}
 	}
 
 	t.Logf("parsed %d files, %d failed", parsed, failed)
+}
+
+// readFolders narrows a game or mod folder down to where the tool reads
+// script from, since the rest of a game holds script in dialects of its own
+// that this parser never has to read. A folder without those is taken whole,
+// so the test can also be pointed at a folder of loose files.
+func readFolders(root string) []string {
+	var folders []string
+
+	for _, folder := range []string{
+		filepath.Join(root, "common", "coat_of_arms"),
+		filepath.Join(root, "common", "named_colors"),
+	} {
+		if info, err := os.Stat(folder); err == nil && info.IsDir() {
+			folders = append(folders, folder)
+		}
+	}
+
+	if len(folders) == 0 {
+		return []string{root}
+	}
+
+	return folders
 }

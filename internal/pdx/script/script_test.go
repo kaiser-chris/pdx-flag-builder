@@ -232,3 +232,40 @@ func TestSyntaxErrorReportsPosition(t *testing.T) {
 		t.Errorf("line = %d, want 2", syntaxError.Line)
 	}
 }
+
+func TestFieldSpans(t *testing.T) {
+	input := byteOrderMark + "@a = 1\nfirst = { x = { 1 2 } }\r\nsecond = \"text\" # comment\nthird = rgb { 1 @a 1 }"
+
+	document, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	want := map[string]string{
+		"first":  "first = { x = { 1 2 } }",
+		"second": `second = "text"`,
+		"third":  "third = rgb { 1 @a 1 }",
+	}
+
+	for _, field := range document.Fields {
+		if got := input[field.Start:field.End]; got != want[field.Key] {
+			t.Errorf("span of %s = %q, want %q", field.Key, got, want[field.Key])
+		}
+	}
+
+	inner := document.Fields[0].Value.Fields[0]
+	if got := input[inner.Start:inner.End]; got != "x = { 1 2 }" {
+		t.Errorf("span of a nested field = %q, want %q", got, "x = { 1 2 }")
+	}
+}
+
+func TestIsKey(t *testing.T) {
+	for text, want := range map[string]bool{
+		"GBR": true, "ABU_subject_GBR": true, "_x": true, "new_flag": true,
+		"": false, "1GBR": false, "two words": false, "quote\"": false, "a{": false,
+	} {
+		if got := IsKey(text); got != want {
+			t.Errorf("IsKey(%q) = %v, want %v", text, got, want)
+		}
+	}
+}

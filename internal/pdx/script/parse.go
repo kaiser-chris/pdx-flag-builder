@@ -119,7 +119,11 @@ func (p *parser) parseField() (Field, error) {
 		return Field{}, err
 	}
 
-	return Field{Key: key.text, Value: value, Line: key.line}, nil
+	// The value has just been read, so the token before the current one is
+	// its last.
+	end := p.tokens[p.index-1].end
+
+	return Field{Key: key.text, Value: value, Line: key.line, Start: key.start, End: end}, nil
 }
 
 // parseVariableDefinition records a variable definition. The definition itself

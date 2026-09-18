@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/AllenDang/cimgui-go/imgui"
 
@@ -106,11 +107,16 @@ func (a *App) databaseTable() {
 		gui.InputText("##name", "game", &entry.Name)
 
 		imgui.TableSetColumnIndex(1)
-		imgui.SetNextItemWidth(-1)
-		// TODO: a Browse button needs a native folder picker. The Odin version
-		// used nativefiledialog; the Go port has to pick a cross platform
-		// replacement before this can be wired up.
+		// The path can be typed or pasted, or picked in the system's dialog.
+		browseWidth := imgui.CalcTextSize(labelBrowse).X + imgui.CurrentStyle().FramePadding().X*2
+		imgui.SetNextItemWidth(imgui.ContentRegionAvail().X - browseWidth - imgui.CurrentStyle().ItemSpacing().X)
 		gui.InputText("##path", "path to a game or mod folder", &entry.Path)
+
+		imgui.SameLine()
+
+		if gui.Button(labelBrowse) {
+			a.browseFolder(index)
+		}
 
 		imgui.TableSetColumnIndex(2)
 		if gui.Button("X") {
@@ -252,4 +258,34 @@ func (a *App) interfaceScale() float32 {
 	}
 
 	return gui.MonitorScale()
+}
+
+// labelBrowse is the button beside each folder that opens the folder dialog.
+const labelBrowse = "Browse..."
+
+// browseFolder picks the folder of a row of the folder table in the system's
+// dialog. Like typing it, this only changes the row until the settings are
+// saved.
+func (a *App) browseFolder(row int) {
+	start := ""
+	if row < len(a.state.databases) {
+		start = a.state.databases[row].Path
+	}
+
+	request := fileRequest{title: "Choose a Game or Mod Folder", start: start, folder: true}
+
+	a.ask(request, func(path string) {
+		// The rows may have changed while the dialog was open.
+		if row >= len(a.state.databases) {
+			return
+		}
+
+		entry := &a.state.databases[row]
+		entry.Path = path
+
+		// A row without a name would not be saved, so it gets the folder's.
+		if entry.Name == "" {
+			entry.Name = filepath.Base(path)
+		}
+	})
 }

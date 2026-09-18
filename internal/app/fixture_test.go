@@ -121,6 +121,10 @@ func startApp(t *testing.T, configure ...func(settings *config.Settings)) (*App,
 	}
 	t.Cleanup(application.Close)
 
+	// A test never gets to see a real dialog: this one cancels whatever it is
+	// asked, until a test hands it answers.
+	application.dialogs = &fakeDialogs{}
+
 	driver := uitest.New(t, application)
 
 	driver.WaitFor("the fixture game to be read", func() bool {

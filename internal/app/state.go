@@ -81,9 +81,9 @@ type state struct {
 	history  history
 	modified bool
 
-	// pendingFlag is a flag waiting to be opened until the user has decided
-	// what happens to the unsaved changes of the one open now.
-	pendingFlag *pdx.Flag
+	// pending is an action waiting until the user has decided what happens to
+	// the unsaved changes it would throw away.
+	pending *pendingAction
 
 	// popup is a modal to open at the top of the next frame. Dear ImGui ties a
 	// popup to the id stack it was opened from, so opening one from inside a
@@ -95,6 +95,17 @@ type state struct {
 
 	// colorSearch is the search field of the named colour picker.
 	colorSearch string
+
+	// dialog is the file dialog that is open, if one is.
+	dialog *pendingDialog
+
+	// export is an image export waiting for the textures it needs.
+	export *imageExport
+
+	// statusAfterLoad replaces the summary the next read of the folders would
+	// put in the status bar, for a read that follows something more worth
+	// reporting, such as a save.
+	statusAfterLoad string
 
 	// status is the message shown in the status bar.
 	status string

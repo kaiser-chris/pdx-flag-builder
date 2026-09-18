@@ -58,12 +58,13 @@ func DecodeFlags(document *script.Document, origin Origin) ([]Flag, []Issue) {
 			continue
 		}
 
-		if field.Value.Kind != script.KindBlock {
+		if !field.Value.IsBlock() {
 			continue
 		}
 
 		flagOrigin := origin
 		flagOrigin.Line = field.Line
+		flagOrigin.Key = field.Key
 
 		flags = append(flags, decoder.flag(field.Key, field.Value, flagOrigin))
 	}

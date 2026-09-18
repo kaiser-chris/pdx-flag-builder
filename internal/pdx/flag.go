@@ -29,6 +29,10 @@ type Origin struct {
 	File string
 	Path string
 
+	// Key is the name the definition was read under. The editor can rename
+	// the flag, so this is what still finds the definition in its file.
+	Key string
+
 	// Line is where the definition started.
 	Line int
 }

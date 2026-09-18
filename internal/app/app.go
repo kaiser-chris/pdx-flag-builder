@@ -42,6 +42,9 @@ type App struct {
 	settings *config.Settings
 	state    state
 
+	// dialogs asks the user for files and folders.
+	dialogs fileDialogs
+
 	// input feeds extra input into Dear ImGui each frame. It is only ever set
 	// by the interface tests.
 	input func()
@@ -131,6 +134,7 @@ func New(options Options) (*App, error) {
 	})
 
 	application.window.SizeForScale(defaultWindowWidth, defaultWindowHeight, application.interfaceScale())
+	application.dialogs = systemDialogs{parent: dialogParent()}
 
 	// Everything below needs the OpenGL context the window just created.
 	shader, err := render.LoadRecolor()
@@ -151,6 +155,8 @@ func New(options Options) (*App, error) {
 	application.thumbnails = render.NewThumbnails(shader, application.texturePath)
 	application.thumbnails.SetSubFlagLookup(application.subFlag)
 	application.dockWindowClass = imgui.NewWindowClass()
+
+	application.window.OnCloseRequest(application.allowQuit)
 
 	application.window.OnShutdown(func() {
 		application.preview.Unload()
@@ -207,6 +213,7 @@ func openStore(dir string) (config.Store, error) {
 func (a *App) drawOffscreen() {
 	a.textures.Upload()
 	a.preview.Draw(a.state.flag)
+	a.finishExport()
 	a.thumbnails.Draw()
 }
 
@@ -263,6 +270,13 @@ func (a *App) reportLoad() {
 	a.thumbnails.SetPalette(library.palette)
 	a.thumbnails.Forget()
 
+	if note := a.state.statusAfterLoad; note != "" {
+		a.state.statusAfterLoad = ""
+		a.setStatus("%s", note)
+
+		return
+	}
+
 	if len(library.set) == 0 {
 		a.setStatus("No folders configured")
 
@@ -291,6 +305,8 @@ func (a *App) frame() {
 	if a.state.library.poll(a.settings.Databases) {
 		a.reportLoad()
 	}
+
+	a.pollDialog()
 
 	// Checked every frame so that "Automatic" follows the window from one
 	// monitor to another. Nothing happens unless the scale actually changes.

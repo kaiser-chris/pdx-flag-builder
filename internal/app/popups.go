@@ -11,9 +11,19 @@ import (
 
 // Labels of the unsaved changes dialog.
 const (
-	labelDiscard = "Discard Changes"
-	labelCancel  = "Cancel"
+	labelSaveFirst = "Save"
+	labelDiscard   = "Discard Changes"
+	labelCancel    = "Cancel"
 )
+
+// pendingAction is something that would throw away unsaved changes, held back
+// until the user has said what should happen to them.
+type pendingAction struct {
+	// what says what the action is, to finish the sentence "... discards them".
+	what string
+
+	run func()
+}
 
 // openRequestedPopup opens the modal asked for during the last frame.
 //
@@ -40,7 +50,33 @@ func (a *App) requestOpen(flag pdx.Flag) {
 	}
 
 	pending := flag.Clone()
-	a.state.pendingFlag = &pending
+	a.confirmDiscard("Opening "+pending.Name, func() { a.openFlag(pending) })
+}
+
+// requestQuit closes the application, first asking what should happen to
+// unsaved changes.
+func (a *App) requestQuit() {
+	if a.allowQuit() {
+		a.window.RequestClose()
+	}
+}
+
+// allowQuit is asked when the user closes the window. With unsaved changes it
+// says no and asks about them instead; the close happens once they are dealt
+// with.
+func (a *App) allowQuit() bool {
+	if a.state.flag == nil || !a.state.modified {
+		return true
+	}
+
+	a.confirmDiscard("Closing "+applicationName, a.window.RequestClose)
+
+	return false
+}
+
+// confirmDiscard holds an action back behind the unsaved changes dialog.
+func (a *App) confirmDiscard(what string, run func()) {
+	a.state.pending = &pendingAction{what: what, run: run}
 	a.state.popup = popupDiscard
 }
 
@@ -57,28 +93,48 @@ func (a *App) discardPopup() {
 	}
 	defer imgui.EndPopup()
 
-	pending := a.state.pendingFlag
+	pending := a.state.pending
 	if pending == nil || a.state.flag == nil {
 		imgui.CloseCurrentPopup()
 
 		return
 	}
 
-	imgui.TextWrapped(fmt.Sprintf("%s has changes that have not been saved. Opening %s discards them.",
-		a.state.flag.Name, pending.Name))
+	imgui.TextWrapped(fmt.Sprintf("%s has changes that have not been saved. %s discards them.",
+		a.state.flag.Name, pending.what))
 
 	imgui.Spacing()
 
+	// Saving right here only works for a flag that already has a file. A
+	// new one would need the file dialog first, and the user can do that
+	// from the File menu after cancelling.
+	if a.state.flag.Origin.Path != "" {
+		if gui.Button(labelSaveFirst) {
+			a.save()
+
+			// A save that failed says why in the status bar, and the
+			// changes stay.
+			if !a.state.modified {
+				pending.run()
+			}
+
+			a.state.pending = nil
+			imgui.CloseCurrentPopup()
+		}
+
+		imgui.SameLine()
+	}
+
 	if gui.Button(labelDiscard) {
-		a.openFlag(*pending)
-		a.state.pendingFlag = nil
+		pending.run()
+		a.state.pending = nil
 		imgui.CloseCurrentPopup()
 	}
 
 	imgui.SameLine()
 
 	if gui.Button(labelCancel) {
-		a.state.pendingFlag = nil
+		a.state.pending = nil
 		imgui.CloseCurrentPopup()
 	}
 }

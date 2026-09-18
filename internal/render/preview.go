@@ -136,23 +136,7 @@ func (p *Preview) drawPlaceholder(label string) {
 // It needs the OpenGL context, so it has to be called from the goroutine that
 // owns the window.
 func (p *Preview) Image() *image.RGBA {
-	captured := rl.LoadImageFromTexture(p.target.Texture)
-	defer rl.UnloadImage(captured)
-
-	// OpenGL fills a render target bottom up.
-	rl.ImageFlipVertical(captured)
-
-	colors := rl.LoadImageColors(captured)
-	defer rl.UnloadImageColors(colors)
-
-	width, height := int(captured.Width), int(captured.Height)
-	picture := image.NewRGBA(image.Rect(0, 0, width, height))
-
-	for index, value := range colors[:width*height] {
-		picture.SetRGBA(index%width, index/width, value)
-	}
-
-	return picture
+	return readBack(p.target.Texture, false)
 }
 
 // Unload releases the render target. It requires a live OpenGL context, so it

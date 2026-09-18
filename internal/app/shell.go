@@ -65,21 +65,30 @@ func (a *App) menuBar() {
 
 		imgui.Separator()
 
-		// Saving and exporting are ported in a later step. They are listed but
-		// disabled so the shape of the application is visible.
-		gui.MenuItem("Save Changes", "Ctrl+S", false)
+		open := a.state.flag != nil
 
-		if gui.BeginMenu("Export") {
-			gui.MenuItem("To Image...", "", false)
-			gui.MenuItem("To Clipboard", "", false)
-			gui.MenuItem("As New Script File...", "", false)
-			imgui.EndMenu()
+		if gui.MenuItem(labelSave, "Ctrl+S", open) {
+			a.save()
+		}
+
+		if gui.MenuItem(labelSaveToFile, "Ctrl+Shift+S", open) {
+			a.saveToFile()
+		}
+
+		imgui.Separator()
+
+		if gui.MenuItem(labelCopyScript, "", open) {
+			a.copyScript()
+		}
+
+		if gui.MenuItem(labelExportImage, "", open) {
+			a.exportImage()
 		}
 
 		imgui.Separator()
 
 		if gui.MenuItem("Exit", "Alt+F4", true) {
-			a.window.RequestClose()
+			a.requestQuit()
 		}
 
 		imgui.EndMenu()
@@ -161,7 +170,11 @@ func (a *App) handleShortcuts() {
 	io := imgui.CurrentIO()
 
 	if io.KeyCtrl() && imgui.IsKeyPressedBool(imgui.KeyS) {
-		a.setStatus("Saving is not available until the flag model is ported")
+		if io.KeyShift() {
+			a.saveToFile()
+		} else {
+			a.save()
+		}
 	}
 
 	if io.KeyCtrl() && imgui.IsKeyPressedBool(imgui.KeyComma) {

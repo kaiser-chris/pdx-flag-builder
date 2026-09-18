@@ -35,6 +35,10 @@ type token struct {
 	number float64
 	line   int
 	column int
+
+	// start and end are byte offsets into the original input, byte order mark
+	// included: where the token begins and just past where it ends.
+	start, end int
 }
 
 // SyntaxError reports where a file stopped making sense.
@@ -49,15 +53,25 @@ func (e *SyntaxError) Error() string {
 }
 
 type lexer struct {
-	input    string
-	offset   int
+	input  string
+	offset int
+
+	// base is how many bytes were cut from the front of the input, so that
+	// offsets can be reported into the input as it was handed over.
+	base int
+
+	// tokenStart is where the token being read began.
+	tokenStart int
+
 	line     int
 	column   int
 	warnings []Warning
 }
 
 func newLexer(input string) *lexer {
-	return &lexer{input: strings.TrimPrefix(input, byteOrderMark), line: 1, column: 1}
+	trimmed := strings.TrimPrefix(input, byteOrderMark)
+
+	return &lexer{input: trimmed, base: len(input) - len(trimmed), line: 1, column: 1}
 }
 
 // tokenize reads the whole input up front. Coat of arms files are small, and
@@ -81,6 +95,20 @@ func (l *lexer) tokenize() ([]token, error) {
 }
 
 func (l *lexer) next() (token, error) {
+	l.tokenStart = l.offset
+
+	lexed, err := l.lexToken()
+	if err != nil {
+		return token{}, err
+	}
+
+	lexed.start = l.base + l.tokenStart
+	lexed.end = l.base + l.offset
+
+	return lexed, nil
+}
+
+func (l *lexer) lexToken() (token, error) {
 	// Characters that belong to no token are skipped rather than treated as a
 	// failure. The shipped game files contain the odd typo, such as a stray
 	// bracket in the middle of a position, and the games read those files
@@ -94,6 +122,7 @@ func (l *lexer) next() (token, error) {
 		}
 
 		start := l.position()
+		l.tokenStart = l.offset
 		char := l.input[l.offset]
 
 		switch {
@@ -329,4 +358,20 @@ func isIdentifierStart(char byte) bool {
 func isIdentifierPart(char byte) bool {
 	return isIdentifierStart(char) || isDigit(char) ||
 		char == '.' || char == '/' || char == '-' || char == ':'
+}
+
+// IsKey reports whether text reads back as a key when written without quotes,
+// which is how the names of coats of arms are written.
+func IsKey(text string) bool {
+	if text == "" || !isIdentifierStart(text[0]) {
+		return false
+	}
+
+	for index := 1; index < len(text); index++ {
+		if !isIdentifierPart(text[index]) {
+			return false
+		}
+	}
+
+	return true
 }

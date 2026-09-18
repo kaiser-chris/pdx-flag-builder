@@ -113,6 +113,10 @@ func (a *App) redo() {
 
 func (a *App) restore(flag pdx.Flag) {
 	restored := flag.Clone()
+
+	// Where the flag is saved is not an edit, so it is not undone: a flag
+	// saved to a new file stays saved there however far back it is taken.
+	restored.Origin = a.state.flag.Origin
 	a.state.flag = &restored
 
 	a.state.history.stable = flag.Clone()

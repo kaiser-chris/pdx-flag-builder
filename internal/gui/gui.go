@@ -64,6 +64,9 @@ type Window struct {
 	shutdown func()
 	closing  bool
 
+	// allowClose decides whether a close the user asked for goes ahead.
+	allowClose func() bool
+
 	// The interface scale: the one in effect, the one asked for, and the
 	// unscaled style both are worked out from.
 	scale        float32
@@ -148,10 +151,28 @@ func (w *Window) RequestClose() {
 	w.closing = true
 }
 
+// OnCloseRequest installs a check that runs when the user asks to close the
+// window, with its close button or the system's shortcut. Returning false keeps
+// the window open, for the application to ask about unsaved work first.
+func (w *Window) OnCloseRequest(allow func() bool) {
+	w.allowClose = allow
+}
+
 // ShouldClose reports whether the window has been asked to close, by the user
 // or by the application.
+//
+// raylib reports a close request for the one frame after it happened, and
+// forgets it again, so a request that is not allowed simply lapses.
 func (w *Window) ShouldClose() bool {
-	return w.closing || rl.WindowShouldClose()
+	if w.closing {
+		return true
+	}
+
+	if !rl.WindowShouldClose() {
+		return false
+	}
+
+	return w.allowClose == nil || w.allowClose()
 }
 
 // Run drives the frame loop until the window is closed, then closes it.

@@ -30,7 +30,7 @@ func TestDecodeInstalledTextures(t *testing.T) {
 
 	var targa, bc7 int
 
-	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+	visit := func(path string, entry os.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return nil //nolint:nilerr // an unreadable folder is not this test's problem
 		}
@@ -86,9 +86,12 @@ func TestDecodeInstalledTextures(t *testing.T) {
 		}
 
 		return nil
-	})
-	if err != nil {
-		t.Fatalf("walk %s: %v", root, err)
+	}
+
+	for _, folder := range readFolders(root) {
+		if err := filepath.WalkDir(folder, visit); err != nil {
+			t.Fatalf("walk %s: %v", folder, err)
+		}
 	}
 
 	t.Logf("decoded %d targa and %d BC7 files", targa, bc7)
@@ -145,4 +148,17 @@ func writePNG(t *testing.T, path string, pixels *Pixels) {
 	if err := png.Encode(file, picture); err != nil {
 		t.Fatalf("encode %s: %v", path, err)
 	}
+}
+
+// readFolders narrows a game or mod folder down to where coat of arms
+// textures are, since the rest of a game holds textures of other sorts, such
+// as flat property maps, that the tool never reads. A folder without that one
+// is taken whole, so the test can also be pointed at a folder of loose files.
+func readFolders(root string) []string {
+	folder := filepath.Join(root, "gfx", "coat_of_arms")
+	if info, err := os.Stat(folder); err == nil && info.IsDir() {
+		return []string{folder}
+	}
+
+	return []string{root}
 }

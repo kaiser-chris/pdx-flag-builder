@@ -6,8 +6,8 @@ that were worth keeping and replacing the parts that were not.
 
 > **Status:** early. The application runs on Windows and Linux, reads the coat
 > of arms files of a configured game or mod folder, lets you browse the flags and
-> textures it found, draws the flag you open and edits it, with undo. Saving and
-> exporting are not ported yet.
+> textures it found, draws the flag you open, edits it with undo, and saves it
+> back to script files or exports it as an image.
 
 ## How it is put together
 
@@ -160,8 +160,33 @@ Wherever a texture or a coat of arms is chosen, the list says which folder each
 one comes from, so a texture a mod replaces shows up once for the game and once
 for the mod.
 **Ctrl+Z** and **Ctrl+Y** undo and redo, one step per edit: a whole drag of a
-slider is one step, not one per frame. Opening another flag over unsaved changes
-asks first.
+slider is one step, not one per frame.
+
+### Saving and exporting
+
+- **File → Save** (`Ctrl+S`) writes the flag back into the file it was read
+  from. Only its own definition is replaced, where it stands: comments,
+  variables, the other flags, line breaks and the byte order mark are left as
+  they were. A renamed flag replaces its old definition.
+- **File → Save To File...** (`Ctrl+Shift+S`) puts the flag into a file of
+  your choosing: in place of a definition of the same name if the file has
+  one, at its end otherwise, and a new file is created with a byte order mark,
+  as the games expect. The flag belongs to that file from then on. Saving a
+  flag that never had a file does the same.
+- **File → Copy Script** puts the flag's script on the clipboard.
+- **File → Export Image...** writes the flag as a 768 by 512 PNG with a
+  transparent background.
+
+The script is laid out the way the games' files are, one placement per line.
+Values the file spelled with `@variables` or `@[expressions]` are written as the
+numbers they came to, since that is all that is left of them once read.
+
+Opening another flag, **File → Exit** and closing the window all ask first
+when there are unsaved changes, and offer to save them when the flag already
+has a file. Files and folders are
+picked in the system's own dialogs through
+[zenity](https://github.com/ncruces/zenity), which needs no C libraries: on
+Linux it runs `zenity` or `kdialog`, whichever the desktop has.
 
 ## Testing
 
@@ -169,9 +194,11 @@ asks first.
 go test ./...
 ```
 
-Three of the tests read a real installation instead of a fixture, because the
-only way to find out what the files really contain is to read the real ones.
-They are skipped unless you point them at a folder:
+Five of the tests read a real installation instead of a fixture, because the
+only way to find out what the files really contain is to read the real ones:
+they parse, decode, write back and merge every coat of arms, and decode every
+coat of arms texture. They are skipped unless you point them at a game or mod
+folder:
 
 ```bash
 PDX_GAME_DIR="/path/to/Victoria 3/game" go test ./... -v
@@ -202,10 +229,6 @@ scrolled out of view or pushed off the edge of the window.
 
 ## What still has to be ported
 
-- Saving a coat of arms back to a file
-- The exporters: script, image and clipboard
-- A cross platform replacement for `nativefiledialog` so folders can be picked
-  instead of typed
 - A Windows resource `.syso` so the executable carries `icon.ico`, replacing the
   `resources.rc` the Odin build used
 
