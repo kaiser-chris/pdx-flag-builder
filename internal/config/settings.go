@@ -42,6 +42,11 @@ type Database struct {
 type Settings struct {
 	BackgroundColor Color
 	Databases       []Database
+
+	// InterfaceScale is how large the interface is drawn, where one is its
+	// designed size. Zero follows the display scale of the monitor, which is
+	// also what a settings file from before the setting existed gets.
+	InterfaceScale float32 `json:",omitempty"`
 }
 
 // Default returns the settings used when no settings file exists yet.
@@ -52,51 +57,51 @@ func Default() *Settings {
 	}
 }
 
-// Dir returns the directory holding this application's configuration, creating
-// it when it does not exist yet.
-func Dir() (string, error) {
+// Store is the directory the configuration lives in.
+//
+// The application uses the one in the user's configuration directory. Tests
+// point a store at a temporary directory instead, so that nothing they do ever
+// touches a real installation.
+type Store struct {
+	dir string
+}
+
+// UserStore returns the store in the user's configuration directory, creating
+// the directory when it does not exist yet.
+func UserStore() (Store, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("determine user config directory: %w", err)
+		return Store{}, fmt.Errorf("determine user config directory: %w", err)
 	}
 
-	dir := filepath.Join(base, folderName)
+	return NewStore(filepath.Join(base, folderName))
+}
+
+// NewStore returns a store in the given directory, creating it if necessary.
+func NewStore(dir string) (Store, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("create config directory %q: %w", dir, err)
+		return Store{}, fmt.Errorf("create config directory %q: %w", dir, err)
 	}
 
-	return dir, nil
+	return Store{dir: dir}, nil
 }
 
 // SettingsPath returns the full path of the settings file.
-func SettingsPath() (string, error) {
-	dir, err := Dir()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(dir, settingsFileName), nil
+func (s Store) SettingsPath() string {
+	return filepath.Join(s.dir, settingsFileName)
 }
 
 // LayoutPath returns the file Dear ImGui persists the window layout in. It
 // lives next to the settings so that removing the config directory resets the
 // application completely.
-func LayoutPath() (string, error) {
-	dir, err := Dir()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(dir, layoutFileName), nil
+func (s Store) LayoutPath() string {
+	return filepath.Join(s.dir, layoutFileName)
 }
 
 // Load reads the settings file. A missing file is not an error: it yields the
 // defaults, which is what a first start looks like.
-func Load() (*Settings, error) {
-	path, err := SettingsPath()
-	if err != nil {
-		return Default(), err
-	}
+func (s Store) Load() (*Settings, error) {
+	path := s.SettingsPath()
 
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -114,14 +119,11 @@ func Load() (*Settings, error) {
 	return settings, nil
 }
 
-// Save writes the settings back to disk.
-func (s *Settings) Save() error {
-	path, err := SettingsPath()
-	if err != nil {
-		return err
-	}
+// Save writes settings to disk.
+func (s Store) Save(settings *Settings) error {
+	path := s.SettingsPath()
 
-	data, err := json.MarshalIndent(s, "", "  ")
+	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode settings: %w", err)
 	}

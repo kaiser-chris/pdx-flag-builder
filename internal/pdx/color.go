@@ -227,3 +227,73 @@ func (c Colors) NextFreeSlot() string {
 
 	return ""
 }
+
+// SlotIndex returns the position of a colour slot, so that color1 is 0. It
+// returns minus one for anything that is not a slot name.
+func SlotIndex(slot string) int {
+	for index, name := range slotNames {
+		if name == slot {
+			return index
+		}
+	}
+
+	return -1
+}
+
+// RGBToHSV is the inverse of HSVToRGB: hue in degrees, saturation and value
+// between zero and one.
+func RGBToHSV(value color.RGBA) (hue, saturation, brightness float32) {
+	red := float32(value.R) / 255
+	green := float32(value.G) / 255
+	blue := float32(value.B) / 255
+
+	high := max(red, green, blue)
+	low := min(red, green, blue)
+	chroma := high - low
+
+	brightness = high
+
+	if high > 0 {
+		saturation = chroma / high
+	}
+
+	if chroma == 0 {
+		return 0, saturation, brightness
+	}
+
+	switch high {
+	case red:
+		hue = 60 * float32(math.Mod(float64((green-blue)/chroma), 6))
+	case green:
+		hue = 60 * ((blue-red)/chroma + 2)
+	default:
+		hue = 60 * ((red-green)/chroma + 4)
+	}
+
+	if hue < 0 {
+		hue += 360
+	}
+
+	return hue, saturation, brightness
+}
+
+// Nearest returns the name of the palette colour closest to a colour, which is
+// what a slot becomes when the user switches it to a named colour.
+func (p Palette) Nearest(value color.RGBA) (string, bool) {
+	best, bestDistance := "", -1
+
+	for name, candidate := range p {
+		red := int(candidate.R) - int(value.R)
+		green := int(candidate.G) - int(value.G)
+		blue := int(candidate.B) - int(value.B)
+		distance := red*red + green*green + blue*blue
+
+		// Ties go to the alphabetically first name, so the answer does not
+		// depend on map order.
+		if bestDistance < 0 || distance < bestDistance || distance == bestDistance && name < best {
+			best, bestDistance = name, distance
+		}
+	}
+
+	return best, bestDistance >= 0
+}

@@ -1,23 +1,24 @@
 // Package render draws flags with raylib.
 //
-// raylib is what the Go rewrite keeps from the Odin version: flags are composed
-// on the GPU from pattern and emblem textures with a recolouring fragment
-// shader, so that pipeline can be ported across largely unchanged. This file
-// owns the offscreen target the interface samples; the layer compositing itself
-// is ported in a later step and currently draws a placeholder.
+// raylib is what the Go rewrite keeps from the Odin version. A coat of arms is
+// composed on the GPU: a pattern is drawn first and the layers over it, each
+// through a fragment shader that swaps the marker colours the textures are
+// painted in for the colours the coat of arms asks for.
 package render
 
 import (
-	"fmt"
+	"image"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
+
+	"github.com/kaiser-chris/pdx-flag-builder-go/internal/pdx"
 )
 
 // The flag canvas is a fixed size in both games, and the Odin version rendered
 // it at exactly this resolution.
 const (
-	FlagWidth  = 768
-	FlagHeight = 512
+	FlagWidth  = pdx.CanvasWidth
+	FlagHeight = pdx.CanvasHeight
 )
 
 // checkerSize is the edge length of one square of the transparency checkerboard.
@@ -38,24 +39,46 @@ var (
 // after an unload, so recreating the target would hand the cache a reference to
 // a freed texture.
 type Preview struct {
-	target rl.RenderTexture2D
-	width  int32
-	height int32
+	target  rl.RenderTexture2D
+	width   int32
+	height  int32
+	painter *Painter
+
+	// checker is one tile of the transparency pattern, repeated across the
+	// target in a single draw.
+	checker rl.Texture2D
 }
 
 // NewPreview allocates the render target. It requires an active OpenGL context,
 // so it must be called after the window exists.
-func NewPreview(width, height int32) *Preview {
+func NewPreview(width, height int32, painter *Painter) *Preview {
 	preview := &Preview{
-		target: rl.LoadRenderTexture(width, height),
-		width:  width,
-		height: height,
+		target:  rl.LoadRenderTexture(width, height),
+		width:   width,
+		height:  height,
+		painter: painter,
+		checker: checkerTexture(),
 	}
 
 	// The preview is scaled to fit its panel, so it wants smooth minification.
 	rl.SetTextureFilter(preview.target.Texture, rl.FilterBilinear)
 
 	return preview
+}
+
+// checkerTexture builds the two by two tile the transparency pattern repeats.
+func checkerTexture() rl.Texture2D {
+	tile := rl.GenImageChecked(checkerSize*2, checkerSize*2, checkerSize, checkerSize, checkerDark, checkerLight)
+	defer rl.UnloadImage(tile)
+
+	texture := rl.LoadTextureFromImage(tile)
+
+	// Repeating is what lets one quad cover the whole target, and the squares
+	// want hard edges rather than a blur.
+	rl.SetTextureWrap(texture, rl.WrapRepeat)
+	rl.SetTextureFilter(texture, rl.FilterPoint)
+
+	return texture
 }
 
 // Target is the render texture holding the most recently drawn frame.
@@ -68,9 +91,10 @@ func (p *Preview) Size() (width, height int32) {
 	return p.width, p.height
 }
 
-// Draw composes the current flag into the render target. It has to run while
-// raylib drawing is active and before the interface samples the texture.
-func (p *Preview) Draw() {
+// Draw composes a coat of arms into the render target. Passing nil draws the
+// empty state instead. It has to run while raylib drawing is active and before
+// the interface samples the texture.
+func (p *Preview) Draw(flag *pdx.Flag) {
 	rl.BeginTextureMode(p.target)
 	defer rl.EndTextureMode()
 
@@ -78,42 +102,62 @@ func (p *Preview) Draw() {
 
 	p.drawCheckerboard()
 
-	// TODO: replace with the ported layer compositing (pattern, coloured
-	// emblems, textured emblems and sub flags) from the Odin renderer.
-	p.drawPlaceholder()
+	if flag == nil {
+		p.drawPlaceholder("No flag open")
+	} else {
+		p.painter.Draw(*flag, rl.Rectangle{Width: float32(p.width), Height: float32(p.height)})
+	}
 
 	rl.DrawRectangleLines(0, 0, p.width, p.height, borderColor)
 }
 
 // drawCheckerboard fills the target with the pattern that marks transparency,
-// so an empty flag does not look like a rendering failure.
+// so that the see through parts of a flag look deliberate.
+//
+// It is one quad of a repeating texture rather than a grid of small rectangles.
+// That is not only faster: filling the target with well over a thousand
+// rectangles leaves so much queued in raylib's batch that the shader draws
+// which follow come out clipped to a fraction of their size.
 func (p *Preview) drawCheckerboard() {
-	for y := int32(0); y < p.height; y += checkerSize {
-		for x := int32(0); x < p.width; x += checkerSize {
-			color := checkerLight
-			if (x/checkerSize+y/checkerSize)%2 == 0 {
-				color = checkerDark
-			}
+	source := rl.Rectangle{Width: float32(p.width), Height: float32(p.height)}
+	destination := source
 
-			rl.DrawRectangle(x, y, checkerSize, checkerSize, color)
-		}
-	}
+	rl.DrawTexturePro(p.checker, source, destination, rl.Vector2{}, 0, rl.White)
 }
 
-func (p *Preview) drawPlaceholder() {
+func (p *Preview) drawPlaceholder(label string) {
 	const fontSize = 20
 
-	label := "No flag loaded"
 	width := rl.MeasureText(label, fontSize)
-	rl.DrawText(label, (p.width-width)/2, p.height/2-fontSize, fontSize, labelColor)
+	rl.DrawText(label, (p.width-width)/2, (p.height-fontSize)/2, fontSize, labelColor)
+}
 
-	hint := fmt.Sprintf("%d x %d", p.width, p.height)
-	hintWidth := rl.MeasureText(hint, fontSize-6)
-	rl.DrawText(hint, (p.width-hintWidth)/2, p.height/2+8, fontSize-6, labelColor)
+// Image reads the most recently drawn frame back from the GPU, the right way up.
+// It needs the OpenGL context, so it has to be called from the goroutine that
+// owns the window.
+func (p *Preview) Image() *image.RGBA {
+	captured := rl.LoadImageFromTexture(p.target.Texture)
+	defer rl.UnloadImage(captured)
+
+	// OpenGL fills a render target bottom up.
+	rl.ImageFlipVertical(captured)
+
+	colors := rl.LoadImageColors(captured)
+	defer rl.UnloadImageColors(colors)
+
+	width, height := int(captured.Width), int(captured.Height)
+	picture := image.NewRGBA(image.Rect(0, 0, width, height))
+
+	for index, value := range colors[:width*height] {
+		picture.SetRGBA(index%width, index/width, value)
+	}
+
+	return picture
 }
 
 // Unload releases the render target. It requires a live OpenGL context, so it
 // has to run before the window is destroyed.
 func (p *Preview) Unload() {
 	rl.UnloadRenderTexture(p.target)
+	rl.UnloadTexture(p.checker)
 }

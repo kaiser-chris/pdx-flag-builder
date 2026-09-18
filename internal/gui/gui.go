@@ -16,6 +16,7 @@ import (
 
 	"github.com/AllenDang/cimgui-go/backend/raylibbackend"
 	"github.com/AllenDang/cimgui-go/imgui"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 // Config describes the application window.
@@ -30,7 +31,6 @@ type Config struct {
 	MinHeight int
 
 	// LayoutFile is where Dear ImGui persists the docking layout between runs.
-	// An empty path disables persistence.
 	LayoutFile string
 
 	// Icon is shown in the title bar and the task bar. Nil keeps the default.
@@ -39,6 +39,11 @@ type Config struct {
 	// Background is cleared at the start of every frame. It sits behind both
 	// the raylib drawing and the interface.
 	Background color.RGBA
+
+	// Hidden creates the window without showing it and lets frames run as fast
+	// as they can. It is how the interface tests drive the real application
+	// without a window appearing on the desktop.
+	Hidden bool
 }
 
 // Frame is the per frame work the application wants done, split by when it has
@@ -49,13 +54,31 @@ type Frame struct {
 	// how the flag preview gets its texture.
 	Offscreen func()
 
+	// Input runs after the platform input has been handed to Dear ImGui and
+	// before the interface is built, so whatever it feeds in takes precedence.
+	// The interface tests use it to click and type.
+	Input func()
+
 	// UI builds the interface for this frame.
 	UI func()
 }
 
 // Window is the application window and the Dear ImGui context that draws into it.
 type Window struct {
-	backend *raylibbackend.RaylibBackend
+	backend    *raylibbackend.RaylibBackend
+	background color.RGBA
+	shutdown   func()
+	closing    bool
+
+	// The interface scale: the one in effect, the one asked for, and the
+	// unscaled style both are worked out from.
+	scale        float32
+	pendingScale float32
+	baseStyle    *imgui.Style
+
+	// scaleSettled is set once the first frame has picked its scale. Every
+	// later change is one made while the application runs.
+	scaleSettled bool
 }
 
 // NewWindow creates the window and the Dear ImGui context. It must be called
@@ -63,15 +86,27 @@ type Window struct {
 // operating system thread.
 func NewWindow(cfg Config) *Window {
 	back := raylibbackend.NewRaylibBackend()
-	back.SetConfigFlags(
+
+	flags := []raylibbackend.RaylibBackendFlags{
 		raylibbackend.RaylibBackendFlagsResizable,
-		raylibbackend.RaylibBackendFlagsVsyncHint,
 		raylibbackend.RaylibBackendFlagsMSAA4X,
-	)
+	}
+	if cfg.Hidden {
+		flags = append(flags, raylibbackend.RaylibBackendFlagsHidden)
+	} else {
+		flags = append(flags, raylibbackend.RaylibBackendFlagsVsyncHint)
+	}
+
+	back.SetConfigFlags(flags...)
 
 	// CreateWindow also creates the Dear ImGui context, so anything touching
 	// imgui state has to come after it.
 	back.CreateWindow(cfg.Title, cfg.Width, cfg.Height)
+
+	if cfg.Hidden {
+		// A test waits on frames, not on the display.
+		rl.SetTargetFPS(0)
+	}
 
 	// Escape closes the focused panel rather than the application; raylib would
 	// otherwise treat it as a quit request.
@@ -86,8 +121,6 @@ func NewWindow(cfg Config) *Window {
 		back.SetIcons(cfg.Icon)
 	}
 
-	back.SetBgColor(vec4FromColor(cfg.Background))
-
 	io := imgui.CurrentIO()
 	io.SetConfigFlags(io.ConfigFlags() |
 		imgui.ConfigFlagsDockingEnable |
@@ -97,7 +130,10 @@ func NewWindow(cfg Config) *Window {
 	configureFonts()
 	ApplyTheme()
 
-	return &Window{backend: back}
+	window := &Window{backend: back, background: cfg.Background}
+	window.captureBaseStyle()
+
+	return window
 }
 
 // Backend exposes the raylib backend for the few places that need it, such as
@@ -108,41 +144,98 @@ func (w *Window) Backend() *raylibbackend.RaylibBackend {
 
 // SetBackground changes the colour cleared at the start of every frame.
 func (w *Window) SetBackground(c color.RGBA) {
-	w.backend.SetBgColor(vec4FromColor(c))
+	w.background = c
 }
 
-// OnShutdown registers work to run after the loop ends while the OpenGL context
-// is still alive, which is the only point where GPU resources can be released.
+// Background is the colour cleared at the start of every frame.
+func (w *Window) Background() color.RGBA {
+	return w.background
+}
+
+// OnShutdown registers work to run when the window closes, while the OpenGL
+// context is still alive, which is the only point where GPU resources can be
+// released.
 func (w *Window) OnShutdown(fn func()) {
-	w.backend.SetBeforeDestroyContextHook(fn)
+	w.shutdown = fn
 }
 
 // RequestClose ends the frame loop after the current frame.
 func (w *Window) RequestClose() {
-	w.backend.SetShouldClose(true)
+	w.closing = true
 }
 
-// Run drives the frame loop until the window is closed. It returns once the
-// window and the Dear ImGui context have been torn down.
+// ShouldClose reports whether the window has been asked to close, by the user
+// or by the application.
+func (w *Window) ShouldClose() bool {
+	return w.closing || rl.WindowShouldClose()
+}
+
+// Run drives the frame loop until the window is closed, then closes it.
 func (w *Window) Run(frame Frame) {
-	if frame.Offscreen != nil {
-		w.backend.SetBeforeImGuiRenderHook(frame.Offscreen)
+	for !w.ShouldClose() {
+		w.Step(frame)
 	}
 
-	ui := frame.UI
-	if ui == nil {
-		ui = func() {}
-	}
-
-	w.backend.Run(ui)
-	w.backend.Dispose()
+	w.Close()
 }
 
-func vec4FromColor(c color.RGBA) imgui.Vec4 {
-	return imgui.Vec4{
-		X: float32(c.R) / 255,
-		Y: float32(c.G) / 255,
-		Z: float32(c.B) / 255,
-		W: float32(c.A) / 255,
+// Step runs exactly one frame.
+//
+// The application loop is nothing more than Step until the window should
+// close. Having it separate is what lets a test advance the application one
+// frame at a time and look at the result in between.
+func (w *Window) Step(frame Frame) {
+	rl.BeginDrawing()
+	defer rl.EndDrawing()
+
+	rl.ClearBackground(w.background)
+
+	if frame.Offscreen != nil {
+		frame.Offscreen()
+
+		// Flush the offscreen drawing so it is not interleaved with the
+		// interface's own batch.
+		rl.DrawRenderBatchActive()
 	}
+
+	w.applyPendingScale()
+	w.backend.NewFrame()
+
+	if frame.Input != nil {
+		frame.Input()
+	}
+
+	imgui.NewFrame()
+
+	if frame.UI != nil {
+		frame.UI()
+	}
+
+	imgui.Render()
+
+	if drawData := imgui.CurrentDrawData(); drawData != nil {
+		// See textures.go: the backend's own texture handling breaks as
+		// soon as Dear ImGui has more than one texture.
+		restore := w.serviceTextures(drawData)
+		w.backend.Render(*drawData)
+		restore()
+	}
+}
+
+// Close releases the application's GPU resources and closes the window.
+func (w *Window) Close() {
+	if w.shutdown != nil {
+		w.shutdown()
+		w.shutdown = nil
+	}
+
+	if w.baseStyle != nil {
+		w.baseStyle.Destroy()
+		w.baseStyle = nil
+	}
+
+	// Dear ImGui writes the docking layout out when its context goes away, so
+	// that has to happen before the process ends.
+	imgui.DestroyContext()
+	rl.CloseWindow()
 }

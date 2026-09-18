@@ -72,6 +72,14 @@ void main()
 
     vec4 texel = texture(texture0, fragTexCoord) * fragColor;
 
+    // Find the marker colour this texel is closest to. Taking the first one
+    // within tolerance instead would let a faint match shadow a strong one:
+    // where filtering blends two markers at a seam, the blend sits just inside
+    // the tolerance of one and squarely on the other, and it would come out
+    // barely recoloured, as a line of the raw marker colour.
+    int closest = -1;
+    float closestDistance = 1e9;
+
     for (int i = 0; i < MAX_RECOLORS; i++)
     {
         // Avoid reading inactive mapping slots.
@@ -81,9 +89,18 @@ void main()
             ? distance(texel.rg, sourceColors[i].rg)
             : distance(texel.rgb, sourceColors[i]);
 
+        if (colorDistance < closestDistance)
+        {
+            closest = i;
+            closestDistance = colorDistance;
+        }
+    }
+
+    if (closest >= 0)
+    {
         // A smooth threshold avoids noisy hard edges.
         float matchAmount = 1.0 -
-            smoothstep(tolerance * 0.75, tolerance, colorDistance);
+            smoothstep(tolerance * 0.75, tolerance, closestDistance);
 
         if (matchAmount > 0.0)
         {
@@ -91,24 +108,21 @@ void main()
 
             if (blueChannelShading)
             {
-                replacement = applyBlueShading(replacementColors[i], texel.b);
+                replacement = applyBlueShading(replacementColors[closest], texel.b);
             }
             else
             {
                 float brightness = dot(texel.rgb, vec3(0.299, 0.587, 0.114));
 
-                vec3 shadedReplacement = replacementColors[i] * brightness;
+                vec3 shadedReplacement = replacementColors[closest] * brightness;
                 replacement = mix(
-                    replacementColors[i],
+                    replacementColors[closest],
                     shadedReplacement,
                     preserveShading
                 );
             }
 
             texel.rgb = mix(texel.rgb, replacement, matchAmount);
-
-            // First matching mapping wins.
-            break;
         }
     }
 

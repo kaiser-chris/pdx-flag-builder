@@ -19,7 +19,9 @@ const (
 	windowFlagDatabase    = "Flag Database"
 	windowTextureDatabase = "Texture Database"
 
-	popupAbout = "About"
+	popupAbout   = "About"
+	popupDiscard = "Unsaved Changes"
+	popupPicker  = "Choose###picker"
 )
 
 // noLayer is what selectedLayer holds when nothing is selected.
@@ -56,6 +58,7 @@ type state struct {
 
 	// Settings window buffers.
 	backgroundColor [4]float32
+	interfaceScale  float32
 	databases       []databaseEntry
 
 	// Everything read from the configured folders.
@@ -69,9 +72,30 @@ type state struct {
 
 	// flag is the coat of arms open in the editor, a copy of the one in the
 	// database so that editing it leaves the database alone. selectedLayer is
-	// the index of the layer being looked at, or noLayer.
+	// the index of the layer being edited, or noLayer for the coat of arms
+	// itself.
 	flag          *pdx.Flag
 	selectedLayer int
+
+	// history is the undo stack of the open flag, and modified says whether
+	// it has changes that have not been saved.
+	history  history
+	modified bool
+
+	// pendingFlag is a flag waiting to be opened until the user has decided
+	// what happens to the unsaved changes of the one open now.
+	pendingFlag *pdx.Flag
+
+	// popup is a modal to open at the top of the next frame. Dear ImGui ties a
+	// popup to the id stack it was opened from, so opening one from inside a
+	// menu would leave it unreachable from the top level where it is drawn.
+	popup string
+
+	// picker chooses a texture or a coat of arms for the editor.
+	picker picker
+
+	// colorSearch is the search field of the named colour picker.
+	colorSearch string
 
 	// status is the message shown in the status bar.
 	status string
@@ -98,6 +122,8 @@ func (s *state) loadFrom(settings *config.Settings) {
 		float32(settings.BackgroundColor.B) / 255,
 		float32(settings.BackgroundColor.A) / 255,
 	}
+
+	s.interfaceScale = settings.InterfaceScale
 
 	s.databases = make([]databaseEntry, 0, len(settings.Databases))
 	for _, database := range settings.Databases {

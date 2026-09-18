@@ -7,6 +7,8 @@ import (
 	"github.com/AllenDang/cimgui-go/imgui"
 
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/database"
+	"github.com/kaiser-chris/pdx-flag-builder-go/internal/gui"
+	"github.com/kaiser-chris/pdx-flag-builder-go/internal/pdx"
 )
 
 // tableFlags are shared by both database listings: scrollable, striped, and
@@ -23,7 +25,7 @@ func (a *App) flagDatabaseWindow() {
 		return
 	}
 
-	imgui.SetNextWindowSizeV(imgui.Vec2{X: 760, Y: 560}, imgui.CondFirstUseEver)
+	imgui.SetNextWindowSizeV(gui.ScaledVec2(760, 560), imgui.CondFirstUseEver)
 
 	if imgui.BeginV(windowFlagDatabase, &a.state.showFlagDatabase, 0) {
 		a.trackFocus(windowFlagDatabase)
@@ -52,7 +54,7 @@ func (a *App) flagDatabaseBody() {
 	}
 
 	imgui.SetNextItemWidth(-1)
-	imgui.InputTextWithHint("##flag-search", "Search by name, folder or file", &a.state.flagSearch, 0, nil)
+	gui.InputText("##flag-search", "Search by name, folder or file", &a.state.flagSearch)
 
 	rows := a.state.flagRows.get(
 		a.state.flagSearch,
@@ -75,8 +77,8 @@ func (a *App) flagDatabaseBody() {
 	defer imgui.EndTable()
 
 	imgui.TableSetupColumnV("Name", imgui.TableColumnFlagsWidthStretch, 0, 0)
-	imgui.TableSetupColumnV("Layers", imgui.TableColumnFlagsWidthFixed, 60, 0)
-	imgui.TableSetupColumnV("Folder", imgui.TableColumnFlagsWidthFixed, 110, 0)
+	imgui.TableSetupColumnV("Layers", imgui.TableColumnFlagsWidthFixed, gui.Scaled(60), 0)
+	imgui.TableSetupColumnV("Folder", imgui.TableColumnFlagsWidthFixed, gui.Scaled(110), 0)
 	imgui.TableSetupColumnV("File", imgui.TableColumnFlagsWidthStretch, 0, 0)
 	imgui.TableSetupScrollFreeze(0, 1)
 	imgui.TableHeadersRow()
@@ -99,8 +101,8 @@ func (a *App) flagDatabaseBody() {
 				a.state.flag.Name == flag.Name &&
 				a.state.flag.Origin.Path == flag.Origin.Path
 
-			if imgui.SelectableBoolV(flag.Name, open, imgui.SelectableFlagsSpanAllColumns, imgui.Vec2{}) {
-				a.openFlag(*flag)
+			if gui.Selectable(flag.Name, open, imgui.SelectableFlagsSpanAllColumns) {
+				a.requestOpen(*flag)
 			}
 
 			imgui.TableSetColumnIndex(1)
@@ -123,7 +125,7 @@ func (a *App) textureDatabaseWindow() {
 		return
 	}
 
-	imgui.SetNextWindowSizeV(imgui.Vec2{X: 700, Y: 560}, imgui.CondFirstUseEver)
+	imgui.SetNextWindowSizeV(gui.ScaledVec2(700, 560), imgui.CondFirstUseEver)
 
 	if imgui.BeginV(windowTextureDatabase, &a.state.showTextureDatabase, 0) {
 		a.trackFocus(windowTextureDatabase)
@@ -152,7 +154,7 @@ func (a *App) textureDatabaseBody() {
 	}
 
 	imgui.SetNextItemWidth(-1)
-	imgui.InputTextWithHint("##texture-search", "Search by name or kind", &a.state.textureSearch, 0, nil)
+	gui.InputText("##texture-search", "Search by name or kind", &a.state.textureSearch)
 
 	rows := a.state.textureRows.get(
 		a.state.textureSearch,
@@ -169,15 +171,16 @@ func (a *App) textureDatabaseBody() {
 
 	imgui.TextDisabled(fmt.Sprintf("%d of %d textures", len(rows), len(library.textures)))
 
-	// TODO: show the image itself once the DDS and BC7 loading is ported.
-	if !imgui.BeginTableV("textures", 3, tableFlags, imgui.Vec2{}, 0) {
+	// TODO: show a thumbnail of each texture next to its name.
+	if !imgui.BeginTableV("textures", 4, tableFlags, imgui.Vec2{}, 0) {
 		return
 	}
 	defer imgui.EndTable()
 
 	imgui.TableSetupColumnV("Name", imgui.TableColumnFlagsWidthStretch, 0, 0)
-	imgui.TableSetupColumnV("Kind", imgui.TableColumnFlagsWidthFixed, 130, 0)
-	imgui.TableSetupColumnV("Folder", imgui.TableColumnFlagsWidthFixed, 110, 0)
+	imgui.TableSetupColumnV("Kind", imgui.TableColumnFlagsWidthFixed, gui.Scaled(130), 0)
+	imgui.TableSetupColumnV("Folder", imgui.TableColumnFlagsWidthFixed, gui.Scaled(110), 0)
+	imgui.TableSetupColumnV("##use", imgui.TableColumnFlagsWidthFixed, gui.Scaled(110), 0)
 	imgui.TableSetupScrollFreeze(0, 1)
 	imgui.TableHeadersRow()
 
@@ -200,6 +203,18 @@ func (a *App) textureDatabaseBody() {
 
 			imgui.TableSetColumnIndex(2)
 			imgui.TextUnformatted(texture.Database)
+
+			// Using a texture needs a flag to use it on.
+			imgui.TableSetColumnIndex(3)
+			imgui.PushIDInt(int32(rows[row]))
+			imgui.BeginDisabledV(a.state.flag == nil)
+
+			if gui.SmallButton(textureAction(texture.Kind)) {
+				a.useTexture(*texture)
+			}
+
+			imgui.EndDisabled()
+			imgui.PopID()
 		}
 	}
 
@@ -210,4 +225,43 @@ func (a *App) textureDatabaseBody() {
 func describeDatabase(entry *database.Database) string {
 	return fmt.Sprintf("%s: %s, %d flags, %d textures",
 		entry.Name, entry.Game, len(entry.Flags), len(entry.Textures))
+}
+
+// Labels of the texture database's row actions.
+const (
+	labelSetPattern = "Set as Pattern"
+	labelAddAsLayer = "Add as Layer"
+)
+
+func textureAction(kind database.TextureKind) string {
+	if kind == database.PatternTexture {
+		return labelSetPattern
+	}
+
+	return labelAddAsLayer
+}
+
+// useTexture puts a texture from the database to work on the open flag: a
+// pattern replaces the flag's pattern, an emblem becomes a new layer.
+func (a *App) useTexture(texture database.Texture) {
+	flag := a.state.flag
+	if flag == nil {
+		return
+	}
+
+	switch texture.Kind {
+	case database.PatternTexture:
+		flag.Pattern = texture.Name
+		a.setStatus("Pattern set to %s", texture.Name)
+
+	case database.ColoredEmblemTexture:
+		a.addLayer(pdx.NewColoredEmblem(texture.Name))
+		a.setStatus("Added %s", texture.Name)
+
+	case database.TexturedEmblemTexture:
+		a.addLayer(pdx.NewTexturedEmblem(texture.Name))
+		a.setStatus("Added %s", texture.Name)
+	}
+
+	a.changed()
 }

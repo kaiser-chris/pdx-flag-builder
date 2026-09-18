@@ -74,7 +74,7 @@ func TestDecodeFlag(t *testing.T) {
 		t.Fatalf("got %d layers, want 3", len(flag.Layers))
 	}
 
-	textured, ok := flag.Layers[0].(TexturedEmblem)
+	textured, ok := flag.Layers[0].(*TexturedEmblem)
 	if !ok {
 		t.Fatalf("layer 0 is %T, want a TexturedEmblem", flag.Layers[0])
 	}
@@ -82,7 +82,7 @@ func TestDecodeFlag(t *testing.T) {
 		t.Errorf("textured emblem texture = %q", textured.Texture)
 	}
 
-	colored, ok := flag.Layers[1].(ColoredEmblem)
+	colored, ok := flag.Layers[1].(*ColoredEmblem)
 	if !ok {
 		t.Fatalf("layer 1 is %T, want a ColoredEmblem", flag.Layers[1])
 	}
@@ -105,7 +105,7 @@ func TestDecodeFlag(t *testing.T) {
 		t.Errorf("color2 = %T, want a SlotColor", second.Value)
 	}
 
-	sub, ok := flag.Layers[2].(SubFlag)
+	sub, ok := flag.Layers[2].(*SubFlag)
 	if !ok {
 		t.Fatalf("layer 2 is %T, want a SubFlag", flag.Layers[2])
 	}
@@ -155,7 +155,7 @@ func TestDecodeInstanceDefaults(t *testing.T) {
 		}
 	`)
 
-	emblem := flags[0].Layers[0].(ColoredEmblem)
+	emblem := flags[0].Layers[0].(*ColoredEmblem)
 
 	// Nothing is invented in the model, so that writing the flag back out does
 	// not add an instance the author never wrote.
@@ -338,7 +338,7 @@ func TestDecodeSingleValueScale(t *testing.T) {
 		t.Fatalf("unexpected issues: %v", issues)
 	}
 
-	instance := flags[0].Layers[0].(ColoredEmblem).Instances[0]
+	instance := flags[0].Layers[0].(*ColoredEmblem).Instances[0]
 
 	if instance.Scale.X != 0.07 {
 		t.Errorf("scale x = %v, want 0.07", instance.Scale.X)

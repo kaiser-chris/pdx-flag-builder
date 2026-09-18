@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/AllenDang/cimgui-go/imgui"
+
+	"github.com/kaiser-chris/pdx-flag-builder-go/internal/gui"
 )
 
 // dockNodeFlagsDockSpace is ImGuiDockNodeFlags_DockSpace from imgui_internal.h.
@@ -56,47 +58,58 @@ func (a *App) menuBar() {
 	}
 	defer imgui.EndMainMenuBar()
 
-	if imgui.BeginMenu("File") {
-		if imgui.MenuItemBoolV("New Flag", "", false, true) {
-			a.setStatus("New flag")
+	if gui.BeginMenu("File") {
+		if gui.MenuItem("New Flag", "", true) {
+			a.requestOpen(newFlag())
 		}
 
 		imgui.Separator()
 
-		// Everything below waits on the flag model and the exporters, which are
-		// ported in a later step. They are listed but disabled so the shape of
-		// the application is visible.
-		imgui.MenuItemBoolV("Save Changes", "Ctrl+S", false, false)
+		// Saving and exporting are ported in a later step. They are listed but
+		// disabled so the shape of the application is visible.
+		gui.MenuItem("Save Changes", "Ctrl+S", false)
 
-		if imgui.BeginMenu("Export") {
-			imgui.MenuItemBoolV("To Image...", "", false, false)
-			imgui.MenuItemBoolV("To Clipboard", "", false, false)
-			imgui.MenuItemBoolV("As New Script File...", "", false, false)
+		if gui.BeginMenu("Export") {
+			gui.MenuItem("To Image...", "", false)
+			gui.MenuItem("To Clipboard", "", false)
+			gui.MenuItem("As New Script File...", "", false)
 			imgui.EndMenu()
 		}
 
 		imgui.Separator()
 
-		if imgui.MenuItemBoolV("Exit", "Alt+F4", false, true) {
+		if gui.MenuItem("Exit", "Alt+F4", true) {
 			a.window.RequestClose()
 		}
 
 		imgui.EndMenu()
 	}
 
-	if imgui.BeginMenu("Databases") {
-		imgui.MenuItemBoolPtr(windowFlagDatabase, "", &a.state.showFlagDatabase)
-		imgui.MenuItemBoolPtr(windowTextureDatabase, "", &a.state.showTextureDatabase)
+	if gui.BeginMenu("Edit") {
+		if gui.MenuItem("Undo", "Ctrl+Z", a.canUndo()) {
+			a.undo()
+		}
+
+		if gui.MenuItem("Redo", "Ctrl+Y", a.canRedo()) {
+			a.redo()
+		}
+
 		imgui.EndMenu()
 	}
 
-	if imgui.BeginMenu("View") {
-		imgui.MenuItemBoolPtr(panelLayers, "", &a.state.showLayers)
-		imgui.MenuItemBoolPtr(panelSelected, "", &a.state.showSelected)
+	if gui.BeginMenu("Databases") {
+		gui.MenuToggle(windowFlagDatabase, "", &a.state.showFlagDatabase)
+		gui.MenuToggle(windowTextureDatabase, "", &a.state.showTextureDatabase)
+		imgui.EndMenu()
+	}
+
+	if gui.BeginMenu("View") {
+		gui.MenuToggle(panelLayers, "", &a.state.showLayers)
+		gui.MenuToggle(panelSelected, "", &a.state.showSelected)
 
 		imgui.Separator()
 
-		if imgui.MenuItemBoolV("Reset Layout", "", false, true) {
+		if gui.MenuItem("Reset Layout", "", true) {
 			a.state.layoutBuilt = false
 			a.state.showLayers = true
 			a.state.showSelected = true
@@ -106,14 +119,14 @@ func (a *App) menuBar() {
 		imgui.EndMenu()
 	}
 
-	if imgui.BeginMenu("Settings") {
-		imgui.MenuItemBoolPtr("Open Settings", "Ctrl+,", &a.state.showSettings)
+	if gui.BeginMenu("Settings") {
+		gui.MenuToggle("Open Settings", "Ctrl+,", &a.state.showSettings)
 		imgui.EndMenu()
 	}
 
-	if imgui.BeginMenu("Help") {
-		if imgui.MenuItemBoolV("About", "", false, true) {
-			imgui.OpenPopupStr(popupAbout)
+	if gui.BeginMenu("Help") {
+		if gui.MenuItem("About", "", true) {
+			a.state.popup = popupAbout
 		}
 		imgui.EndMenu()
 	}
@@ -155,6 +168,17 @@ func (a *App) handleShortcuts() {
 		a.state.showSettings = !a.state.showSettings
 	}
 
+	// A text field being edited has an undo of its own, which is the one
+	// Ctrl+Z should reach while typing.
+	if io.KeyCtrl() && !io.WantTextInput() {
+		switch {
+		case imgui.IsKeyPressedBool(imgui.KeyZ) && io.KeyShift(), imgui.IsKeyPressedBool(imgui.KeyY):
+			a.redo()
+		case imgui.IsKeyPressedBool(imgui.KeyZ):
+			a.undo()
+		}
+	}
+
 	// Escape closes the window on top. While a text field is being edited Dear
 	// ImGui uses Escape to revert the edit, so leave it alone then.
 	if imgui.IsKeyPressedBool(imgui.KeyEscape) && !io.WantTextInput() {
@@ -186,7 +210,13 @@ func (a *App) diagnostics() string {
 		return fmt.Sprintf("reading folders...  |  %.0f FPS", imgui.CurrentIO().Framerate())
 	}
 
-	return fmt.Sprintf("%d flags  |  %d textures  |  %d colours  |  %.0f FPS",
-		len(library.flags), len(library.textures), len(library.palette),
-		imgui.CurrentIO().Framerate())
+	summary := fmt.Sprintf("%d flags  |  %d textures", len(library.flags), len(library.textures))
+
+	// Artwork that could not be read shows up as a missing layer, so say so
+	// rather than leave the user wondering.
+	if _, _, failed := a.textures.Counts(); failed > 0 {
+		summary += fmt.Sprintf(" (%d unreadable)", failed)
+	}
+
+	return fmt.Sprintf("%s  |  %.0f FPS", summary, imgui.CurrentIO().Framerate())
 }

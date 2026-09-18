@@ -51,9 +51,13 @@ type Flag struct {
 	Origin Origin
 }
 
-// Layer is one entry in a flag's stack of layers.
+// Layer is one entry in a flag's stack of layers: a *ColoredEmblem, a
+// *TexturedEmblem or a *SubFlag.
+//
+// Layers are pointers so that the editor can change one where it sits. Clone
+// copies them, so a cloned flag never shares a layer with the original.
 type Layer interface {
-	// Instances returns how often and where the layer is drawn.
+	// InstanceCount is how many placements the file gives the layer.
 	InstanceCount() int
 
 	layer()
@@ -88,13 +92,13 @@ type SubFlag struct {
 	Instances []SubInstance
 }
 
-func (ColoredEmblem) layer()  {}
-func (TexturedEmblem) layer() {}
-func (SubFlag) layer()        {}
+func (*ColoredEmblem) layer()  {}
+func (*TexturedEmblem) layer() {}
+func (*SubFlag) layer()        {}
 
-func (l ColoredEmblem) InstanceCount() int  { return len(l.Instances) }
-func (l TexturedEmblem) InstanceCount() int { return len(l.Instances) }
-func (l SubFlag) InstanceCount() int        { return len(l.Instances) }
+func (l *ColoredEmblem) InstanceCount() int  { return len(l.Instances) }
+func (l *TexturedEmblem) InstanceCount() int { return len(l.Instances) }
+func (l *SubFlag) InstanceCount() int        { return len(l.Instances) }
 
 // Instance is one placement of an emblem on the flag.
 type Instance struct {
@@ -149,9 +153,9 @@ func SubPlacements(instances []SubInstance) []SubInstance {
 // draws another coat of arms instead, so it has none.
 func Texture(layer Layer) (string, bool) {
 	switch typed := layer.(type) {
-	case ColoredEmblem:
+	case *ColoredEmblem:
 		return typed.Texture, true
-	case TexturedEmblem:
+	case *TexturedEmblem:
 		return typed.Texture, true
 	}
 
@@ -175,23 +179,27 @@ func (f Flag) Clone() Flag {
 	return clone
 }
 
+// cloneLayer copies a layer, including the slices it holds.
 func cloneLayer(layer Layer) Layer {
 	switch typed := layer.(type) {
-	case ColoredEmblem:
-		typed.Colors = append(Colors(nil), typed.Colors...)
-		typed.Instances = append([]Instance(nil), typed.Instances...)
+	case *ColoredEmblem:
+		clone := *typed
+		clone.Colors = append(Colors(nil), typed.Colors...)
+		clone.Instances = append([]Instance(nil), typed.Instances...)
 
-		return typed
+		return &clone
 
-	case TexturedEmblem:
-		typed.Instances = append([]Instance(nil), typed.Instances...)
+	case *TexturedEmblem:
+		clone := *typed
+		clone.Instances = append([]Instance(nil), typed.Instances...)
 
-		return typed
+		return &clone
 
-	case SubFlag:
-		typed.Instances = append([]SubInstance(nil), typed.Instances...)
+	case *SubFlag:
+		clone := *typed
+		clone.Instances = append([]SubInstance(nil), typed.Instances...)
 
-		return typed
+		return &clone
 	}
 
 	return layer

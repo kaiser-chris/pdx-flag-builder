@@ -1,6 +1,8 @@
 package app
 
 import (
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -25,6 +27,10 @@ type library struct {
 	flags    []pdx.Flag
 	textures []database.Texture
 	palette  pdx.Palette
+
+	// paletteNames are the named colours in alphabetical order, for the colour
+	// picker.
+	paletteNames []string
 
 	loading bool
 	result  chan loadResult
@@ -88,6 +94,7 @@ func (l *library) poll(folders []config.Database) bool {
 		l.flags = result.set.Flags()
 		l.textures = result.set.Textures()
 		l.palette = result.set.Palette()
+		l.paletteNames = slices.Sorted(maps.Keys(l.palette))
 		l.loading = false
 		l.result = nil
 		l.version++

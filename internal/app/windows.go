@@ -1,6 +1,8 @@
 package app
 
 import (
+	"fmt"
+
 	"github.com/AllenDang/cimgui-go/imgui"
 
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/config"
@@ -18,18 +20,20 @@ func (a *App) settingsWindow() {
 		return
 	}
 
-	imgui.SetNextWindowSizeV(imgui.Vec2{X: 640, Y: 520}, imgui.CondFirstUseEver)
+	imgui.SetNextWindowSizeV(gui.ScaledVec2(640, 520), imgui.CondFirstUseEver)
 
 	if imgui.BeginV(windowSettings, &a.state.showSettings, 0) {
 		a.trackFocus(windowSettings)
 
 		sectionHeader("Appearance")
 
-		if imgui.ColorEdit4("Background", &a.state.backgroundColor) {
+		if gui.ColorEdit("Background", &a.state.backgroundColor) {
 			// Applied immediately so the choice can be judged, but only stored
 			// when the user saves.
 			a.window.SetBackground(colorFromFloats(a.state.backgroundColor))
 		}
+
+		a.scaleField()
 
 		sectionHeader("Game and Mod Folders")
 		dimmedWrapped("Point these at a game folder or a mod folder to load its flags and textures. " +
@@ -37,19 +41,19 @@ func (a *App) settingsWindow() {
 
 		a.databaseTable()
 
-		if imgui.Button("Add Folder") {
+		if gui.Button("Add Folder") {
 			a.state.databases = append(a.state.databases, databaseEntry{})
 		}
 
 		imgui.SameLine()
 
-		if imgui.Button("Save") {
+		if gui.Button("Save") {
 			a.saveSettings()
 		}
 
 		imgui.SameLine()
 
-		if imgui.Button("Revert") {
+		if gui.Button("Revert") {
 			a.state.loadFrom(a.settings)
 			a.window.SetBackground(a.backgroundColor())
 			a.setStatus("Settings reverted")
@@ -71,9 +75,9 @@ func (a *App) databaseTable() {
 	}
 	defer imgui.EndTable()
 
-	imgui.TableSetupColumnV("Name", imgui.TableColumnFlagsWidthFixed, 150, 0)
+	imgui.TableSetupColumnV("Name", imgui.TableColumnFlagsWidthFixed, gui.Scaled(150), 0)
 	imgui.TableSetupColumnV("Folder", imgui.TableColumnFlagsWidthStretch, 0, 0)
-	imgui.TableSetupColumnV("", imgui.TableColumnFlagsWidthFixed, 28, 0)
+	imgui.TableSetupColumnV("", imgui.TableColumnFlagsWidthFixed, gui.Scaled(28), 0)
 	imgui.TableHeadersRow()
 
 	remove := -1
@@ -87,17 +91,17 @@ func (a *App) databaseTable() {
 
 		imgui.TableSetColumnIndex(0)
 		imgui.SetNextItemWidth(-1)
-		imgui.InputTextWithHint("##name", "game", &entry.Name, 0, nil)
+		gui.InputText("##name", "game", &entry.Name)
 
 		imgui.TableSetColumnIndex(1)
 		imgui.SetNextItemWidth(-1)
 		// TODO: a Browse button needs a native folder picker. The Odin version
 		// used nativefiledialog; the Go port has to pick a cross platform
 		// replacement before this can be wired up.
-		imgui.InputTextWithHint("##path", "path to a game or mod folder", &entry.Path, 0, nil)
+		gui.InputText("##path", "path to a game or mod folder", &entry.Path)
 
 		imgui.TableSetColumnIndex(2)
-		if imgui.Button("X") {
+		if gui.Button("X") {
 			remove = index
 		}
 
@@ -141,6 +145,7 @@ func (a *App) loadedFolders() {
 func (a *App) saveSettings() {
 	background := colorFromFloats(a.state.backgroundColor)
 	a.settings.BackgroundColor = config.Color{R: background.R, G: background.G, B: background.B, A: background.A}
+	a.settings.InterfaceScale = a.state.interfaceScale
 
 	databases := make([]config.Database, 0, len(a.state.databases))
 	for _, entry := range a.state.databases {
@@ -153,7 +158,7 @@ func (a *App) saveSettings() {
 	}
 	a.settings.Databases = databases
 
-	if err := a.settings.Save(); err != nil {
+	if err := a.store.Save(a.settings); err != nil {
 		warn(err)
 		a.setStatus("Settings could not be saved: %v", err)
 
@@ -166,7 +171,7 @@ func (a *App) saveSettings() {
 }
 
 func (a *App) aboutPopup() {
-	imgui.SetNextWindowSizeV(imgui.Vec2{X: 380, Y: 0}, imgui.CondAlways)
+	imgui.SetNextWindowSizeV(gui.ScaledVec2(380, 0), imgui.CondAlways)
 
 	if !imgui.BeginPopupModalV(popupAbout, nil, imgui.WindowFlagsNoResize|imgui.WindowFlagsNoSavedSettings) {
 		return
@@ -185,7 +190,58 @@ func (a *App) aboutPopup() {
 
 	imgui.Separator()
 
-	if imgui.Button("Close") {
+	if gui.Button("Close") {
 		imgui.CloseCurrentPopup()
 	}
+}
+
+// scaleChoices are the interface scales offered besides following the monitor.
+var scaleChoices = []float32{1, 1.25, 1.5, 1.75, 2, 2.5, 3}
+
+func scaleLabel(scale float32) string {
+	return fmt.Sprintf("%.0f%%", scale*100)
+}
+
+// automaticScaleLabel names the choice that follows the monitor, with the
+// scale that works out to right now.
+func automaticScaleLabel() string {
+	return fmt.Sprintf("Automatic (%s)", scaleLabel(gui.MonitorScale()))
+}
+
+// scaleField chooses how large the interface is drawn. Like the background, a
+// choice shows straight away but is only stored when the settings are saved.
+func (a *App) scaleField() {
+	current := a.state.interfaceScale
+
+	preview := automaticScaleLabel()
+	if current > 0 {
+		preview = scaleLabel(current)
+	}
+
+	imgui.SetNextItemWidth(imgui.FontSize() * 12)
+
+	if !gui.BeginCombo("Interface Scale", preview) {
+		return
+	}
+	defer imgui.EndCombo()
+
+	if gui.Selectable(automaticScaleLabel(), current == 0, 0) {
+		a.state.interfaceScale = 0
+	}
+
+	for _, choice := range scaleChoices {
+		if gui.Selectable(scaleLabel(choice), current == choice, 0) {
+			a.state.interfaceScale = choice
+		}
+	}
+}
+
+// interfaceScale is the scale the interface should be drawn at: the one chosen
+// in the settings, or the monitor's.
+func (a *App) interfaceScale() float32 {
+	if a.state.interfaceScale > 0 {
+		return a.state.interfaceScale
+	}
+
+	return gui.MonitorScale()
 }

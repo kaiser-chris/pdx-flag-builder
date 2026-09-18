@@ -11,7 +11,8 @@ endif
 
 OUTPUT := bin/$(PLATFORM)/$(BINARY_NAME)
 
-.PHONY: build release run test vet fmt tidy clean
+.PHONY: build release run test uitest vet fmt tidy clean
+
 
 ## build: compile a development binary
 build:
@@ -31,6 +32,10 @@ run: build
 
 test:
 	go test ./...
+
+## uitest: drive the real application in a hidden window; needs a display
+uitest:
+	go test -tags uitest -count=1 ./internal/app/...
 
 vet:
 	go vet ./...

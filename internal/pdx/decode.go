@@ -146,8 +146,8 @@ func (d *decoder) flag(name string, node script.Node, origin Origin) Flag {
 	return flag
 }
 
-func (d *decoder) coloredEmblem(node script.Node) ColoredEmblem {
-	emblem := ColoredEmblem{}
+func (d *decoder) coloredEmblem(node script.Node) *ColoredEmblem {
+	emblem := &ColoredEmblem{}
 
 	for _, field := range node.Fields {
 		switch {
@@ -170,8 +170,8 @@ func (d *decoder) coloredEmblem(node script.Node) ColoredEmblem {
 	return emblem
 }
 
-func (d *decoder) texturedEmblem(node script.Node) TexturedEmblem {
-	emblem := TexturedEmblem{}
+func (d *decoder) texturedEmblem(node script.Node) *TexturedEmblem {
+	emblem := &TexturedEmblem{}
 
 	for _, field := range node.Fields {
 		switch {
@@ -186,8 +186,8 @@ func (d *decoder) texturedEmblem(node script.Node) TexturedEmblem {
 	return emblem
 }
 
-func (d *decoder) subFlag(node script.Node) SubFlag {
-	sub := SubFlag{}
+func (d *decoder) subFlag(node script.Node) *SubFlag {
+	sub := &SubFlag{}
 
 	for _, field := range node.Fields {
 		switch {
