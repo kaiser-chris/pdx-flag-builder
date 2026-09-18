@@ -57,9 +57,8 @@ type state struct {
 	layoutBuilt bool
 
 	// Settings window buffers.
-	backgroundColor [4]float32
-	interfaceScale  float32
-	databases       []databaseEntry
+	interfaceScale float32
+	databases      []databaseEntry
 
 	// Everything read from the configured folders.
 	library library
@@ -116,13 +115,6 @@ func newState(settings *config.Settings) state {
 
 // loadFrom resets the settings window buffers to the stored configuration.
 func (s *state) loadFrom(settings *config.Settings) {
-	s.backgroundColor = [4]float32{
-		float32(settings.BackgroundColor.R) / 255,
-		float32(settings.BackgroundColor.G) / 255,
-		float32(settings.BackgroundColor.B) / 255,
-		float32(settings.BackgroundColor.A) / 255,
-	}
-
 	s.interfaceScale = settings.InterfaceScale
 
 	s.databases = make([]databaseEntry, 0, len(settings.Databases))

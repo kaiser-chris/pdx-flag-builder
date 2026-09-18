@@ -60,11 +60,18 @@ func (a *App) layersBody() {
 
 	imgui.Separator()
 
-	if gui.Selectable(labelCoatOfArms, a.state.selectedLayer == noLayer, 0) {
+	// Every row is as tall as the buttons beside the layers, the coat of arms
+	// too, with its label in the middle, so that the list reads evenly.
+	height := imgui.FrameHeight()
+
+	imgui.PushStyleVarVec2(imgui.StyleVarSelectableTextAlign, imgui.Vec2{Y: 0.5})
+	defer imgui.PopStyleVar()
+
+	if gui.SelectableSized(labelCoatOfArms, a.state.selectedLayer == noLayer, 0, height) {
 		a.selectLayer(noLayer)
 	}
 
-	a.layerRows(flag)
+	a.layerRows(flag, height)
 }
 
 func (a *App) addLayerMenu() {
@@ -92,7 +99,7 @@ func (a *App) addLayerMenu() {
 
 // layerRows draws one row per layer, with buttons to move and remove it. The
 // list is changed after it has been drawn, never while it is being walked.
-func (a *App) layerRows(flag *pdx.Flag) {
+func (a *App) layerRows(flag *pdx.Flag, height float32) {
 	const noAction = -1
 
 	moveFrom, moveBy, remove := noAction, 0, noAction
@@ -104,7 +111,7 @@ func (a *App) layerRows(flag *pdx.Flag) {
 		imgui.PushIDInt(int32(index))
 
 		width := imgui.ContentRegionAvail().X - buttons
-		if gui.SelectableSized(describeLayer(layer), index == a.state.selectedLayer, width) {
+		if gui.SelectableSized(describeLayer(layer), index == a.state.selectedLayer, width, height) {
 			a.selectLayer(index)
 		}
 

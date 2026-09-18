@@ -12,7 +12,6 @@ package gui
 
 import (
 	"image"
-	"image/color"
 
 	"github.com/AllenDang/cimgui-go/backend/raylibbackend"
 	"github.com/AllenDang/cimgui-go/imgui"
@@ -35,10 +34,6 @@ type Config struct {
 
 	// Icon is shown in the title bar and the task bar. Nil keeps the default.
 	Icon image.Image
-
-	// Background is cleared at the start of every frame. It sits behind both
-	// the raylib drawing and the interface.
-	Background color.RGBA
 
 	// Hidden creates the window without showing it and lets frames run as fast
 	// as they can. It is how the interface tests drive the real application
@@ -65,10 +60,9 @@ type Frame struct {
 
 // Window is the application window and the Dear ImGui context that draws into it.
 type Window struct {
-	backend    *raylibbackend.RaylibBackend
-	background color.RGBA
-	shutdown   func()
-	closing    bool
+	backend  *raylibbackend.RaylibBackend
+	shutdown func()
+	closing  bool
 
 	// The interface scale: the one in effect, the one asked for, and the
 	// unscaled style both are worked out from.
@@ -130,7 +124,7 @@ func NewWindow(cfg Config) *Window {
 	configureFonts()
 	ApplyTheme()
 
-	window := &Window{backend: back, background: cfg.Background}
+	window := &Window{backend: back}
 	window.captureBaseStyle()
 
 	return window
@@ -140,16 +134,6 @@ func NewWindow(cfg Config) *Window {
 // drawing a render texture as an image inside a panel.
 func (w *Window) Backend() *raylibbackend.RaylibBackend {
 	return w.backend
-}
-
-// SetBackground changes the colour cleared at the start of every frame.
-func (w *Window) SetBackground(c color.RGBA) {
-	w.background = c
-}
-
-// Background is the colour cleared at the start of every frame.
-func (w *Window) Background() color.RGBA {
-	return w.background
 }
 
 // OnShutdown registers work to run when the window closes, while the OpenGL
@@ -188,7 +172,8 @@ func (w *Window) Step(frame Frame) {
 	rl.BeginDrawing()
 	defer rl.EndDrawing()
 
-	rl.ClearBackground(w.background)
+	// Whatever no panel covers shows the same colour as the panels themselves.
+	rl.ClearBackground(clearColor())
 
 	if frame.Offscreen != nil {
 		frame.Offscreen()

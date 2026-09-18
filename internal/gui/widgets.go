@@ -163,18 +163,11 @@ func InputText(label, hint string, text *string) bool {
 	return changed
 }
 
-// ColorEdit is imgui.ColorEdit4.
-func ColorEdit(label string, value *[4]float32) bool {
-	changed := imgui.ColorEdit4(fieldLabel(label), value)
-	record(label, false)
-
-	return changed
-}
-
 // SelectableSized is Selectable with a size, for a row that has to leave room
-// for buttons beside it.
-func SelectableSized(label string, selected bool, width float32) bool {
-	clicked := imgui.SelectableBoolV(label, selected, 0, imgui.Vec2{X: width})
+// for buttons beside it or line up with rows that have them. Zero for either
+// side keeps the default: the rest of the line, one line of text.
+func SelectableSized(label string, selected bool, width, height float32) bool {
+	clicked := imgui.SelectableBoolV(label, selected, 0, imgui.Vec2{X: width, Y: height})
 	record(label, selected)
 
 	return clicked
@@ -298,4 +291,16 @@ func TableHeadersRow() {
 		record(name, false)
 		imgui.PopID()
 	}
+}
+
+// FindWindow looks a window up by name. cimgui-go wraps whatever Dear ImGui
+// returns, a null pointer included, so a missing window would otherwise look
+// found and crash on first use.
+func FindWindow(name string) (*imgui.Window, bool) {
+	window := imgui.InternalFindWindowByName(name)
+	if window == nil || window.CData == nil {
+		return nil, false
+	}
+
+	return window, true
 }

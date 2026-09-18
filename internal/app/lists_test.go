@@ -129,8 +129,8 @@ func TestFormLabelsAreOnTheLeft(t *testing.T) {
 
 	field := driver.Find(panelSelected, "Name")
 
-	window := imgui.InternalFindWindowByName(panelSelected)
-	if window == nil {
+	window, found := gui.FindWindow(panelSelected)
+	if !found {
 		t.Fatal("the selected layer panel is not open")
 	}
 
@@ -202,4 +202,87 @@ func thumbnailPixel(application *App, thumbnail render.Thumbnail, across, down f
 	v := thumbnail.V0 + (thumbnail.V1-thumbnail.V0)*down
 
 	return rl.GetImageColor(*captured, int32(u*float32(captured.Width)), int32(v*float32(captured.Height)))
+}
+
+func TestLayerRowsAreEvenlySized(t *testing.T) {
+	application, driver := startApp(t)
+
+	driver.Menu("Databases", windowFlagDatabase)
+	driver.Click("", "TST_emblem")
+
+	coatOfArms := driver.Find(panelLayers, labelCoatOfArms)
+	layer := driver.Find(panelLayers, describeLayer(application.state.flag.Layers[0]))
+
+	height := func(item uitest.Item) float32 { return item.Max.Y - item.Min.Y }
+
+	// The layer has buttons beside it and the coat of arms has none, which
+	// must not make the rows differ.
+	if height(coatOfArms) != height(layer) {
+		t.Errorf("the coat of arms row is %v tall and the layer row %v, want them the same",
+			height(coatOfArms), height(layer))
+	}
+}
+
+func TestSettingsWindowFitsItsContents(t *testing.T) {
+	_, driver := startApp(t)
+
+	driver.Menu("Settings", "Open Settings")
+	driver.Frames(3)
+
+	windowHeight := func() float32 {
+		window, found := gui.FindWindow(windowSettings)
+		if !found {
+			t.Fatal("the settings window is not open")
+		}
+
+		return window.SizeFull().Y
+	}
+
+	assertAllVisible := func(when string) {
+		t.Helper()
+
+		for _, item := range driver.Items() {
+			if item.Window == windowSettings && !item.Reachable(item.ClickPoint()) {
+				t.Errorf("%s: %q is outside the visible part of the settings window", when, item.Label)
+			}
+		}
+	}
+
+	assertAllVisible("on opening")
+
+	before, button := windowHeight(), driver.Find(windowSettings, "Add Folder")
+
+	driver.Click(windowSettings, "Add Folder")
+	driver.Frames(3)
+
+	// The table has no height of its own: a new row pushes everything below it
+	// down, and the window grows by as much instead of scrolling.
+	moved := driver.Find(windowSettings, "Add Folder").Min.Y - button.Min.Y
+	grew := windowHeight() - before
+
+	if moved <= 0 {
+		t.Fatalf("Add Folder stayed at %v after adding a folder, want the table to grow above it", button.Min.Y)
+	}
+
+	if grew < moved-1 || grew > moved+1 {
+		t.Errorf("the window grew by %v while the table grew by %v, want the same", grew, moved)
+	}
+
+	assertAllVisible("after adding a folder")
+}
+
+func TestFolderColumnsLineUpWithTheirHeaders(t *testing.T) {
+	_, driver := startApp(t)
+
+	driver.Menu("Settings", "Open Settings")
+
+	// Every column's field is as far in from its header as every other's: the
+	// first one is not pushed against the edge of the table.
+	nameInset := driver.Find(windowSettings, "##name").Min.X - driver.Find(windowSettings, "Name").Min.X
+	folderInset := driver.Find(windowSettings, "##path").Min.X - driver.Find(windowSettings, "Folder").Min.X
+
+	if nameInset <= 0 || nameInset != folderInset {
+		t.Errorf("the name field is %v in from its header and the folder field %v, want the same, above zero",
+			nameInset, folderInset)
+	}
 }

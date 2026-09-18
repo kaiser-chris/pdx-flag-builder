@@ -1,6 +1,10 @@
 package gui
 
-import "github.com/AllenDang/cimgui-go/imgui"
+import (
+	"image/color"
+
+	"github.com/AllenDang/cimgui-go/imgui"
+)
 
 // The palette. Dear ImGui's stock dark theme is a neutral grey that makes every
 // panel look the same; these values give the application a flatter, slightly
@@ -129,4 +133,12 @@ func withAlpha(color imgui.Vec4, alpha float32) imgui.Vec4 {
 
 func transparent() imgui.Vec4 {
 	return imgui.Vec4{}
+}
+
+// clearColor is the colour the window is cleared to every frame, the one the
+// panels have, so that the interface has no seams between them.
+func clearColor() color.RGBA {
+	channel := func(value float32) uint8 { return uint8(value*255 + 0.5) }
+
+	return color.RGBA{R: channel(colorWindowBg.X), G: channel(colorWindowBg.Y), B: channel(colorWindowBg.Z), A: 255}
 }

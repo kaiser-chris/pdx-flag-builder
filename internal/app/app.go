@@ -11,7 +11,6 @@ import (
 	"bytes"
 	"fmt"
 	"image"
-	"image/color"
 	"image/png"
 	"os"
 	"time"
@@ -128,7 +127,6 @@ func New(options Options) (*App, error) {
 		MinHeight:  render.FlagHeight + minimumChromeHeight,
 		LayoutFile: store.LayoutPath(),
 		Icon:       icon,
-		Background: application.backgroundColor(),
 		Hidden:     options.Hidden,
 	})
 
@@ -319,16 +317,6 @@ func (a *App) frame() {
 
 	// Last, once every widget has had its say about this frame.
 	a.settleHistory()
-}
-
-// backgroundColor is the window's clear colour as configured by the user.
-func (a *App) backgroundColor() color.RGBA {
-	return color.RGBA{
-		R: a.settings.BackgroundColor.R,
-		G: a.settings.BackgroundColor.G,
-		B: a.settings.BackgroundColor.B,
-		A: a.settings.BackgroundColor.A,
-	}
 }
 
 // trackFocus records which closable window the user interacted with last so

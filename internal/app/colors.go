@@ -11,7 +11,7 @@ import (
 )
 
 // colorFromFloats converts the 0..1 channels Dear ImGui's colour editor works
-// with back into the 8 bit channels the settings file stores.
+// with back into 8 bit channels.
 func colorFromFloats(channels [4]float32) color.RGBA {
 	return color.RGBA{
 		R: uint8(channels[0]*255 + 0.5),

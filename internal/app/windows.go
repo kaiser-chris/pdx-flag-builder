@@ -13,25 +13,30 @@ import (
 // rewrite follows was at 1.4.0.
 const applicationVersion = "0.1.0-dev"
 
-// settingsWindow edits the configured game and mod folders and the window
-// background. Edits are made on copies and only written to disk on save.
+// settingsWidth is how wide the settings window opens, in unscaled units.
+const settingsWidth = 640
+
+// settingsWindow edits the interface scale and the configured game and mod
+// folders. Edits are made on copies and only written to disk on save.
 func (a *App) settingsWindow() {
 	if !a.state.showSettings {
 		return
 	}
 
-	imgui.SetNextWindowSizeV(gui.ScaledVec2(640, 520), imgui.CondFirstUseEver)
+	// The window keeps whatever width it is given but always fits its contents
+	// in height: a height of zero asks Dear ImGui to fit it, and asking every
+	// frame keeps it fitting as folders are added and removed.
+	width := gui.Scaled(settingsWidth)
+	if window, found := gui.FindWindow(windowSettings); found && window.SizeFull().X > 0 {
+		width = window.SizeFull().X
+	}
+
+	imgui.SetNextWindowSizeV(imgui.Vec2{X: width}, imgui.CondAlways)
 
 	if imgui.BeginV(windowSettings, &a.state.showSettings, 0) {
 		a.trackFocus(windowSettings)
 
 		sectionHeader("Appearance")
-
-		if gui.ColorEdit("Background", &a.state.backgroundColor) {
-			// Applied immediately so the choice can be judged, but only stored
-			// when the user saves.
-			a.window.SetBackground(colorFromFloats(a.state.backgroundColor))
-		}
 
 		a.scaleField()
 
@@ -55,7 +60,6 @@ func (a *App) settingsWindow() {
 
 		if gui.Button("Revert") {
 			a.state.loadFrom(a.settings)
-			a.window.SetBackground(a.backgroundColor())
 			a.setStatus("Settings reverted")
 		}
 
@@ -66,11 +70,19 @@ func (a *App) settingsWindow() {
 }
 
 func (a *App) databaseTable() {
-	// Leave room below the table for the buttons and the summary that follow it.
-	height := imgui.FrameHeightWithSpacing() * 6
-	outerSize := imgui.Vec2{X: 0, Y: min(height, max(imgui.ContentRegionAvail().Y-height, height))}
+	// The same breathing room around the header and between the rows that the
+	// lists with previews have. Dear ImGui reads the padding row by row, so it
+	// stays pushed until the table ends.
+	padding := imgui.CurrentStyle().CellPadding()
+	imgui.PushStyleVarVec2(imgui.StyleVarCellPadding, imgui.Vec2{X: padding.X, Y: gui.Scaled(5)})
+	defer imgui.PopStyleVar()
 
-	if !imgui.BeginTableV("databases", 3, imgui.TableFlagsBordersInnerH|imgui.TableFlagsRowBg, outerSize, 0) {
+	// No height of its own: the table grows by a row for every folder added,
+	// and the window grows with it. Without outer borders Dear ImGui leaves
+	// the outer edges unpadded, which puts the first column flush against the
+	// edge while every other one is indented, so the padding is asked for.
+	flags := imgui.TableFlagsBordersInnerH | imgui.TableFlagsRowBg | imgui.TableFlagsPadOuterX
+	if !imgui.BeginTableV("databases", 3, flags, imgui.Vec2{}, 0) {
 		return
 	}
 	defer imgui.EndTable()
@@ -78,7 +90,7 @@ func (a *App) databaseTable() {
 	imgui.TableSetupColumnV("Name", imgui.TableColumnFlagsWidthFixed, gui.Scaled(150), 0)
 	imgui.TableSetupColumnV("Folder", imgui.TableColumnFlagsWidthStretch, 0, 0)
 	imgui.TableSetupColumnV("", imgui.TableColumnFlagsWidthFixed, gui.Scaled(28), 0)
-	imgui.TableHeadersRow()
+	gui.TableHeadersRow()
 
 	remove := -1
 
@@ -143,8 +155,6 @@ func (a *App) loadedFolders() {
 }
 
 func (a *App) saveSettings() {
-	background := colorFromFloats(a.state.backgroundColor)
-	a.settings.BackgroundColor = config.Color{R: background.R, G: background.G, B: background.B, A: background.A}
 	a.settings.InterfaceScale = a.state.interfaceScale
 
 	databases := make([]config.Database, 0, len(a.state.databases))
@@ -208,8 +218,8 @@ func automaticScaleLabel() string {
 	return fmt.Sprintf("Automatic (%s)", scaleLabel(gui.MonitorScale()))
 }
 
-// scaleField chooses how large the interface is drawn. Like the background, a
-// choice shows straight away but is only stored when the settings are saved.
+// scaleField chooses how large the interface is drawn. A choice shows straight
+// away but is only stored when the settings are saved.
 func (a *App) scaleField() {
 	current := a.state.interfaceScale
 

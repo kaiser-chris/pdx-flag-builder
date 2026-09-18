@@ -23,15 +23,6 @@ const (
 	layoutFileName   = "layout.ini"
 )
 
-// Color is an 8 bit per channel colour. The lowercase JSON names match the
-// settings file written by the Odin version.
-type Color struct {
-	R uint8 `json:"r"`
-	G uint8 `json:"g"`
-	B uint8 `json:"b"`
-	A uint8 `json:"a"`
-}
-
 // Database is a game or mod folder that flags and textures are read from.
 type Database struct {
 	Name string
@@ -40,8 +31,7 @@ type Database struct {
 
 // Settings is the persisted application configuration.
 type Settings struct {
-	BackgroundColor Color
-	Databases       []Database
+	Databases []Database
 
 	// InterfaceScale is how large the interface is drawn, where one is its
 	// designed size. Zero follows the display scale of the monitor, which is
@@ -52,8 +42,7 @@ type Settings struct {
 // Default returns the settings used when no settings file exists yet.
 func Default() *Settings {
 	return &Settings{
-		BackgroundColor: Color{R: 90, G: 95, B: 100, A: 255},
-		Databases:       []Database{},
+		Databases: []Database{},
 	}
 }
 
