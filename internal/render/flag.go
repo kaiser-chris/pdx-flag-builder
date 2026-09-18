@@ -184,7 +184,7 @@ func (p *Painter) drawTexturedEmblem(emblem *pdx.TexturedEmblem, destination rl.
 		target := instanceRect(instance, destination)
 		origin := rl.Vector2{X: target.Width / 2, Y: target.Height / 2}
 
-		rl.DrawTexturePro(texture, wholeTexture(texture), target, origin, instance.Rotation, rl.White)
+		drawTexture(texture, wholeTexture(texture), target, origin, instance.Rotation, rl.White)
 	}
 }
 

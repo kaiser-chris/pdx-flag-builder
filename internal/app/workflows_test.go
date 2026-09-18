@@ -230,3 +230,60 @@ func TestAFileDialogThatFailsIsReported(t *testing.T) {
 		t.Errorf("the dialog was asked for %d times, want a second try to ask again", asked)
 	}
 }
+
+// A negative scale mirrors an emblem where it stands, as the games do: the
+// Byzantine flag's left emblems are its right ones turned around.
+func TestNegativeScaleMirrorsAnEmblemInPlace(t *testing.T) {
+	application, driver := startApp(t)
+
+	driver.Menu("File", "New Flag")
+	driver.Click("", labelAddLayer)
+	driver.Click("", "Textured Emblem...")
+	driver.Click("", "te_left.png")
+
+	// Half the flag wide, centred on its left half, mirrored.
+	emblem := lastLayer(t, application).(*pdx.TexturedEmblem)
+	emblem.Instances = []pdx.Instance{{Position: pdx.Vec2{X: 0.25, Y: 0.5}, Scale: pdx.Vec2{X: -0.5, Y: 1}}}
+
+	waitForArtwork(t, application, driver, 1)
+
+	// The texture is coloured on its left half; mirrored, that half lands on
+	// the right of the emblem, which covers the left half of the flag.
+	for _, check := range []struct {
+		x       int
+		colored bool
+		why     string
+	}{
+		{288, true, "the emblem's right quarter holds the texture's coloured half"},
+		{96, false, "the emblem's left quarter holds the texture's empty half"},
+		{480, false, "nothing is drawn right of the emblem"},
+	} {
+		if got := pixel(application, check.x, 256); near(got, texturedMark) != check.colored {
+			t.Errorf("pixel at x %d = %v: %s", check.x, got, check.why)
+		}
+	}
+}
+
+// A sub flag with a negative scale is mirrored as a whole.
+func TestNegativeScaleMirrorsASubFlag(t *testing.T) {
+	application, driver := startApp(t)
+
+	driver.Menu("File", "New Flag")
+	driver.Click("", labelAddLayer)
+	driver.Click("", "Sub Flag...")
+	driver.Click("", "TST_split")
+
+	// Upside down: placed from the bottom edge, growing upwards.
+	sub := lastLayer(t, application).(*pdx.SubFlag)
+	sub.Instances = []pdx.SubInstance{{Offset: pdx.Vec2{X: 0, Y: 1}, Scale: pdx.Vec2{X: 1, Y: -1}}}
+
+	waitForArtwork(t, application, driver, 1)
+
+	if got := pixel(application, 384, 100); !near(got, fixtureWhite) {
+		t.Errorf("top = %v, want TST_split's bottom colour %v on top", got, fixtureWhite)
+	}
+
+	if got := pixel(application, 384, 400); !near(got, fixtureBlue) {
+		t.Errorf("bottom = %v, want TST_split's top colour %v at the bottom", got, fixtureBlue)
+	}
+}

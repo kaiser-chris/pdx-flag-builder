@@ -147,3 +147,56 @@ func TestMaskForARotatedEmblem(t *testing.T) {
 		t.Errorf("UV axis along the left edge = %v, want straight left", mask.UVAxisY)
 	}
 }
+
+// span is the stretch a drawn texture covers across the flag, left to right,
+// as raylib computes it when nothing is rotated.
+func span(destination rl.Rectangle, origin rl.Vector2) (low, high float32) {
+	start := destination.X - origin.X
+	end := start + destination.Width
+
+	return min(start, end), max(start, end)
+}
+
+func TestUnmirror(t *testing.T) {
+	source := rl.Rectangle{Width: 64, Height: 32}
+
+	tests := []struct {
+		name        string
+		destination rl.Rectangle
+		origin      rl.Vector2
+	}{
+		// An emblem pivots on its middle.
+		{"mirrored emblem", rl.Rectangle{X: 192, Y: 256, Width: -384, Height: 512}, rl.Vector2{X: -192, Y: 256}},
+		// A pattern is drawn from its corner.
+		{"mirrored pattern", rl.Rectangle{X: 768, Y: 0, Width: -768, Height: 512}, rl.Vector2{}},
+		{"upside down", rl.Rectangle{X: 0, Y: 512, Width: 768, Height: -512}, rl.Vector2{}},
+	}
+
+	for _, test := range tests {
+		gotSource, gotDestination, gotOrigin := unmirror(source, test.destination, test.origin)
+
+		if gotDestination.Width < 0 || gotDestination.Height < 0 {
+			t.Errorf("%s: destination %+v, want a positive size for raylib", test.name, gotDestination)
+		}
+
+		// The sign moved to the source, which is how raylib mirrors.
+		if (gotSource.Width < 0) != (test.destination.Width < 0) || (gotSource.Height < 0) != (test.destination.Height < 0) {
+			t.Errorf("%s: source %+v, want it negative where the destination was", test.name, gotSource)
+		}
+
+		// And the texture covers the same part of the flag as before.
+		wantLow, wantHigh := span(test.destination, test.origin)
+		gotLow, gotHigh := span(gotDestination, gotOrigin)
+
+		if !nearly(gotLow, wantLow) || !nearly(gotHigh, wantHigh) {
+			t.Errorf("%s: covers %v to %v, want %v to %v", test.name, gotLow, gotHigh, wantLow, wantHigh)
+		}
+	}
+
+	// Nothing mirrored, nothing changed.
+	plain := rl.Rectangle{X: 10, Y: 20, Width: 30, Height: 40}
+	if gotSource, gotDestination, gotOrigin := unmirror(source, plain, rl.Vector2{X: 15, Y: 20}); gotSource != source ||
+		gotDestination != plain || gotOrigin != (rl.Vector2{X: 15, Y: 20}) {
+		t.Errorf("unmirror changed a plain rectangle: %+v %+v %+v", gotSource, gotDestination, gotOrigin)
+	}
+}

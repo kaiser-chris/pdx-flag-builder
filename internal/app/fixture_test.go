@@ -90,6 +90,17 @@ func newFixtureGame(t *testing.T) string {
 	writePNG(t, filepath.Join(root, "gfx", "coat_of_arms", "textured_emblems", "te_mark.png"), 32, 32,
 		func(int, int) color.RGBA { return texturedMark })
 
+	// Coloured on its left half only, so that a mirrored copy can be told from
+	// one drawn the right way round.
+	writePNG(t, filepath.Join(root, "gfx", "coat_of_arms", "textured_emblems", "te_left.png"), 32, 32,
+		func(x, _ int) color.RGBA {
+			if x < 16 {
+				return texturedMark
+			}
+
+			return color.RGBA{}
+		})
+
 	return root
 }
 

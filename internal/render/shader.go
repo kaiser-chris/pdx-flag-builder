@@ -132,7 +132,7 @@ func (r Recolor) Draw(texture rl.Texture2D, source, destination rl.Rectangle, op
 
 	r.apply(options)
 
-	rl.DrawTexturePro(texture, source, destination, options.Origin, options.Rotation, rl.White)
+	drawTexture(texture, source, destination, options.Origin, options.Rotation, rl.White)
 }
 
 func (r Recolor) apply(options DrawOptions) {
