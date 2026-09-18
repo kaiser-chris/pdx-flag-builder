@@ -278,7 +278,8 @@ func TestAboutOpensFromTheHelpMenu(t *testing.T) {
 
 // Every control of the editing panels has to be reachable in the default
 // window size. Rows that grow wider than their panel push their last buttons
-// off the edge of the window, where no one can click them.
+// off the edge of the window, where no one can click them. A panel taller
+// than the window is fine: it scrolls, but only up and down.
 func TestEditingPanelsFitTheWindow(t *testing.T) {
 	application, driver := startApp(t)
 	openFixture(t, application, driver, "TST_emblem")
@@ -287,6 +288,10 @@ func TestEditingPanelsFitTheWindow(t *testing.T) {
 		t.Helper()
 
 		for _, item := range driver.OffScreen() {
+			if width := imgui.CurrentIO().DisplaySize().X; item.Min.X >= 0 && item.Max.X <= width {
+				continue
+			}
+
 			t.Errorf("%s: %q in %q reaches past the window at (%.0f,%.0f)-(%.0f,%.0f)",
 				what, item.Label, item.Window, item.Min.X, item.Min.Y, item.Max.X, item.Max.Y)
 		}

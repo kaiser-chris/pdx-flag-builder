@@ -314,6 +314,8 @@ func (a *App) placementEditor(instances *[]pdx.Instance) {
 
 	if len(*instances) == 0 {
 		dimmedWrapped("Drawn once at the default placement until a placement is added.")
+	} else {
+		dragHint()
 	}
 
 	remove := -1
@@ -366,6 +368,8 @@ func (a *App) subPlacementEditor(instances *[]pdx.SubInstance) {
 
 	if len(*instances) == 0 {
 		dimmedWrapped("Drawn once over the whole flag until a placement is added.")
+	} else {
+		dragHint()
 	}
 
 	remove := -1
@@ -405,4 +409,11 @@ func (a *App) subPlacementEditor(instances *[]pdx.SubInstance) {
 		*instances = append(*instances, pdx.NewSubInstance())
 		a.changed()
 	}
+}
+
+// dragHint explains the number fields of a placement, which look like plain
+// boxes but are changed by dragging across them.
+func dragHint() {
+	dimmedWrapped("Drag a value sideways to change it, or double-click it to type a number. " +
+		"Hold Shift while dragging for bigger steps, Alt for finer ones.")
 }

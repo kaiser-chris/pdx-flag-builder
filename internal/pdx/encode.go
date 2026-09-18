@@ -11,7 +11,7 @@ import (
 
 // Script writes a coat of arms as script, laid out the way the games' own
 // files lay one out: the pattern and the colours first, then one block per
-// layer, each placement on a line of its own. lineBreak is "\n" or "\r\n", to
+// layer, and in it one block per placement. lineBreak is "\n" or "\r\n", to
 // match the file the script goes into.
 //
 // What the file spelled with variables or expressions is written as the
@@ -85,30 +85,30 @@ func (w *writer) subFlag(sub *SubFlag) {
 	w.line(2, keyParent+" = "+quote(sub.Parent))
 
 	for _, instance := range sub.Instances {
-		w.line(2, fmt.Sprintf("%s = { %s = %s %s = %s }",
-			keyInstance,
-			keyOffset, vector(instance.Offset),
-			keyScale, vector(instance.Scale)))
+		w.line(2, keyInstance+" = {")
+		w.line(3, keyOffset+" = "+vector(instance.Offset))
+		w.line(3, keyScale+" = "+vector(instance.Scale))
+		w.line(2, "}")
 	}
 
 	w.line(1, "}")
 }
 
-// instances writes an emblem's placements. A rotation of zero is left out, as
-// the games' files do; position and scale are always written, so that a reader
-// of the file does not have to know the defaults.
+// instances writes an emblem's placements, one block each with an attribute
+// per line. A rotation of zero is left out, as the games' files do; position
+// and scale are always written, so that a reader of the file does not have to
+// know the defaults.
 func (w *writer) instances(instances []Instance) {
 	for _, instance := range instances {
-		text := fmt.Sprintf("%s = { %s = %s %s = %s",
-			keyInstance,
-			keyPosition, vector(instance.Position),
-			keyScale, vector(instance.Scale))
+		w.line(2, keyInstance+" = {")
+		w.line(3, keyPosition+" = "+vector(instance.Position))
+		w.line(3, keyScale+" = "+vector(instance.Scale))
 
 		if instance.Rotation != 0 {
-			text += fmt.Sprintf(" %s = %s", keyRotation, number(instance.Rotation))
+			w.line(3, keyRotation+" = "+number(instance.Rotation))
 		}
 
-		w.line(2, text+" }")
+		w.line(2, "}")
 	}
 }
 

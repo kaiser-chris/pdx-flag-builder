@@ -212,10 +212,17 @@ func DragPair(label string, x, y *float32, speed, low, high float32, format stri
 	return changed
 }
 
-// ColorEditRGB edits a colour without alpha.
+// ColorEditRGB edits a colour without alpha: one field per channel and a
+// swatch that opens the colour picker.
 func ColorEditRGB(label string, value *[3]float32) bool {
 	changed := imgui.ColorEdit3V(label, value, imgui.ColorEditFlagsNoLabel)
 	record(label, false)
+
+	// The swatch at the end of the row opens the picker, which nothing about
+	// a plain square of colour says, so it carries an eyedropper.
+	high := imgui.ItemRectMax()
+	swatch := imgui.Vec2{X: high.X - imgui.FrameHeight(), Y: imgui.ItemRectMin().Y}
+	drawPickerIcon(swatch, high, *value)
 
 	return changed
 }
