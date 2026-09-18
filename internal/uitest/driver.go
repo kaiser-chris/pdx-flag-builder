@@ -315,6 +315,8 @@ const maxAimFrames = 8
 func (d *Driver) aim(item Item) imgui.Vec2 {
 	d.t.Helper()
 
+	item = d.scrollIntoView(item)
+
 	for range maxAimFrames {
 		d.mouse = item.ClickPoint()
 		d.Frame()
@@ -380,8 +382,19 @@ const dragSteps = 6
 func (d *Driver) Drag(item Item, byX, byY float32) {
 	d.t.Helper()
 
-	start := d.aim(item)
+	d.dragFrom(d.aim(item), byX, byY)
+}
 
+// DragAt drags from a point no widget covers, such as the corner of a window
+// that resizes it.
+func (d *Driver) DragAt(start imgui.Vec2, byX, byY float32) {
+	d.mouse = start
+	d.Frame()
+
+	d.dragFrom(start, byX, byY)
+}
+
+func (d *Driver) dragFrom(start imgui.Vec2, byX, byY float32) {
 	d.mouseDown = true
 	d.Frame()
 
@@ -476,4 +489,68 @@ func describeWindow(window string) string {
 	}
 
 	return fmt.Sprintf("window %q", window)
+}
+
+// Hold presses keys and keeps them down, frame after frame, until Release.
+// Modifiers are held the same way, as imgui.ModShift and the like.
+func (d *Driver) Hold(keys ...imgui.Key) {
+	for _, key := range keys {
+		d.keys = append(d.keys, keyEvent{key: key, down: true})
+	}
+
+	d.Frame()
+}
+
+// Release lets go of keys held with Hold.
+func (d *Driver) Release(keys ...imgui.Key) {
+	for _, key := range keys {
+		d.keys = append(d.keys, keyEvent{key: key, down: false})
+	}
+
+	d.Frame()
+}
+
+// ClickAt clicks a point of the window that no widget covers, such as an
+// image, which is how a panel without widgets is given focus.
+func (d *Driver) ClickAt(point imgui.Vec2) {
+	d.mouse = point
+	d.Frame()
+
+	d.mouseDown = true
+	d.Frame()
+
+	d.mouseDown = false
+	d.Frame()
+
+	d.Frame()
+}
+
+// scrollIntoView scrolls the window a widget is in until the widget is in
+// the middle of what the window shows, the way a user scrolls to a button
+// before clicking it. Only up and down: nothing in the application scrolls
+// sideways, and a widget off the side stays off it, for aim to report.
+func (d *Driver) scrollIntoView(item Item) Item {
+	low, high := item.visible()
+	if low.Y < high.Y && item.Reachable(item.ClickPoint()) {
+		return item
+	}
+
+	window, found := gui.FindWindow(item.Window)
+	if !found {
+		return item
+	}
+
+	middle := (item.Min.Y + item.Max.Y) / 2
+	shown := (item.ClipMin.Y + item.ClipMax.Y) / 2
+
+	// Dear ImGui keeps the scroll within what the window can scroll, and
+	// applies it on the next frame.
+	imgui.InternalSetScrollYWindowPtr(window, window.Scroll().Y+middle-shown)
+	d.Frames(2)
+
+	if current, found := d.byID(item.ID); found {
+		return current
+	}
+
+	return item
 }

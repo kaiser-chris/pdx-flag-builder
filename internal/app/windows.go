@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"math"
 	"path/filepath"
 
 	"github.com/AllenDang/cimgui-go/imgui"
@@ -14,8 +15,12 @@ import (
 // rewrite follows was at 1.4.0.
 const applicationVersion = "0.1.0-dev"
 
-// settingsWidth is how wide the settings window opens, in unscaled units.
-const settingsWidth = 640
+// How wide the settings window opens, and how narrow it can be made, in
+// unscaled units.
+const (
+	settingsWidth    = 640
+	settingsMinWidth = 460
+)
 
 // settingsWindow edits the interface scale and the configured game and mod
 // folders. Edits are made on copies and only written to disk on save.
@@ -24,15 +29,21 @@ func (a *App) settingsWindow() {
 		return
 	}
 
-	// The window keeps whatever width it is given but always fits its contents
-	// in height: a height of zero asks Dear ImGui to fit it, and asking every
-	// frame keeps it fitting as folders are added and removed.
-	width := gui.Scaled(settingsWidth)
-	if window, found := gui.FindWindow(windowSettings); found && window.SizeFull().X > 0 {
-		width = window.SizeFull().X
-	}
+	// The window fits its contents in height, however many folders there are,
+	// and can be made as wide as the paths in it need. Asking Dear ImGui to fit
+	// the height outright would switch off its resize grips, width and all, so
+	// the height is pinned with size constraints instead, at what fitting it
+	// would come to. A height of zero on first use has it fitted to begin with.
+	imgui.SetNextWindowSizeV(gui.ScaledVec2(settingsWidth, 0), imgui.CondFirstUseEver)
 
-	imgui.SetNextWindowSizeV(imgui.Vec2{X: width}, imgui.CondAlways)
+	if window, found := gui.FindWindow(windowSettings); found {
+		height := imgui.InternalCalcWindowNextAutoFitSize(window).Y
+
+		imgui.SetNextWindowSizeConstraints(
+			imgui.Vec2{X: gui.Scaled(settingsMinWidth), Y: height},
+			imgui.Vec2{X: math.MaxFloat32, Y: height},
+		)
+	}
 
 	if imgui.BeginV(windowSettings, &a.state.showSettings, 0) {
 		a.trackFocus(windowSettings)
@@ -59,9 +70,19 @@ func (a *App) settingsWindow() {
 
 		imgui.SameLine()
 
+		unsaved := a.settingsChanged()
+
+		imgui.BeginDisabledV(!unsaved)
 		if gui.Button("Revert") {
 			a.state.loadFrom(a.settings)
 			a.setStatus("Settings reverted")
+		}
+		imgui.EndDisabled()
+
+		if unsaved {
+			imgui.SameLine()
+			imgui.AlignTextToFramePadding()
+			gui.WarningText(labelUnsavedSettings)
 		}
 
 		a.loadedFolders()
@@ -187,7 +208,7 @@ func (a *App) saveSettings() {
 }
 
 func (a *App) aboutPopup() {
-	imgui.SetNextWindowSizeV(gui.ScaledVec2(380, 0), imgui.CondAlways)
+	imgui.SetNextWindowSizeV(gui.ScaledVec2(460, 0), imgui.CondAlways)
 
 	if !imgui.BeginPopupModalV(popupAbout, nil, imgui.WindowFlagsNoResize|imgui.WindowFlagsNoSavedSettings) {
 		return
@@ -203,6 +224,13 @@ func (a *App) aboutPopup() {
 	imgui.Separator()
 
 	imgui.TextDisabled("Rendering by raylib, interface by Dear ImGui.")
+
+	sectionHeader("Credits")
+
+	for _, credit := range credits {
+		credit.show()
+		imgui.Spacing()
+	}
 
 	imgui.Separator()
 
@@ -288,4 +316,30 @@ func (a *App) browseFolder(row int) {
 			entry.Name = filepath.Base(path)
 		}
 	})
+}
+
+// labelUnsavedSettings says that the settings window shows edits which have
+// not been saved, and so are not in effect for the folders yet.
+const labelUnsavedSettings = "Unsaved changes"
+
+// settingsChanged reports whether the settings window holds edits that have
+// not been saved. The interface scale shows straight away, but counts as well:
+// it is lost on the next start unless saved.
+func (a *App) settingsChanged() bool {
+	if a.state.interfaceScale != a.settings.InterfaceScale {
+		return true
+	}
+
+	if len(a.state.databases) != len(a.settings.Databases) {
+		return true
+	}
+
+	for index, entry := range a.state.databases {
+		saved := a.settings.Databases[index]
+		if entry.Name != saved.Name || entry.Path != saved.Path {
+			return true
+		}
+	}
+
+	return false
 }

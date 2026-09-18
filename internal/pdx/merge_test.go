@@ -115,7 +115,7 @@ func TestMergeIntoInstalledGameFiles(t *testing.T) {
 		t.Skip("set PDX_GAME_DIR to a game or mod folder to run this test")
 	}
 
-	files, _ := filepath.Glob(filepath.Join(root, "common", "coat_of_arms", "coat_of_arms", "*.txt"))
+	files := coatOfArmsFiles(root)
 	merged := 0
 
 	for _, path := range files {

@@ -28,6 +28,7 @@ const (
 	textureColumnPreview = iota
 	textureColumnName
 	textureColumnKind
+	textureColumnSize
 	textureColumnFolder
 	textureColumnUse
 	textureColumns
@@ -240,6 +241,9 @@ func (a *App) textureDatabaseBody() {
 	setupThumbnailColumn()
 	imgui.TableSetupColumnV("Name", imgui.TableColumnFlagsWidthStretch|imgui.TableColumnFlagsDefaultSort, 0, 0)
 	imgui.TableSetupColumnV("Kind", imgui.TableColumnFlagsWidthFixed, gui.Scaled(130), 0)
+	// A size is known once the texture has been read for its preview, which
+	// only happens for the rows on screen, so there is nothing to sort by.
+	imgui.TableSetupColumnV("Size", imgui.TableColumnFlagsWidthFixed|imgui.TableColumnFlagsNoSort, gui.Scaled(90), 0)
 	imgui.TableSetupColumnV("Folder", imgui.TableColumnFlagsWidthFixed, gui.Scaled(110), 0)
 	imgui.TableSetupColumnV("##use", imgui.TableColumnFlagsWidthFixed|imgui.TableColumnFlagsNoSort, gui.Scaled(110), 0)
 	imgui.TableSetupScrollFreeze(0, 1)
@@ -283,6 +287,9 @@ func (a *App) textureDatabaseBody() {
 
 			imgui.TableSetColumnIndex(textureColumnKind)
 			highlightedCell(texture.Kind.String(), query, height)
+
+			imgui.TableSetColumnIndex(textureColumnSize)
+			plainCell(a.textureSize(texture.Path), height)
 
 			imgui.TableSetColumnIndex(textureColumnFolder)
 			highlightedCell(texture.Database, query, height)
@@ -347,4 +354,15 @@ func (a *App) useTexture(texture database.Texture) {
 	}
 
 	a.changed()
+}
+
+// textureSize describes a texture's size, as the Odin version showed it,
+// once its thumbnail has been drawn and the size is known.
+func (a *App) textureSize(path string) string {
+	width, height, ok := a.thumbnails.TextureSize(path)
+	if !ok {
+		return ""
+	}
+
+	return fmt.Sprintf("%d × %d", width, height)
 }

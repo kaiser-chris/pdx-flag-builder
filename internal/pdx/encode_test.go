@@ -164,7 +164,7 @@ func TestScriptRoundTripInstalledGame(t *testing.T) {
 		t.Skip("set PDX_GAME_DIR to a game or mod folder to run this test")
 	}
 
-	files, _ := filepath.Glob(filepath.Join(root, "common", "coat_of_arms", "coat_of_arms", "*.txt"))
+	files := coatOfArmsFiles(root)
 	count := 0
 
 	for _, path := range files {
@@ -236,4 +236,18 @@ func kindName(value ColorValue) string {
 	}
 
 	return "?"
+}
+
+// coatOfArmsFiles lists the coat of arms files of a game or mod folder, in
+// the layout of either game: Europa Universalis 5 keeps its script in three
+// folders of its own.
+func coatOfArmsFiles(root string) []string {
+	var files []string
+
+	for _, base := range []string{root, filepath.Join(root, "main_menu"), filepath.Join(root, "in_game"), filepath.Join(root, "loading_screen")} {
+		found, _ := filepath.Glob(filepath.Join(base, "common", "coat_of_arms", "coat_of_arms", "*.txt"))
+		files = append(files, found...)
+	}
+
+	return files
 }

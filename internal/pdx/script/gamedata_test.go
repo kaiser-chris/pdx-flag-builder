@@ -57,12 +57,15 @@ func TestParseInstalledGameFiles(t *testing.T) {
 func readFolders(root string) []string {
 	var folders []string
 
-	for _, folder := range []string{
-		filepath.Join(root, "common", "coat_of_arms"),
-		filepath.Join(root, "common", "named_colors"),
-	} {
-		if info, err := os.Stat(folder); err == nil && info.IsDir() {
-			folders = append(folders, folder)
+	// Europa Universalis 5 keeps its script in three folders of its own.
+	for _, base := range []string{root, filepath.Join(root, "main_menu"), filepath.Join(root, "in_game"), filepath.Join(root, "loading_screen")} {
+		for _, folder := range []string{
+			filepath.Join(base, "common", "coat_of_arms"),
+			filepath.Join(base, "common", "named_colors"),
+		} {
+			if info, err := os.Stat(folder); err == nil && info.IsDir() {
+				folders = append(folders, folder)
+			}
 		}
 	}
 

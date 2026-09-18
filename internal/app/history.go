@@ -63,7 +63,7 @@ func (a *App) changed() {
 // and takes the snapshot the next gesture will return to. It runs at the end
 // of every frame.
 func (a *App) settleHistory() {
-	if imgui.IsAnyItemActive() || a.state.flag == nil {
+	if imgui.IsAnyItemActive() || a.state.nudging || a.state.flag == nil {
 		return
 	}
 

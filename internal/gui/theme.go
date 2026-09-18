@@ -142,3 +142,13 @@ func clearColor() color.RGBA {
 
 	return color.RGBA{R: channel(colorWindowBg.X), G: channel(colorWindowBg.Y), B: channel(colorWindowBg.Z), A: 255}
 }
+
+// colorWarning marks something the user should not overlook, such as edits
+// that have not been saved.
+var colorWarning = rgb(0xE0A948)
+
+// WarningText is a line of text in the warning colour.
+func WarningText(text string) {
+	imgui.TextColored(colorWarning, text)
+	record(text, false)
+}

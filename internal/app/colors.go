@@ -240,10 +240,21 @@ func (a *App) colorValueEditor(entry *pdx.Color, slots pdx.Colors, width float32
 		imgui.SetNextItemWidth(width)
 		if gui.BeginCombo("##slot", value.Slot) {
 			for _, candidate := range otherSlots(entry.Slot, slots) {
+				imgui.PushIDStr(candidate)
+
+				// The colour the slot comes to, so that the choice is not made
+				// by number alone.
+				if target, ok := slots.Get(candidate); ok {
+					a.swatch(target, slots)
+					imgui.SameLine()
+				}
+
 				if gui.Selectable(candidate, candidate == value.Slot, 0) && candidate != value.Slot {
 					entry.Value = pdx.SlotColor{Slot: candidate}
 					a.changed()
 				}
+
+				imgui.PopID()
 			}
 
 			imgui.EndCombo()
@@ -311,7 +322,7 @@ func (a *App) namedColorEditor(entry *pdx.Color, value pdx.NamedColor, width flo
 		a.swatch(pdx.Color{Slot: name, Value: pdx.NamedColor{Name: name}}, nil)
 		imgui.SameLine()
 
-		if gui.Selectable(name, name == value.Name, 0) && name != value.Name {
+		if gui.HighlightedSelectable(name, a.state.colorSearch, name == value.Name, 0, 0) && name != value.Name {
 			entry.Value = pdx.NamedColor{Name: name}
 			a.changed()
 		}

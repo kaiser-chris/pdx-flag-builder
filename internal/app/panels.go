@@ -21,9 +21,43 @@ func (a *App) previewPanel() {
 
 	if open {
 		a.drawPreviewImage()
+
+		// Clicking the flag gives the panel focus, and with it the arrow keys.
+		focused := imgui.IsWindowFocused()
+		if focused {
+			a.nudge()
+		} else {
+			a.state.nudging = false
+		}
+
+		if hint := a.nudgeHint(focused); hint != "" {
+			previewCaption(hint)
+		}
+	} else {
+		a.state.nudging = false
 	}
 
 	imgui.End()
+}
+
+// previewCaption writes a line of dimmed text along the bottom of the preview
+// panel, on a band of the panel's colour so that it reads over the flag too.
+func previewCaption(text string) {
+	padding := gui.Scaled(8)
+	position := imgui.WindowPos()
+	size := imgui.WindowSize()
+
+	textSize := imgui.CalcTextSizeV(text, false, -1)
+	top := imgui.Vec2{X: position.X + padding, Y: position.Y + size.Y - textSize.Y - padding*2}
+
+	drawList := imgui.WindowDrawList()
+	drawList.AddRectFilledV(top,
+		imgui.Vec2{X: top.X + textSize.X + padding*2, Y: top.Y + textSize.Y + padding},
+		imgui.ColorU32ColV(imgui.ColWindowBg, 0.85), gui.Scaled(4), 0)
+	// One line, clipped by the panel when it is too narrow. cimgui-go cannot
+	// pass the null clip rectangle the wrapping variant takes.
+	drawList.AddTextVec2(imgui.Vec2{X: top.X + padding, Y: top.Y + padding/2},
+		imgui.ColorU32Col(imgui.ColTextDisabled), text)
 }
 
 func (a *App) drawPreviewImage() {

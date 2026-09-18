@@ -72,6 +72,10 @@ type Thumbnails struct {
 	// scrolled past quickly are never drawn.
 	wanted map[string]thumbnailJob
 
+	// sizes records the size of every texture a thumbnail was drawn from, by
+	// the name it was asked for under, for the lists to show.
+	sizes map[string][2]int32
+
 	frame uint64
 }
 
@@ -110,6 +114,7 @@ func NewThumbnails(shader Recolor, resolve func(name string) (string, bool)) *Th
 		cells:    map[string]*thumbnailCell{},
 		free:     make([]int, 0, count),
 		wanted:   map[string]thumbnailJob{},
+		sizes:    map[string][2]int32{},
 	}
 
 	// Filled from the back, so that cells are handed out from the top left.
@@ -274,6 +279,8 @@ func (t *Thumbnails) drawCell(index int, job thumbnailJob) {
 	}
 
 	rl.DrawTexturePro(texture, wholeTexture(texture), fitRect(texture, cell), rl.Vector2{}, 0, rl.White)
+
+	t.sizes[job.texture] = [2]int32{texture.Width, texture.Height}
 }
 
 // fitRect is the largest rectangle with the texture's proportions that fits in
@@ -335,6 +342,7 @@ func (t *Thumbnails) Forget() {
 
 	clear(t.cells)
 	clear(t.wanted)
+	clear(t.sizes)
 	t.textures.Forget()
 }
 
@@ -343,4 +351,12 @@ func (t *Thumbnails) Forget() {
 func (t *Thumbnails) Unload() {
 	t.textures.Unload()
 	rl.UnloadRenderTexture(t.atlas)
+}
+
+// TextureSize is the size of a texture file in pixels, once its thumbnail has
+// been drawn.
+func (t *Thumbnails) TextureSize(path string) (width, height int32, ok bool) {
+	size, ok := t.sizes[filePrefix+path]
+
+	return size[0], size[1], ok
 }

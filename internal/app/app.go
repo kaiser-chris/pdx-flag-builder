@@ -244,6 +244,7 @@ func (a *App) openFlag(flag pdx.Flag) {
 
 	a.state.flag = &opened
 	a.state.selectedLayer = noLayer
+	a.state.selectedPlacement = 0
 	a.state.showLayers = true
 	a.state.modified = false
 	a.state.history.reset(opened)
@@ -313,6 +314,7 @@ func (a *App) frame() {
 	a.window.SetScale(a.interfaceScale())
 
 	a.openRequestedPopup()
+	a.state.popupWasOpen = imgui.IsPopupOpenStrV("", imgui.PopupFlagsAnyPopup)
 
 	a.menuBar()
 	a.statusBar()

@@ -109,7 +109,8 @@ func (a *App) discardPopup() {
 	// new one would need the file dialog first, and the user can do that
 	// from the File menu after cancelling.
 	if a.state.flag.Origin.Path != "" {
-		if gui.Button(labelSaveFirst) {
+		// Enter takes the choice that loses nothing. It never discards.
+		if gui.Button(labelSaveFirst) || imgui.IsKeyPressedBool(imgui.KeyEnter) {
 			a.save()
 
 			// A save that failed says why in the status bar, and the
@@ -133,7 +134,7 @@ func (a *App) discardPopup() {
 
 	imgui.SameLine()
 
-	if gui.Button(labelCancel) {
+	if gui.Button(labelCancel) || imgui.IsKeyPressedBool(imgui.KeyEscape) {
 		a.state.pending = nil
 		imgui.CloseCurrentPopup()
 	}

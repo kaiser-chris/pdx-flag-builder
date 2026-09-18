@@ -194,7 +194,9 @@ func (a *App) handleShortcuts() {
 
 	// Escape closes the window on top. While a text field is being edited Dear
 	// ImGui uses Escape to revert the edit, so leave it alone then.
-	if imgui.IsKeyPressedBool(imgui.KeyEscape) && !io.WantTextInput() {
+	// A dialog that was open answers Escape itself. It has closed by now, so
+	// what counts is whether one was open when the frame began.
+	if imgui.IsKeyPressedBool(imgui.KeyEscape) && !io.WantTextInput() && !a.state.popupWasOpen {
 		a.closeFocusedWindow()
 	}
 }

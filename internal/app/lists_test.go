@@ -286,3 +286,33 @@ func TestFolderColumnsLineUpWithTheirHeaders(t *testing.T) {
 			nameInset, folderInset)
 	}
 }
+
+func TestSettingsWindowCanBeWidened(t *testing.T) {
+	_, driver := startApp(t)
+
+	driver.Menu("Settings", "Open Settings")
+	driver.Frames(3)
+
+	window, found := gui.FindWindow(windowSettings)
+	if !found {
+		t.Fatal("the settings window is not open")
+	}
+
+	before := window.SizeFull()
+	corner := imgui.Vec2{X: window.Pos().X + before.X - 3, Y: window.Pos().Y + before.Y - 3}
+
+	// The resize grip in the corner, dragged outwards both ways.
+	driver.DragAt(corner, 150, 120)
+	driver.Frames(2)
+
+	after := window.SizeFull()
+
+	if after.X < before.X+140 {
+		t.Errorf("the window is %v wide after dragging its corner 150 to the right, was %v", after.X, before.X)
+	}
+
+	// The height stays what the contents need.
+	if after.Y != before.Y {
+		t.Errorf("the window is %v tall after the drag, want it to stay %v", after.Y, before.Y)
+	}
+}

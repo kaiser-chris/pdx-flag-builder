@@ -146,6 +146,10 @@ func (a *App) layerRows(flag *pdx.Flag, height float32) {
 }
 
 func (a *App) selectLayer(index int) {
+	if index != a.state.selectedLayer {
+		a.state.selectedPlacement = 0
+	}
+
 	a.state.selectedLayer = index
 	a.state.showSelected = true
 }
@@ -306,114 +310,4 @@ func maskLabel(mask int) string {
 	}
 
 	return fmt.Sprintf("Pattern colour %d", mask)
-}
-
-// placementEditor edits where an emblem is drawn.
-func (a *App) placementEditor(instances *[]pdx.Instance) {
-	sectionHeader(instanceHeading(len(*instances), len(*instances) == 0))
-
-	if len(*instances) == 0 {
-		dimmedWrapped("Drawn once at the default placement until a placement is added.")
-	} else {
-		dragHint()
-	}
-
-	remove := -1
-
-	for index := range *instances {
-		instance := &(*instances)[index]
-
-		imgui.PushIDInt(int32(index))
-
-		imgui.AlignTextToFramePadding()
-		imgui.TextDisabled(fmt.Sprintf("Placement %d", index+1))
-		imgui.SameLine()
-
-		if gui.SmallButton("Remove") {
-			remove = index
-		}
-
-		if gui.DragPair("Position", &instance.Position.X, &instance.Position.Y,
-			dragFraction, pdx.MinPosition, pdx.MaxPosition, "%.3f") {
-			a.changed()
-		}
-
-		if gui.DragPair("Scale", &instance.Scale.X, &instance.Scale.Y,
-			dragFraction, pdx.MinScale, pdx.MaxScale, "%.3f") {
-			a.changed()
-		}
-
-		if gui.DragFloat("Rotation", &instance.Rotation,
-			dragDegrees, -pdx.MaxRotation, pdx.MaxRotation, "%.1f deg") {
-			a.changed()
-		}
-
-		imgui.PopID()
-	}
-
-	if remove >= 0 {
-		*instances = pdx.RemoveItem(*instances, remove)
-		a.changed()
-	}
-
-	if gui.Button("Add Placement") {
-		*instances = append(*instances, pdx.NewInstance())
-		a.changed()
-	}
-}
-
-// subPlacementEditor edits where a sub flag is drawn.
-func (a *App) subPlacementEditor(instances *[]pdx.SubInstance) {
-	sectionHeader(instanceHeading(len(*instances), len(*instances) == 0))
-
-	if len(*instances) == 0 {
-		dimmedWrapped("Drawn once over the whole flag until a placement is added.")
-	} else {
-		dragHint()
-	}
-
-	remove := -1
-
-	for index := range *instances {
-		instance := &(*instances)[index]
-
-		imgui.PushIDInt(int32(index))
-
-		imgui.AlignTextToFramePadding()
-		imgui.TextDisabled(fmt.Sprintf("Placement %d", index+1))
-		imgui.SameLine()
-
-		if gui.SmallButton("Remove") {
-			remove = index
-		}
-
-		if gui.DragPair("Offset", &instance.Offset.X, &instance.Offset.Y,
-			dragFraction, pdx.MinPosition, pdx.MaxPosition, "%.3f") {
-			a.changed()
-		}
-
-		if gui.DragPair("Scale", &instance.Scale.X, &instance.Scale.Y,
-			dragFraction, pdx.MinScale, pdx.MaxScale, "%.3f") {
-			a.changed()
-		}
-
-		imgui.PopID()
-	}
-
-	if remove >= 0 {
-		*instances = pdx.RemoveItem(*instances, remove)
-		a.changed()
-	}
-
-	if gui.Button("Add Placement") {
-		*instances = append(*instances, pdx.NewSubInstance())
-		a.changed()
-	}
-}
-
-// dragHint explains the number fields of a placement, which look like plain
-// boxes but are changed by dragging across them.
-func dragHint() {
-	dimmedWrapped("Drag a value sideways to change it, or double-click it to type a number. " +
-		"Hold Shift while dragging for bigger steps, Alt for finer ones.")
 }

@@ -76,6 +76,12 @@ type state struct {
 	flag          *pdx.Flag
 	selectedLayer int
 
+	// selectedPlacement is the placement of the selected layer that the arrow
+	// keys move while the flag preview has focus. nudging is set while one of
+	// them is held, which keeps a held key to a single undo step.
+	selectedPlacement int
+	nudging           bool
+
 	// history is the undo stack of the open flag, and modified says whether
 	// it has changes that have not been saved.
 	history  history
@@ -106,6 +112,10 @@ type state struct {
 	// put in the status bar, for a read that follows something more worth
 	// reporting, such as a save.
 	statusAfterLoad string
+
+	// popupWasOpen records whether a popup or a modal was open as the frame
+	// began, which decides who a press of Escape was meant for.
+	popupWasOpen bool
 
 	// status is the message shown in the status bar.
 	status string

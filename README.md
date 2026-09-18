@@ -149,9 +149,10 @@ usual tasks (`make build`, `make run`, `make release`, `make vet`).
 
 The flags and textures it found are then in **Databases → Flag Database** and
 **Databases → Texture Database**, each with a small preview: the rendered flag,
-or the texture as the file has it. Clicking a column header sorts the list,
-and the part of each name a search matched is marked. Picking a flag opens it
-and shows its layers.
+or the texture as the file has it, along with its size. Clicking a column
+header sorts the list, and the part of each name a search matched is marked.
+Picking a flag opens it and shows its layers.
+
 Layers are added, reordered and removed in the **Layers** panel, and the
 selected one is edited in the panel next to it: its texture, colours, mask and
 placements. **File → New Flag** starts from an empty one, and a texture can be
@@ -159,8 +160,15 @@ used straight from the texture database as the pattern or as a new layer.
 Wherever a texture or a coat of arms is chosen, the list says which folder each
 one comes from, so a texture a mod replaces shows up once for the game and once
 for the mod.
+A placement is changed by dragging its fields, or by typing into them after a
+double click. Clicking the flag hands it the arrow keys, as in the Odin
+version: they move the selected placement, with Ctrl they scale it and with
+Alt, left and right turn it; Shift makes each step ten times bigger. The
+placements of a layer can be put in a different order, which decides which is
+drawn on top where they overlap.
+
 **Ctrl+Z** and **Ctrl+Y** undo and redo, one step per edit: a whole drag of a
-slider is one step, not one per frame.
+slider is one step, not one per frame. Holding an arrow key down is one step too.
 
 ### Saving and exporting
 
@@ -198,7 +206,7 @@ Five of the tests read a real installation instead of a fixture, because the
 only way to find out what the files really contain is to read the real ones:
 they parse, decode, write back and merge every coat of arms, and decode every
 coat of arms texture. They are skipped unless you point them at a game or mod
-folder:
+folder of either game:
 
 ```bash
 PDX_GAME_DIR="/path/to/Victoria 3/game" go test ./... -v
@@ -217,15 +225,17 @@ make uitest
 runs the real application in a hidden window and drives it the way a user
 would: it opens menus, clicks buttons, types, drags sliders and presses
 shortcuts, then checks the application's state and the pixels of the rendered
-flag. The tests sit behind the `uitest` build tag (`go test -tags uitest
-./internal/app/...`) because they need a display, which a headless CI runner
-does not have; on Linux, `xvfb-run` provides one.
+flag. The same tag covers the renderer's tests that need an OpenGL context,
+such as the thumbnail atlas and the texture cache. They sit behind the
+`uitest` build tag (`go test -tags uitest ./...`) because they need a display,
+which a headless CI runner does not have; on Linux, `xvfb-run` provides one.
 
 The widgets the application uses come from `internal/gui`, which reports each
 one it lays out (its label, window, rectangle and visible area) to the
 driver in `internal/uitest`. That is how a test finds "Save" in the settings
 window without knowing where it is, and how it notices when a widget has been
-scrolled out of view or pushed off the edge of the window.
+scrolled out of view or pushed off the edge of the window. Like a user, the
+driver scrolls a widget into view before it clicks it.
 
 ## What still has to be ported
 
@@ -234,6 +244,15 @@ scrolled out of view or pushed off the edge of the window.
 
 ## Credit
 
-This repository inherits the original's credits; see the
-[upstream README](https://github.com/kaiser-chris/pdx-flag-builder#credit) for the
-icon and library attributions.
+The application shows these in **Help → About** as well.
+
+- The application icon is waving flag by Suncheli Project from
+  [Noun Project](https://thenounproject.com/browse/icons/term/waving-flag/)
+  (CC BY 3.0).
+- The interface is set in [Roboto](https://github.com/googlefonts/roboto-classic),
+  designed by Christian Robertson, copyright 2011 The Roboto Project Authors,
+  under the SIL Open Font License 1.1, which is in
+  [assets/fonts/roboto/OFL.txt](assets/fonts/roboto/OFL.txt). Roboto is a
+  trademark of Google.
+- The BC7 decoder follows [bcdec](https://github.com/iOrange/bcdec) by iOrange,
+  which the Odin version vendored.

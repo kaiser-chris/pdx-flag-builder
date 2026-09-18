@@ -283,6 +283,7 @@ func (a *App) addLayer(layer pdx.Layer) {
 	flag.Layers = append(flag.Layers, layer)
 
 	a.state.selectedLayer = len(flag.Layers) - 1
+	a.state.selectedPlacement = 0
 	a.state.showSelected = true
 }
 

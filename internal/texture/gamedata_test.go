@@ -74,10 +74,11 @@ func TestDecodeInstalledTextures(t *testing.T) {
 			return nil
 		}
 
-		// A block compressed emblem is artwork, so a single flat colour means
-		// the decoder produced nothing useful. Patterns are exempt: a solid
-		// pattern really is one colour, waiting to be recoloured.
-		if extension != ".tga" && uniform(pixels) {
+		// An emblem is artwork, so a single flat colour means the decoder
+		// produced nothing useful. Patterns are exempt, since a solid pattern
+		// really is one colour waiting to be recoloured, and so are the solid
+		// and empty emblems both games ship.
+		if !meantToBeFlat(path) && uniform(pixels) {
 			t.Errorf("%s: decoded to a single flat colour", filepath.Base(path))
 		}
 
@@ -155,10 +156,28 @@ func writePNG(t *testing.T, path string, pixels *Pixels) {
 // as flat property maps, that the tool never reads. A folder without that one
 // is taken whole, so the test can also be pointed at a folder of loose files.
 func readFolders(root string) []string {
-	folder := filepath.Join(root, "gfx", "coat_of_arms")
-	if info, err := os.Stat(folder); err == nil && info.IsDir() {
-		return []string{folder}
+	var folders []string
+
+	// Europa Universalis 5 keeps its artwork in three folders of its own.
+	for _, base := range []string{root, filepath.Join(root, "main_menu"), filepath.Join(root, "in_game"), filepath.Join(root, "loading_screen")} {
+		folder := filepath.Join(base, "gfx", "coat_of_arms")
+		if info, err := os.Stat(folder); err == nil && info.IsDir() {
+			folders = append(folders, folder)
+		}
 	}
 
-	return []string{root}
+	if len(folders) == 0 {
+		return []string{root}
+	}
+
+	return folders
+}
+
+// meantToBeFlat reports whether a texture is one colour by design: every
+// pattern can be, and emblems named solid or empty are.
+func meantToBeFlat(path string) bool {
+	name := strings.ToLower(filepath.Base(path))
+
+	return filepath.Base(filepath.Dir(path)) == "patterns" ||
+		strings.Contains(name, "solid") || strings.Contains(name, "empty")
 }
