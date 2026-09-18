@@ -128,10 +128,11 @@ build.bat
 
 ### Linux
 
-Install Go, a compiler and the X11 and OpenGL development headers:
+Install Go, a compiler and the OpenGL, X11 and Wayland development headers.
+raylib builds GLFW with both of its Linux backends, so it needs both:
 
 ```bash
-sudo apt-get install build-essential xorg-dev libgl1-mesa-dev libasound2-dev
+sudo apt-get install build-essential libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
 ./build.sh
 ```
 
@@ -236,6 +237,28 @@ driver in `internal/uitest`. That is how a test finds "Save" in the settings
 window without knowing where it is, and how it notices when a widget has been
 scrolled out of view or pushed off the edge of the window. Like a user, the
 driver scrolls a widget into view before it clicks it.
+
+## Continuous integration and releases
+
+Every push to `main` and every pull request is vetted, tested and built on
+Linux. Windows takes around ten minutes to compile raylib and Dear ImGui with
+MinGW, so it only runs when the **Build** workflow is started by hand, and for
+every release.
+
+A release is started by hand from the **Release** workflow in the Actions tab,
+choosing whether it is a major, minor or patch release. The workflow:
+
+1. takes the latest release tag, or 0.1.0 when there is none yet, and
+   increases the chosen part of it;
+2. writes the new version into `internal/app/version.go`, then vets, tests and
+   builds on Linux and Windows;
+3. commits the version, tags the commit with it and pushes both, together or
+   not at all, so that a release never tags a `main` that moved on meanwhile;
+4. creates the GitHub release, with a zip of each build and the commits since
+   the last release as its notes.
+
+Nothing is committed, tagged or published unless both builds pass. Tags are
+plain versions such as `1.2.3`.
 
 ## What still has to be ported
 

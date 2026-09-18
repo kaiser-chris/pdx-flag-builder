@@ -11,10 +11,6 @@ import (
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/gui"
 )
 
-// applicationVersion is reported in the about dialog. The Odin version this
-// rewrite follows was at 1.4.0.
-const applicationVersion = "0.1.0-dev"
-
 // How wide the settings window opens, and how narrow it can be made, in
 // unscaled units.
 const (

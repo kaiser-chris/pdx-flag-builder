@@ -1,0 +1,172 @@
+name: Release
+
+# Releases a new version, started by hand from the Actions tab:
+#
+#   1. works out the version from the latest release tag (0.1.0 when there is
+#      none yet) and the part of it to increase,
+#   2. writes it into the code, then vets, tests and builds on Linux and
+#      Windows,
+#   3. commits the version, tags that commit and pushes both,
+#   4. creates the GitHub release with the builds attached.
+#
+# Nothing is committed, tagged or published unless both builds pass, and the
+# commit and the tag are pushed together or not at all.
+
+on:
+  workflow_dispatch:
+    inputs:
+      increment:
+        description: Part of the version to increase
+        type: choice
+        options: [ patch, minor, major ]
+        default: minor
+
+permissions:
+  contents: write
+
+# Two releases at once would work out the same version.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      previous-tag: ${{ steps.version.outputs.previous-tag }}
+      next: ${{ steps.version.outputs.next }}
+
+    steps:
+      - name: Only release from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Releases are made from main, not ${{ github.ref_name }}."
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          # The whole history, for the tags.
+          fetch-depth: 0
+
+      - name: Work out the version
+        id: version
+        run: .github/scripts/next-version.sh "${{ inputs.increment }}" | tee -a "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - { runner: ubuntu-latest, os: linux, binary: pdx-flag-builder, ldflags: "-s -w" }
+          # windowsgui keeps a console window from opening next to the application.
+          - { runner: windows-latest, os: windows, binary: pdx-flag-builder.exe, ldflags: "-s -w -H windowsgui" }
+
+    env:
+      VERSION: ${{ needs.version.outputs.next }}
+      ARCHIVE: pdx-flag-builder_${{ needs.version.outputs.next }}_${{ matrix.os }}_amd64.zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-build
+
+      - name: Set the version
+        shell: bash
+        run: .github/scripts/set-version.sh "$VERSION"
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        shell: bash
+        run: go build -trimpath -ldflags "${{ matrix.ldflags }}" -o "dist/${{ matrix.binary }}" ./cmd/pdx-flag-builder
+
+      # The font is built into the application, and its licence asks to travel
+      # with it.
+      - name: Add the licences
+        shell: bash
+        run: |
+          cp LICENSE dist/LICENSE
+          cp assets/fonts/roboto/OFL.txt dist/Roboto-OFL.txt
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: cd dist && zip -r "../$ARCHIVE" .
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist\* -DestinationPath $env:ARCHIVE
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARCHIVE }}
+          path: ${{ env.ARCHIVE }}
+          if-no-files-found: error
+
+  release:
+    needs: [ version, build ]
+    runs-on: ubuntu-latest
+
+    env:
+      VERSION: ${{ needs.version.outputs.next }}
+      PREVIOUS_TAG: ${{ needs.version.outputs.previous-tag }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The history since the last release, for the release notes.
+          fetch-depth: 0
+
+      - name: Commit and tag the version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          .github/scripts/set-version.sh "$VERSION"
+          git commit --all --message "Release $VERSION"
+          git tag --annotate "$VERSION" --message "Release $VERSION"
+
+      # Atomic: the commit and the tag go up together or not at all. If main
+      # moved on since the release started, the push is refused and nothing
+      # is published.
+      - name: Push the commit and the tag
+        run: git push --atomic origin "HEAD:${{ github.ref }}" "refs/tags/$VERSION"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pdx-flag-builder_*
+          path: dist
+          merge-multiple: true
+
+      - name: Write the release notes
+        run: |
+          # The commits that went into this release, without the version commit.
+          if [ -n "$PREVIOUS_TAG" ]; then
+            range="$PREVIOUS_TAG..$GITHUB_SHA"
+          else
+            range="$GITHUB_SHA"
+          fi
+
+          {
+            echo "Released a new version of **pdx-flag-builder**."
+            echo
+            echo "### Changes"
+            git log "$range" --no-merges --pretty=format:'- %s'
+            echo
+          } > notes.md
+
+          cat notes.md
+
+      - name: Create the release
+        run: |
+          gh release create "$VERSION" dist/*.zip \
+            --title "$VERSION" \
+            --notes-file notes.md \
+            --verify-tag

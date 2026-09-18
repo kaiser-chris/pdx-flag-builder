@@ -1,0 +1,31 @@
+name: Set up the build
+description: >
+  Installs Go with its module and build caches, and what cgo needs to compile
+  raylib and Dear ImGui on the runner's platform.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+        # Caches the modules and the build cache. The C and C++ of raylib and
+        # Dear ImGui are most of a build, and are only compiled again when
+        # go.sum changes.
+        cache: true
+
+    # raylib builds GLFW with both of its Linux backends, X11 and Wayland, so
+    # it needs the headers of both, and xkbcommon for keyboard layouts.
+    - name: Install Linux build dependencies
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
+
+    # The Windows runner ships MinGW with MSYS2 but does not put it on PATH.
+    - name: Add MinGW to PATH
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: echo "C:\msys64\mingw64\bin" >> $env:GITHUB_PATH

@@ -2,37 +2,42 @@ name: Build
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ main ]
   pull_request:
+  # Runs the Windows build as well, on request.
+  workflow_dispatch:
 
 jobs:
-  build:
-    name: ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ ubuntu-latest, windows-latest ]
+  linux:
+    name: ubuntu-latest
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
+      - uses: ./.github/actions/setup-build
 
-      # raylib links against X11 and OpenGL, and Dear ImGui needs a C++ compiler.
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xorg-dev libgl1-mesa-dev libasound2-dev
+      - name: Vet
+        run: go vet ./...
 
-      # The Windows runner ships MinGW with MSYS2 but does not put it on PATH.
-      - name: Add MinGW to PATH
-        if: runner.os == 'Windows'
-        run: echo "C:\msys64\mingw64\bin" >> $env:GITHUB_PATH
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: go build -trimpath -o bin/ ./cmd/pdx-flag-builder
+
+  # Compiling raylib and Dear ImGui with MinGW takes around ten minutes on the
+  # hosted Windows runner, too long for every push. It runs when started by
+  # hand, and every release builds and tests on Windows before publishing.
+  windows:
+    name: windows-latest
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-build
 
       - name: Vet
         run: go vet ./...
