@@ -89,7 +89,7 @@ func TestReorderAndRemoveLayers(t *testing.T) {
 
 	// A second layer, from the texture database this time.
 	driver.Menu("Databases", windowTextureDatabase)
-	driver.Click("", labelAddAsLayer)
+	driver.ClickItem(rowButton(t, driver, "ce_square.png", labelAddAsLayer))
 	application.state.showTextureDatabase = false
 	driver.Frames(2)
 

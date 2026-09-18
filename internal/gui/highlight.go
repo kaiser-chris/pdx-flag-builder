@@ -46,6 +46,9 @@ func MatchRanges(text, query string) [][2]int {
 func HighlightedText(text, query string) {
 	markMatches(imgui.CursorScreenPos(), text, query)
 	imgui.TextUnformatted(text)
+
+	// Recorded like a widget, so that a test can find the row a name is in.
+	record(text, false)
 }
 
 // HighlightedSelectable is a selectable row labelled with text, with every

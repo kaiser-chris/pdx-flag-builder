@@ -21,6 +21,10 @@ var (
 	patternFirst  = color.RGBA{R: 255, A: 255}
 	patternSecond = color.RGBA{R: 255, G: 255, A: 255}
 	emblemFirst   = color.RGBA{B: 128, A: 255}
+
+	// texturedMark is the colour of the fixture's textured emblem, which is
+	// drawn as it is: nothing in a flag recolours it.
+	texturedMark = color.RGBA{R: 200, G: 120, B: 40, A: 255}
 )
 
 // Colours the fixture's named colour file defines, deliberately pure so that a
@@ -60,8 +64,9 @@ colors = {
 `
 
 // newFixtureGame lays out a tiny game folder: two coats of arms, three named
-// colours, a pattern split into its two marker colours top and bottom, and a
-// square emblem in the first emblem marker colour.
+// colours, a pattern split into its two marker colours top and bottom, a
+// square emblem in the first emblem marker colour and a textured emblem of one
+// plain colour.
 func newFixtureGame(t *testing.T) string {
 	t.Helper()
 
@@ -81,6 +86,9 @@ func newFixtureGame(t *testing.T) string {
 
 	writePNG(t, filepath.Join(root, "gfx", "coat_of_arms", "colored_emblems", "ce_square.png"), 32, 32,
 		func(int, int) color.RGBA { return emblemFirst })
+
+	writePNG(t, filepath.Join(root, "gfx", "coat_of_arms", "textured_emblems", "te_mark.png"), 32, 32,
+		func(int, int) color.RGBA { return texturedMark })
 
 	return root
 }
