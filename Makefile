@@ -11,7 +11,7 @@ endif
 
 OUTPUT := bin/$(PLATFORM)/$(BINARY_NAME)
 
-.PHONY: build release run test uitest vet fmt tidy clean
+.PHONY: build release msix run test uitest vet fmt tidy clean
 
 
 ## build: compile a development binary
@@ -25,6 +25,10 @@ ifeq ($(OS),Windows_NT)
 else
 	go build -trimpath -ldflags "-s -w" -o $(OUTPUT) $(PACKAGE)
 endif
+
+## msix: pack a Microsoft Store package into bin/msix; Windows only, needs the Windows SDK
+msix:
+	powershell -NoProfile -ExecutionPolicy Bypass -File packaging/msix/build-msix.ps1
 
 ## run: build and start the application
 run: build

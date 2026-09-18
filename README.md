@@ -141,9 +141,25 @@ With `make` installed, the `Makefile` covers the everyday tasks:
 | `make build`   | Builds a development executable into `bin/` |
 | `make run`     | Builds it and starts it |
 | `make release` | Builds an optimised executable, without a console window on Windows |
+| `make msix`    | Packs a Microsoft Store package on Windows, see below |
 | `make test`    | Runs the tests |
 | `make uitest`  | Runs the interface tests as well, which open a hidden window and so need a display |
 | `make vet`     | Checks the code with `go vet` |
+
+### Microsoft Store package
+
+`packaging/msix/build-msix.ps1` builds the Windows executable and packs it into an
+MSIX package for the Microsoft Store, in `bin/msix`. It needs the Windows SDK,
+whose `makeappx` and `makepri` do the packing, besides Go and MinGW:
+
+```bat
+powershell -ExecutionPolicy Bypass -File packaging\msix\build-msix.ps1
+```
+
+The package takes its version from the code, so running it on a release commit
+packs that release. It is not signed; the Store signs what it publishes.
+
+### Tests
 
 The tests that read a real installation run when `PDX_GAME_DIR` points at a game
 or mod folder:

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The package manifest for the Microsoft Store. build-msix.ps1 replaces
+  $VERSION$ with the version it packs.
+
+  The identity, the display names and the application id are the ones the
+  Store listing was created with; changing them makes a different app.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap10 rescap">
+
+  <Identity
+    Name="ChrisBahmutKaiser.PDXFlagBuilder"
+    Publisher="CN=DF95829D-20FA-471F-BF70-6EE0E21C1083"
+    Version="$VERSION$"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>PDX Flag Builder</DisplayName>
+    <PublisherDisplayName>Chris 'Bahmut' Kaiser</PublisherDisplayName>
+    <Description>PDX Flag Builder is a tool to build flags for Victoria 3 and Europa Universalis 5.</Description>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <uap10:PackageIntegrity>
+      <uap10:Content Enforcement="on" />
+    </uap10:PackageIntegrity>
+  </Properties>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22000.1" />
+  </Dependencies>
+
+  <!--
+    The application starts directly. It keeps its settings in %AppData%, which
+    Windows gives every packaged application its own copy of, and carries its
+    assets inside the executable, so it needs none of the launcher fixes the
+    Package Support Framework offers.
+  -->
+  <Applications>
+    <Application Id="PDXFLAGBUILDER" Executable="pdx-flag-builder.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        BackgroundColor="transparent"
+        DisplayName="PDX Flag Builder"
+        Description="PDX Flag Builder"
+        Square150x150Logo="Assets\PDXFLAGBUILDER-Square150x150Logo.png"
+        Square44x44Logo="Assets\PDXFLAGBUILDER-Square44x44Logo.png">
+        <uap:DefaultTile
+          Wide310x150Logo="Assets\PDXFLAGBUILDER-Wide310x150Logo.png"
+          Square310x310Logo="Assets\PDXFLAGBUILDER-Square310x310Logo.png"
+          Square71x71Logo="Assets\PDXFLAGBUILDER-Square71x71Logo.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>
