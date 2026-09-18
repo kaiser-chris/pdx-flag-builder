@@ -5,4 +5,4 @@ package app
 // The release workflow writes the version it releases into this line, with
 // .github/scripts/set-version.sh, and commits it. Keep the line as it is:
 // the script finds it by its shape, which a test in this package checks.
-const applicationVersion = "2.0.0"
+const applicationVersion = "2.0.1"
