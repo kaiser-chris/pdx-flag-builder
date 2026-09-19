@@ -15,8 +15,9 @@ Download the zip for your system from the
 [releases page](https://github.com/kaiser-chris/pdx-flag-builder/releases),
 extract it anywhere and run `pdx-flag-builder`.
 
-On Linux the file dialogs need `zenity` or `kdialog`, one of which most desktops
-already have.
+On Linux the tool needs a distribution with glibc 2.38 or newer, such as Ubuntu
+24.04, Debian 13 or Fedora 39, and its file dialogs need `zenity` or `kdialog`,
+one of which most desktops already have.
 
 ### Setup
 
