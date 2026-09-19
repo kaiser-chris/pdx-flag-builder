@@ -65,7 +65,7 @@ func TestSetAsPatternFromTheTextureDatabase(t *testing.T) {
 
 	driver.Menu("File", "New Flag")
 	driver.Menu("Databases", windowTextureDatabase)
-	driver.Click("", labelSetPattern)
+	driver.ClickItem(rowButton(t, driver, "pattern_split.png", labelSetPattern))
 
 	if application.state.flag.Pattern != "pattern_split.png" {
 		t.Errorf("pattern = %q, want the one set from the texture database", application.state.flag.Pattern)

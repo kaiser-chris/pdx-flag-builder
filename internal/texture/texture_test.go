@@ -2,6 +2,12 @@ package texture
 
 import (
 	"encoding/binary"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -266,5 +272,54 @@ func TestIsBC7(t *testing.T) {
 
 	if IsBC7([]byte("not a dds file at all")) {
 		t.Error("rubbish was taken for BC7")
+	}
+}
+
+// The DXT pixel formats handed to raylib have to be the numbers raylib's C
+// enum gives them, which raylib-go's constants are not. raylib.h is read from
+// the raylib-go module, so an update that renumbers them fails here.
+func TestDXTFormatsMatchRaylib(t *testing.T) {
+	output, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/gen2brain/raylib-go/raylib").Output()
+	if err != nil {
+		t.Skipf("the raylib-go module is not at hand: %v", err)
+	}
+
+	header, err := os.ReadFile(filepath.Join(strings.TrimSpace(string(output)), "raylib.h"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Read the enum the way the C compiler numbers it.
+	enum := regexp.MustCompile(`(?s)typedef enum \{\s*(PIXELFORMAT_UNCOMPRESSED_GRAYSCALE = 1.*?)\} PixelFormat;`).FindSubmatch(header)
+	if enum == nil {
+		t.Fatal("the PixelFormat enum was not found in raylib.h")
+	}
+
+	values := map[string]int{}
+	next := 0
+
+	for _, line := range strings.Split(string(enum[1]), "\n") {
+		name := regexp.MustCompile(`^\s*(PIXELFORMAT_\w+)\s*(?:=\s*(\d+))?`).FindStringSubmatch(line)
+		if name == nil {
+			continue
+		}
+
+		if name[2] != "" {
+			next, _ = strconv.Atoi(name[2])
+		}
+
+		values[name[1]] = next
+		next++
+	}
+
+	for format, name := range map[DXTFormat]string{
+		DXT1:      "PIXELFORMAT_COMPRESSED_DXT1_RGB",
+		DXT1Alpha: "PIXELFORMAT_COMPRESSED_DXT1_RGBA",
+		DXT3:      "PIXELFORMAT_COMPRESSED_DXT3_RGBA",
+		DXT5:      "PIXELFORMAT_COMPRESSED_DXT5_RGBA",
+	} {
+		if got, want := int(dxtFormats[format]), values[name]; got != want {
+			t.Errorf("%s is handed to raylib as %d, raylib.h says %d", name, got, want)
+		}
 	}
 }

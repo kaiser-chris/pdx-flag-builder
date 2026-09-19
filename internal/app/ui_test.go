@@ -190,3 +190,20 @@ func TestInterfaceScaleSetting(t *testing.T) {
 		}
 	}
 }
+
+// Most of the base game's textures are DXT5 with mipmaps. They are read here
+// rather than by raylib, whose reader overruns its buffer on them, and have
+// to reach the GPU in the right format and be recoloured like any other.
+func TestDXTPatternIsDrawn(t *testing.T) {
+	application, driver := startApp(t)
+
+	driver.Menu("Databases", windowFlagDatabase)
+	driver.Click("", "TST_dxt")
+	waitForArtwork(t, application, driver, 1)
+
+	for _, point := range [][2]int{{100, 100}, {384, 256}, {700, 450}} {
+		if got := pixel(application, point[0], point[1]); !near(got, fixtureGreen) {
+			t.Errorf("pixel %v = %v, want the flag's colour %v all over", point, got, fixtureGreen)
+		}
+	}
+}

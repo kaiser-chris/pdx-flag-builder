@@ -28,7 +28,7 @@ func TestDecodeInstalledTextures(t *testing.T) {
 		}
 	}
 
-	var targa, bc7 int
+	var targa, bc7, dxt int
 
 	visit := func(path string, entry os.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
@@ -57,6 +57,18 @@ func TestDecodeInstalledTextures(t *testing.T) {
 			bc7++
 
 		default:
+			// DXT stays compressed for the GPU, so the check is that the
+			// largest level is all there.
+			if _, ok, err := ReadDDSDXT(data); ok {
+				dxt++
+
+				if err != nil {
+					t.Errorf("%s: %v", filepath.Base(path), err)
+				}
+
+				return nil
+			}
+
 			// Everything else is raylib's job and is covered by the loading
 			// test in the application rather than here.
 			return nil
@@ -95,9 +107,9 @@ func TestDecodeInstalledTextures(t *testing.T) {
 		}
 	}
 
-	t.Logf("decoded %d targa and %d BC7 files", targa, bc7)
+	t.Logf("decoded %d targa and %d BC7 files, read %d DXT files", targa, bc7, dxt)
 
-	if targa == 0 && bc7 == 0 {
+	if targa == 0 && bc7 == 0 && dxt == 0 {
 		t.Skip("the folder held no files these decoders handle")
 	}
 }

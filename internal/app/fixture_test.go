@@ -3,6 +3,7 @@
 package app
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"image"
 	"image/color"
@@ -40,6 +41,11 @@ TST_split = {
 	pattern = "pattern_split.png"
 	color1 = "blue"
 	color2 = "white"
+}
+
+TST_dxt = {
+	pattern = "pattern_dxt.dds"
+	color1 = "green"
 }
 
 TST_emblem = {
@@ -89,6 +95,10 @@ func newFixtureGame(t *testing.T) string {
 
 	writePNG(t, filepath.Join(root, "gfx", "coat_of_arms", "textured_emblems", "te_mark.png"), 32, 32,
 		func(int, int) color.RGBA { return texturedMark })
+
+	// The first pattern marker colour again, as DXT5 with a full chain of
+	// mipmap levels, the way most of the base game's textures come.
+	writeDXT5(t, filepath.Join(root, "gfx", "coat_of_arms", "patterns", "pattern_dxt.dds"), 768, 512, patternFirst)
 
 	// Coloured on its left half only, so that a mirrored copy can be told from
 	// one drawn the right way round.
@@ -223,4 +233,46 @@ func writePNG(t *testing.T, path string, width, height int, paint func(x, y int)
 	if err := png.Encode(file, picture); err != nil {
 		t.Fatalf("encode %s: %v", path, err)
 	}
+}
+
+// writeDXT5 writes a DXT5 compressed DDS file of one colour, with every
+// mipmap level down to one pixel.
+func writeDXT5(t *testing.T, path string, width, height int, fill color.RGBA) {
+	t.Helper()
+
+	// Both endpoints the same colour and every index zero: every pixel of
+	// the block is the first endpoint.
+	rgb565 := uint16(fill.R>>3)<<11 | uint16(fill.G>>2)<<5 | uint16(fill.B>>3)
+	block := []byte{
+		fill.A, fill.A, 0, 0, 0, 0, 0, 0, // alpha: both endpoints, all indices zero
+		byte(rgb565), byte(rgb565 >> 8), byte(rgb565), byte(rgb565 >> 8), 0, 0, 0, 0,
+	}
+
+	levels := 1
+	for size := max(width, height); size > 1; size /= 2 {
+		levels++
+	}
+
+	header := make([]byte, 128)
+	copy(header[0:4], "DDS ")
+	binary.LittleEndian.PutUint32(header[4:], 124)
+	binary.LittleEndian.PutUint32(header[8:], 0x000A1007) // caps, height, width, pixel format, mipmap count, linear size
+	binary.LittleEndian.PutUint32(header[12:], uint32(height))
+	binary.LittleEndian.PutUint32(header[16:], uint32(width))
+	binary.LittleEndian.PutUint32(header[20:], uint32(width*height))
+	binary.LittleEndian.PutUint32(header[28:], uint32(levels))
+	binary.LittleEndian.PutUint32(header[76:], 32)
+	binary.LittleEndian.PutUint32(header[80:], 0x4)
+	copy(header[84:88], "DXT5")
+
+	data := header
+
+	for level := range levels {
+		blocks := (max(width>>level, 1) + 3) / 4 * ((max(height>>level, 1) + 3) / 4)
+		for range blocks {
+			data = append(data, block...)
+		}
+	}
+
+	writeFile(t, path, string(data))
 }

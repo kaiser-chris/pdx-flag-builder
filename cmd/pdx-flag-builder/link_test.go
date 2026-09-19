@@ -66,3 +66,39 @@ func TestNeedsOnlyDLLsOfWindows(t *testing.T) {
 		}
 	}
 }
+
+// TestRunsOnTheStoreHeap builds the executable and checks its manifest asks
+// for the segment heap, the one Store installs get, so that a build started
+// any other way fails the same way; see internal/gui/resources.go.
+func TestRunsOnTheStoreHeap(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds the executable")
+	}
+
+	executable := filepath.Join(t.TempDir(), "pdx-flag-builder.exe")
+
+	build := exec.Command("go", "build", "-o", executable, ".")
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, output)
+	}
+
+	file, err := pe.Open(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	resources := file.Section(".rsrc")
+	if resources == nil {
+		t.Fatal("the executable carries no resources, so no manifest")
+	}
+
+	data, err := resources.Data()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(string(data), "<heapType") || !strings.Contains(string(data), "SegmentHeap") {
+		t.Error("the executable's manifest does not ask for the segment heap")
+	}
+}
