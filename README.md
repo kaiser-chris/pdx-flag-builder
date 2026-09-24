@@ -97,6 +97,16 @@ The tool is written in Go and draws with [raylib](https://www.raylib.com/) and
 [Dear ImGui](https://github.com/ocornut/imgui). Both are C and C++ libraries that
 are compiled along with it, so a C and C++ compiler is needed as well as Go.
 
+The game's files are read by
+[pdx-parser-go](https://github.com/kaiser-chris/pdx-parser-go), which knows the
+script language of the Paradox games, how a game and its mods are combined, and
+how a coat of arms is written. To build against a checkout of it next to this
+one, rather than the released version, put a `go.work` beside this file:
+
+```
+go work init . ../pdx-parser-go
+```
+
 The first build compiles raylib and Dear ImGui and takes a few minutes. Later
 builds use Go's build cache and take seconds.
 

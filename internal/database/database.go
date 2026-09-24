@@ -1,10 +1,20 @@
 // Package database reads the coats of arms, colours and textures of a
 // configured game or mod folder.
 //
-// The two supported games keep the same files in the same places; Europa
-// Universalis 5 just splits them across three roots instead of one. Everything
-// here is plain file reading with no graphics involved, so it can run off the
-// interface goroutine while the application stays responsive.
+// The files themselves are read by the pdx-parser-go library, which knows
+// where the games keep them, how a game and its mods are combined, and how to
+// read what is in them. What this package adds is the editor's view of it: one
+// database per configured folder, so that the interface can show which folder
+// every flag and every texture came from, and edit the one the user picked.
+//
+// A folder is read with the folders configured before it underneath it, the
+// way the games load a mod on top of the game, and only what the folder
+// itself defines is kept. A mod that changes a flag of the game therefore
+// shows the flag as the game will draw it, while the game's own version stays
+// listed under the game.
+//
+// Everything here is plain file reading with no graphics involved, so it can
+// run off the interface goroutine while the application stays responsive.
 package database
 
 import (
@@ -14,8 +24,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/kaiser-chris/pdx-parser-go/folders"
+	"github.com/kaiser-chris/pdx-parser-go/report"
+	"github.com/kaiser-chris/pdx-parser-go/victoria3"
+
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/pdx"
-	"github.com/kaiser-chris/pdx-flag-builder-go/internal/pdx/script"
 )
 
 // Game is the folder layout a database follows.
@@ -38,22 +51,14 @@ func (g Game) String() string {
 	return "Unknown"
 }
 
-// Folder names shared by both games.
+// Folders that tell the two games apart.
 const (
-	folderCommon          = "common"
-	folderGfx             = "gfx"
-	folderCoatOfArms      = "coat_of_arms"
-	folderNamedColors     = "named_colors"
-	folderPatterns        = "patterns"
-	folderColoredEmblems  = "colored_emblems"
-	folderTexturedEmblems = "textured_emblems"
+	folderCommon = "common"
+	folderGfx    = "gfx"
 )
 
 // europaRoots are the three folders Europa Universalis 5 splits its data over.
 var europaRoots = []string{"main_menu", "loading_screen", "in_game"}
-
-// textureExtensions are the image formats the games load coat of arms art from.
-var textureExtensions = []string{".dds", ".tga", ".png"}
 
 // TextureKind is which part of a coat of arms a texture can be used for.
 type TextureKind uint8
@@ -75,6 +80,14 @@ func (k TextureKind) String() string {
 	}
 
 	return "Unknown"
+}
+
+// textureKinds maps the kinds the library reads to the kinds here, which are
+// the same three under the names the interface shows.
+var textureKinds = map[victoria3.TextureKind]TextureKind{
+	victoria3.PatternTexture:        PatternTexture,
+	victoria3.ColoredEmblemTexture:  ColoredEmblemTexture,
+	victoria3.TexturedEmblemTexture: TexturedEmblemTexture,
 }
 
 // Texture is one image a coat of arms can refer to.
@@ -137,10 +150,41 @@ func Detect(path string) Game {
 	return GameUnknown
 }
 
-// Load reads one configured folder. It fails only when the folder itself cannot
-// be used; anything missing inside it is left empty, because a mod that only
-// adds emblems is perfectly normal.
+// Load reads one configured folder on its own. It fails only when the folder
+// itself cannot be used; anything missing inside it is left empty, because a
+// mod that only adds emblems is perfectly normal.
 func Load(folder Folder) (*Database, error) {
+	return load([]Folder{folder}, 0)
+}
+
+// LoadAll reads every configured folder, in order, each with the folders
+// before it underneath it.
+func LoadAll(configured []Folder) (Set, []Problem) {
+	var (
+		set      Set
+		problems []Problem
+	)
+
+	for index := range configured {
+		database, err := load(configured, index)
+		if err != nil {
+			problems = append(problems, Problem{Path: configured[index].Path, Message: err.Error()})
+
+			continue
+		}
+
+		problems = append(problems, database.Problems...)
+		set = append(set, database)
+	}
+
+	return set, problems
+}
+
+// load reads the folder at index of the configured folders, with the ones
+// before it loaded underneath it.
+func load(configured []Folder, index int) (*Database, error) {
+	folder := configured[index]
+
 	info, err := os.Stat(folder.Path)
 	if err != nil {
 		return nil, fmt.Errorf("open folder %q: %w", folder.Path, err)
@@ -150,22 +194,27 @@ func Load(folder Folder) (*Database, error) {
 		return nil, fmt.Errorf("%q is not a folder", folder.Path)
 	}
 
+	sources := make([]folders.Source, 0, index+1)
+
+	for _, earlier := range configured[:index+1] {
+		if earlier.Path != "" {
+			sources = append(sources, folders.Source{Name: earlier.Name, Path: earlier.Path})
+		}
+	}
+
+	set := folders.Open(sources)
+	heraldry := victoria3.LoadHeraldry(set)
+
 	database := &Database{
 		Name:    folder.Name,
 		Path:    folder.Path,
 		Game:    Detect(folder.Path),
-		Palette: pdx.Palette{},
+		Palette: heraldry.Colors,
 	}
 
-	for _, root := range database.roots() {
-		database.readPalette(filepath.Join(root, folderCommon, folderNamedColors))
-		database.readFlags(filepath.Join(root, folderCommon, folderCoatOfArms, folderCoatOfArms))
-
-		gfx := filepath.Join(root, folderGfx, folderCoatOfArms)
-		database.readTextures(filepath.Join(gfx, folderPatterns), PatternTexture)
-		database.readTextures(filepath.Join(gfx, folderColoredEmblems), ColoredEmblemTexture)
-		database.readTextures(filepath.Join(gfx, folderTexturedEmblems), TexturedEmblemTexture)
-	}
+	database.readFlags(heraldry)
+	database.readTextures(heraldry)
+	database.readProblems(set.Diagnostics, heraldry.Diagnostics)
 
 	sort.Slice(database.Flags, func(first, second int) bool {
 		return database.Flags[first].Name < database.Flags[second].Name
@@ -178,161 +227,95 @@ func Load(folder Folder) (*Database, error) {
 	return database, nil
 }
 
-// LoadAll reads every configured folder, in order.
-func LoadAll(folders []Folder) (Set, []Problem) {
-	var (
-		set      Set
-		problems []Problem
-	)
-
-	for _, folder := range folders {
-		database, err := Load(folder)
-		if err != nil {
-			problems = append(problems, Problem{Path: folder.Path, Message: err.Error()})
-
+// readFlags keeps the coats of arms this folder defines or changes. The rest
+// belongs to the folders underneath it, which are listed as databases of
+// their own.
+func (d *Database) readFlags(heraldry *victoria3.Heraldry) {
+	for _, arms := range heraldry.CoatOfArms.All() {
+		origin, ok := d.origin(arms)
+		if !ok {
 			continue
 		}
 
-		problems = append(problems, database.Problems...)
-		set = append(set, database)
+		d.Flags = append(d.Flags, pdx.FromCoatOfArms(arms, origin))
 	}
-
-	return set, problems
 }
 
-// roots returns the folders to read, which for Europa Universalis 5 is one per
-// part of the game and for everything else is the folder itself.
-func (d *Database) roots() []string {
-	if d.Game != GameEuropaUniversalis5 {
-		return []string{d.Path}
-	}
+// origin is where in this folder a coat of arms was written, which is the
+// file the editor writes it back to. A flag the folder does not touch has
+// none.
+func (d *Database) origin(arms *victoria3.CoatOfArms) (pdx.Origin, bool) {
+	origin := pdx.Origin{Database: d.Name, Key: arms.Key}
+	found := false
 
-	roots := make([]string, 0, len(europaRoots))
-	for _, root := range europaRoots {
-		full := filepath.Join(d.Path, root)
-		if isDirectory(full) {
-			roots = append(roots, full)
-		}
-	}
-
-	return roots
-}
-
-func (d *Database) readFlags(folder string) {
-	for _, path := range scriptFiles(folder) {
-		document, err := parseFile(path)
-		if err != nil {
-			d.Problems = append(d.Problems, Problem{Path: path, Message: err.Error()})
-
+	// The last one wins: a folder that both defines a flag and injects into
+	// it is edited where it said the most about it.
+	for _, source := range arms.Origins {
+		if !d.holds(source.Path) {
 			continue
 		}
 
-		for _, warning := range document.Warnings {
-			d.Problems = append(d.Problems, Problem{Path: path, Message: warning.String()})
-		}
-
-		origin := pdx.Origin{
-			Database: d.Name,
-			File:     filepath.Base(path),
-			Path:     path,
-		}
-
-		flags, issues := pdx.DecodeFlags(document, origin)
-
-		for _, issue := range issues {
-			d.Problems = append(d.Problems, Problem{Path: path, Message: issue.String()})
-		}
-
-		d.Flags = append(d.Flags, flags...)
+		origin.File = filepath.Base(source.Path)
+		origin.Path = source.Path
+		origin.Line = source.Line
+		found = true
 	}
+
+	return origin, found
 }
 
-func (d *Database) readPalette(folder string) {
-	for _, path := range scriptFiles(folder) {
-		document, err := parseFile(path)
-		if err != nil {
-			d.Problems = append(d.Problems, Problem{Path: path, Message: err.Error()})
-
-			continue
-		}
-
-		palette, issues := pdx.DecodePalette(document)
-
-		for _, issue := range issues {
-			d.Problems = append(d.Problems, Problem{Path: path, Message: issue.String()})
-		}
-
-		// Later files override earlier ones, the way the games read them.
-		for name, color := range palette {
-			d.Palette[name] = color
-		}
-	}
-}
-
-func (d *Database) readTextures(folder string, kind TextureKind) {
-	entries, err := os.ReadDir(folder)
-	if err != nil {
-		// A folder a mod does not have is not a problem worth reporting.
-		return
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() || !hasTextureExtension(entry.Name()) {
+func (d *Database) readTextures(heraldry *victoria3.Heraldry) {
+	for _, texture := range heraldry.Textures {
+		if !d.holds(texture.Path) {
 			continue
 		}
 
 		d.Textures = append(d.Textures, Texture{
-			Name:     entry.Name(),
-			Path:     filepath.Join(folder, entry.Name()),
-			Kind:     kind,
+			Name:     filepath.Base(texture.Path),
+			Path:     texture.Path,
+			Kind:     textureKinds[texture.Kind],
 			Database: d.Name,
 		})
 	}
 }
 
-func parseFile(path string) (*script.Document, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+// readProblems keeps the diagnostics about this folder's own files that a mod
+// author can act on. What the library reports at info severity is not a
+// problem but a remark, such as one file overriding another, and would only
+// bury the rest.
+func (d *Database) readProblems(diagnostics ...report.Diagnostics) {
+	for _, group := range diagnostics {
+		for _, diagnostic := range group.Filter(report.SeverityWarning) {
+			if !d.holds(diagnostic.Path) {
+				continue
+			}
 
-	return script.Parse(string(data))
-}
+			message := diagnostic.Message
+			if diagnostic.Line > 0 {
+				message = fmt.Sprintf("line %d: %s", diagnostic.Line, message)
+			}
 
-// scriptFiles lists the script files of a folder, sorted by name. The games
-// read them in that order and let later files override earlier ones, which is
-// what the leading numbers in their file names are for.
-func scriptFiles(folder string) []string {
-	entries, err := os.ReadDir(folder)
-	if err != nil {
-		return nil
-	}
+			if diagnostic.Subject != "" {
+				message = diagnostic.Subject + ": " + message
+			}
 
-	var paths []string
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".txt") {
-			continue
-		}
-
-		paths = append(paths, filepath.Join(folder, entry.Name()))
-	}
-
-	sort.Strings(paths)
-
-	return paths
-}
-
-func hasTextureExtension(name string) bool {
-	extension := strings.ToLower(filepath.Ext(name))
-
-	for _, candidate := range textureExtensions {
-		if extension == candidate {
-			return true
+			d.Problems = append(d.Problems, Problem{Path: diagnostic.Path, Message: message})
 		}
 	}
+}
 
-	return false
+// holds reports whether a file lies inside this folder, which is how what the
+// folder itself holds is told apart from what it was loaded on top of. A
+// folder holds the files of its downloadable content as well, which the
+// library reads as folders of their own.
+func (d *Database) holds(path string) bool {
+	if path == "" {
+		return false
+	}
+
+	relative, err := filepath.Rel(d.Path, path)
+
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
 func isDirectory(path string) bool {

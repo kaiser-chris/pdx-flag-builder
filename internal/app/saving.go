@@ -13,8 +13,8 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/pdx"
-	"github.com/kaiser-chris/pdx-flag-builder-go/internal/pdx/script"
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/render"
+	"github.com/kaiser-chris/pdx-parser-go/script"
 )
 
 // Labels of the File menu's save and export actions.

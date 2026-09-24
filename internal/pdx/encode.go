@@ -9,6 +9,28 @@ import (
 	"strings"
 )
 
+// The keys and tags the writer spells a coat of arms with. The reader knows
+// them too, in the parser library; they are repeated here because what this
+// writes is a layout of its own, not a copy of what was read.
+const (
+	keyPattern        = "pattern"
+	keyColoredEmblem  = "colored_emblem"
+	keyTexturedEmblem = "textured_emblem"
+	keySub            = "sub"
+	keyTexture        = "texture"
+	keyParent         = "parent"
+	keyInstance       = "instance"
+	keyMask           = "mask"
+	keyPosition       = "position"
+	keyScale          = "scale"
+	keyRotation       = "rotation"
+	keyOffset         = "offset"
+
+	tagRGB    = "rgb"
+	tagHSV360 = "hsv360"
+	tagList   = "list"
+)
+
 // Script writes a coat of arms as script, laid out the way the games' own
 // files lay one out: the pattern and the colours first, then one block per
 // layer, and in it one block per placement. lineBreak is "\n" or "\r\n", to
@@ -162,7 +184,7 @@ func vector(value Vec2) string {
 const numberDecimals = 4
 
 // number writes a number as short as it can be: 0.5 rather than 0.500000.
-func number(value float32) string {
+func number[T float32 | float64](value T) string {
 	scale := math.Pow(10, numberDecimals)
 	rounded := math.Round(float64(value)*scale) / scale
 

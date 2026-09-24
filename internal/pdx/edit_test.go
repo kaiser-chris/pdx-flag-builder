@@ -1,7 +1,6 @@
 package pdx
 
 import (
-	"image/color"
 	"slices"
 	"testing"
 )
@@ -49,10 +48,10 @@ func TestRemoveItem(t *testing.T) {
 	}
 }
 
-func TestColorsRemove(t *testing.T) {
+func TestRemoveColor(t *testing.T) {
 	colors := Colors{{Slot: "color1"}, {Slot: "color2"}, {Slot: "color3"}}
 
-	if !colors.Remove("color2") {
+	if !RemoveColor(&colors, "color2") {
 		t.Fatal("removing a filled slot reported nothing removed")
 	}
 
@@ -60,7 +59,7 @@ func TestColorsRemove(t *testing.T) {
 		t.Errorf("colours = %+v, want color1 and color3 in order", colors)
 	}
 
-	if colors.Remove("color9") {
+	if RemoveColor(&colors, "color9") {
 		t.Error("removing an empty slot reported something removed")
 	}
 }
@@ -104,42 +103,11 @@ func TestCloneDoesNotShareLayers(t *testing.T) {
 	edited := clone.Layers[0].(*ColoredEmblem)
 	edited.Mask = 2
 	edited.Instances[0].Rotation = 45
-	edited.Colors.Remove("color1")
+	RemoveColor(&edited.Colors, "color1")
 
 	source := original.Layers[0].(*ColoredEmblem)
 
 	if source.Mask != 0 || source.Instances[0].Rotation != 0 || len(source.Colors) != 2 {
 		t.Errorf("editing the clone changed the original: %+v", source)
-	}
-}
-
-func TestRGBToHSVRoundTrip(t *testing.T) {
-	for _, value := range []color.RGBA{
-		{R: 255, A: 255}, {G: 255, A: 255}, {B: 255, A: 255},
-		{R: 200, G: 30, B: 90, A: 255}, {R: 12, G: 140, B: 60, A: 255},
-		{A: 255}, {R: 255, G: 255, B: 255, A: 255}, {R: 128, G: 128, B: 128, A: 255},
-	} {
-		hue, saturation, brightness := RGBToHSV(value)
-		back := HSVToRGB(hue, saturation, brightness)
-
-		if back != value {
-			t.Errorf("%v went to hsv %v %v %v and came back as %v", value, hue, saturation, brightness, back)
-		}
-	}
-}
-
-func TestPaletteNearest(t *testing.T) {
-	palette := Palette{
-		"red":   {R: 200, A: 255},
-		"blue":  {B: 200, A: 255},
-		"white": {R: 250, G: 250, B: 250, A: 255},
-	}
-
-	if name, _ := palette.Nearest(color.RGBA{R: 180, G: 20, A: 255}); name != "red" {
-		t.Errorf("nearest to a dark red = %q, want red", name)
-	}
-
-	if _, ok := (Palette{}).Nearest(color.RGBA{}); ok {
-		t.Error("an empty palette found a nearest colour")
 	}
 }

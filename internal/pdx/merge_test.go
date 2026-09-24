@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/kaiser-chris/pdx-flag-builder-go/internal/pdx/script"
 )
 
 func TestMergeReplacesTheDefinitionInPlace(t *testing.T) {
@@ -164,14 +162,7 @@ func TestMergeIntoInstalledGameFiles(t *testing.T) {
 func decodeAll(t *testing.T, content string) []Flag {
 	t.Helper()
 
-	document, err := script.Parse(content)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	flags, _ := DecodeFlags(document, Origin{})
-
-	return flags
+	return readFlags(content)
 }
 
 // scriptsOf maps every flag of a file to its script, which is an easy way to

@@ -1,10 +1,23 @@
+// Package pdx holds the coat of arms model the editor works on.
+//
+// A coat of arms is a pattern with a stack of layers drawn over it. Layers
+// and the flag itself carry numbered colour slots, and a layer can refer back
+// to a slot of the flag it belongs to, so colours are only resolved once
+// everything has been read.
+//
+// The files themselves are read by the pdx-parser-go library, which knows the
+// script language and how the games combine a game with its mods.
+// FromCoatOfArms turns what it read into the model here; Script and Merge
+// write a flag back out.
 package pdx
+
+import "github.com/kaiser-chris/pdx-parser-go/victoria3"
 
 // The canvas a flag is composed on. Positions and scales in the script are
 // fractions of it.
 const (
-	CanvasWidth  = 768
-	CanvasHeight = 512
+	CanvasWidth  = victoria3.CanvasWidth
+	CanvasHeight = victoria3.CanvasHeight
 )
 
 // Defaults for the parts of an instance a file leaves out.

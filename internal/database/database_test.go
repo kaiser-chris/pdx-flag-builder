@@ -127,9 +127,16 @@ func TestLoadReportsBrokenFile(t *testing.T) {
 		t.Error("a broken file was not reported")
 	}
 
-	// One bad file must not cost the flags in the good ones.
-	if len(database.Flags) != 2 {
-		t.Errorf("got %d flags, want the 2 from the readable file", len(database.Flags))
+	// Damage costs only what it touches: the flags of the good file are all
+	// there, and so is as much of the broken one as could be read, which is
+	// how the games read their own files.
+	names := make([]string, 0, len(database.Flags))
+	for _, flag := range database.Flags {
+		names = append(names, flag.Name)
+	}
+
+	if len(names) != 3 || names[0] != "ABS" || names[1] != "BAD" || names[2] != "ZZZ" {
+		t.Errorf("flags = %v, want ABS, BAD and ZZZ", names)
 	}
 }
 
@@ -180,4 +187,49 @@ func findTexture(textures []Texture, name string) (Texture, bool) {
 	}
 
 	return Texture{}, false
+}
+
+// A mod is read on top of the folders before it, the way the games load one,
+// so a mod that only changes part of a flag shows the whole flag. The game
+// keeps its own version, because both folders are listed side by side.
+func TestModsAreReadOnTopOfTheGame(t *testing.T) {
+	game := victoriaFolder(t)
+
+	mod := t.TempDir()
+	write(t, filepath.Join(mod, "common", "coat_of_arms", "coat_of_arms", "02_mod.txt"), `
+		INJECT:ABS = { color1 = "mod_blue" }
+	`)
+	write(t, filepath.Join(mod, "common", "named_colors", "01_mod_colors.txt"), `
+		colors = { mod_blue = rgb { 0 0 255 } }
+	`)
+
+	set, problems := LoadAll([]Folder{{Name: "game", Path: game}, {Name: "mod", Path: mod}})
+	if len(problems) != 0 {
+		t.Errorf("unexpected problems: %v", problems)
+	}
+
+	// The mod lists the one flag it changes, with the pattern it inherited
+	// from the game and the colour it set itself.
+	if len(set[1].Flags) != 1 || set[1].Flags[0].Name != "ABS" {
+		t.Fatalf("the mod lists %+v, want only the flag it changes", set[1].Flags)
+	}
+
+	changed := set[1].Flags[0]
+	if changed.Pattern != "pattern_solid.tga" {
+		t.Errorf("pattern = %q, want the one from the game", changed.Pattern)
+	}
+
+	if color, _ := changed.Colors.Get("color1"); color.Value.Describe() != "mod_blue" {
+		t.Errorf("color1 = %v, want the mod's colour", color.Value)
+	}
+
+	// It is written back to the mod's own file, not to the game's.
+	if changed.Origin.File != "02_mod.txt" || changed.Origin.Database != "mod" {
+		t.Errorf("origin = %+v, want the mod's file", changed.Origin)
+	}
+
+	// The game's own version is still listed under the game.
+	if first, _ := set[0].Flags[0].Colors.Get("color1"); first.Value.Describe() != "red" {
+		t.Errorf("the game's ABS = %v, want it untouched", first.Value)
+	}
 }

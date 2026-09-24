@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/kaiser-chris/pdx-flag-builder-go/internal/pdx/script"
 )
 
 func TestScriptLayout(t *testing.T) {
@@ -173,16 +171,7 @@ func TestScriptRoundTripInstalledGame(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		document, err := script.Parse(string(data))
-		if err != nil {
-			t.Errorf("%s: %v", path, err)
-
-			continue
-		}
-
-		flags, _ := DecodeFlags(document, Origin{})
-
-		for _, flag := range flags {
+		for _, flag := range readFlags(string(data)) {
 			written := Script(flag, "\n")
 			reread := decodeOne(t, written)
 
@@ -204,18 +193,9 @@ func TestScriptRoundTripInstalledGame(t *testing.T) {
 func decodeOne(t *testing.T, source string) Flag {
 	t.Helper()
 
-	document, err := script.Parse(source)
-	if err != nil {
-		t.Fatalf("parse:\n%s\n%v", source, err)
-	}
-
-	flags, issues := DecodeFlags(document, Origin{})
-	if len(issues) > 0 {
-		t.Fatalf("decode issues: %v", issues)
-	}
-
+	flags := readFlags(source)
 	if len(flags) != 1 {
-		t.Fatalf("decoded %d flags, want 1", len(flags))
+		t.Fatalf("read %d flags from:\n%s", len(flags), source)
 	}
 
 	return flags[0]

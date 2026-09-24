@@ -22,3 +22,7 @@
 
 # The Windows resources of the interface, generated from internal/gui/resources.rc
 !/internal/gui/rsrc_windows_amd64.syso
+
+# A Go workspace, for building against a checkout of pdx-parser-go next door
+/go.work
+/go.work.sum

@@ -111,7 +111,7 @@ func (a *App) colorEditor(id string, colors *pdx.Colors, slots pdx.Colors) {
 		imgui.PopID()
 	}
 
-	if remove != "" && colors.Remove(remove) {
+	if remove != "" && pdx.RemoveColor(colors, remove) {
 		a.changed()
 	}
 
@@ -267,16 +267,18 @@ func (a *App) colorValueEditor(entry *pdx.Color, slots pdx.Colors, width float32
 }
 
 // hsvEditor edits hue in degrees and the other two as percentages, the way the
-// hsv360 spelling in the files writes them.
+// hsv360 spelling in the files writes them. The sliders work in the float32 the
+// interface draws with, while the colour keeps the float64 it was read as.
 func (a *App) hsvEditor(entry *pdx.Color, value pdx.HSVColor, width float32) {
-	saturation := value.S * 100
-	brightness := value.V * 100
+	hue := float32(value.H)
+	saturation := float32(value.S * 100)
+	brightness := float32(value.V * 100)
 
 	width = (width - imgui.CurrentStyle().ItemInnerSpacing().X*2) / 3
 	changed := false
 
 	imgui.SetNextItemWidth(width)
-	changed = gui.DragFloat("##hue", &value.H, 1, 0, 360, "H %.0f") || changed
+	changed = gui.DragFloat("##hue", &hue, 1, 0, 360, "H %.0f") || changed
 
 	imgui.SameLine()
 	imgui.SetNextItemWidth(width)
@@ -287,7 +289,7 @@ func (a *App) hsvEditor(entry *pdx.Color, value pdx.HSVColor, width float32) {
 	changed = gui.DragFloat("##value", &brightness, 0.5, 0, 100, "V %.0f%%") || changed
 
 	if changed {
-		entry.Value = pdx.HSVColor{H: value.H, S: saturation / 100, V: brightness / 100}
+		entry.Value = pdx.HSVColor{H: float64(hue), S: float64(saturation) / 100, V: float64(brightness) / 100}
 		a.changed()
 	}
 }

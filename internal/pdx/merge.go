@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kaiser-chris/pdx-flag-builder-go/internal/pdx/script"
+	"github.com/kaiser-chris/pdx-parser-go/script"
 )
 
 // ErrNameTaken is returned by Merge when the coat of arms was renamed to a
@@ -32,11 +32,15 @@ func Merge(file string, flag Flag, key string) (merged string, replaced bool, er
 		return byteOrderMark + Script(flag, "\n") + "\n", false, nil
 	}
 
-	document, err := script.Parse(file)
-	if err != nil {
-		// Writing into a file that could not be read would mean guessing
-		// where the definitions are.
-		return "", false, fmt.Errorf("the file could not be read, so it is left as it is: %w", err)
+	// Parsing never fails: what the parser cannot make sense of it reads past
+	// the way the games do, and says so. Writing into such a file is refused
+	// all the same, because a definition left open by a missing brace runs to
+	// the end of the file, and replacing it would take everything after it
+	// along.
+	document := script.Parse(file)
+
+	if len(document.Warnings) > 0 {
+		return "", false, fmt.Errorf("the file could not be read as it is, so it is left alone: %s", document.Warnings[0])
 	}
 
 	if flag.Name != key && findDefinition(document, flag.Name) >= 0 {

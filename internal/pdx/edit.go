@@ -49,11 +49,14 @@ func RemoveItem[T any](items []T, index int) []T {
 	return append(items[:index], items[index+1:]...)
 }
 
-// Remove empties a colour slot. It reports whether the slot was filled.
-func (c *Colors) Remove(slot string) bool {
-	for index, color := range *c {
+// RemoveColor empties a colour slot. It reports whether the slot was filled.
+//
+// Colours are the parser library's type, which is why this is a function
+// rather than a method on them.
+func RemoveColor(colors *Colors, slot string) bool {
+	for index, color := range *colors {
 		if color.Slot == slot {
-			*c = RemoveItem(*c, index)
+			*colors = RemoveItem(*colors, index)
 
 			return true
 		}
