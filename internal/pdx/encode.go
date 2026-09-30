@@ -86,11 +86,7 @@ func (w *writer) coloredEmblem(emblem *ColoredEmblem) {
 	w.line(1, keyColoredEmblem+" = {")
 	w.line(2, keyTexture+" = "+quote(emblem.Texture))
 	w.colors(2, emblem.Colors)
-
-	if emblem.Mask > 0 {
-		w.line(2, fmt.Sprintf("%s = { %d }", keyMask, emblem.Mask))
-	}
-
+	w.mask(emblem.Mask)
 	w.instances(emblem.Instances)
 	w.line(1, "}")
 }
@@ -98,13 +94,23 @@ func (w *writer) coloredEmblem(emblem *ColoredEmblem) {
 func (w *writer) texturedEmblem(emblem *TexturedEmblem) {
 	w.line(1, keyTexturedEmblem+" = {")
 	w.line(2, keyTexture+" = "+quote(emblem.Texture))
+	w.mask(emblem.Mask)
 	w.instances(emblem.Instances)
 	w.line(1, "}")
+}
+
+// mask writes which of the pattern's colours an emblem is restricted to. The
+// files leave it out for an emblem that is not masked.
+func (w *writer) mask(mask int) {
+	if mask > 0 {
+		w.line(2, fmt.Sprintf("%s = { %d }", keyMask, mask))
+	}
 }
 
 func (w *writer) subFlag(sub *SubFlag) {
 	w.line(1, keySub+" = {")
 	w.line(2, keyParent+" = "+quote(sub.Parent))
+	w.colors(2, sub.Colors)
 
 	for _, instance := range sub.Instances {
 		w.line(2, keyInstance+" = {")

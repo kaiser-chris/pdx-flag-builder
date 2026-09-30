@@ -211,7 +211,7 @@ func (a *App) selectedLayerBody() {
 	switch typed := layer.(type) {
 	case *pdx.ColoredEmblem:
 		a.textureField("Texture", typed.Texture, pickLayerTexture)
-		a.maskField(typed)
+		a.maskField(&typed.Mask)
 
 		sectionHeader("Colours")
 		a.colorEditor("emblem", &typed.Colors, flag.Colors, layerColors)
@@ -220,10 +220,17 @@ func (a *App) selectedLayerBody() {
 
 	case *pdx.TexturedEmblem:
 		a.textureField("Texture", typed.Texture, pickLayerTexture)
+		a.maskField(&typed.Mask)
 		a.placementEditor(&typed.Instances)
 
 	case *pdx.SubFlag:
 		a.parentField(typed)
+
+		// The colours a sub flag fills in are handed to the coat of arms it
+		// draws, in place of that one's own.
+		sectionHeader("Colours")
+		a.colorEditor("sub", &typed.Colors, flag.Colors, layerColors)
+
 		a.subPlacementEditor(&typed.Instances)
 	}
 }
@@ -290,15 +297,15 @@ func (a *App) parentField(sub *pdx.SubFlag) {
 }
 
 // maskField restricts a coloured emblem to one colour of the pattern.
-func (a *App) maskField(emblem *pdx.ColoredEmblem) {
-	if !gui.BeginCombo("Mask", maskLabel(emblem.Mask)) {
+func (a *App) maskField(mask *int) {
+	if !gui.BeginCombo("Mask", maskLabel(*mask)) {
 		return
 	}
 	defer imgui.EndCombo()
 
 	for value := range pdx.MaxMask + 1 {
-		if gui.Selectable(maskLabel(value), value == emblem.Mask, 0) && value != emblem.Mask {
-			emblem.Mask = value
+		if gui.Selectable(maskLabel(value), value == *mask, 0) && value != *mask {
+			*mask = value
 			a.changed()
 		}
 	}

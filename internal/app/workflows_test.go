@@ -287,3 +287,78 @@ func TestNegativeScaleMirrorsASubFlag(t *testing.T) {
 		t.Errorf("bottom = %v, want TST_split's top colour %v at the bottom", got, fixtureBlue)
 	}
 }
+
+// A sub flag can hand the coat of arms it draws colours of its own, so that
+// the same one comes out in the colours of whichever flag it is part of.
+func TestSubFlagIsDrawnInTheColoursItIsHanded(t *testing.T) {
+	application, driver := startApp(t)
+
+	driver.Menu("File", "New Flag")
+	driver.Click("", labelAddLayer)
+	driver.Click("", "Sub Flag...")
+	driver.Click("", "TST_split")
+
+	waitForArtwork(t, application, driver, 1)
+
+	// Left alone, it draws in its own first colour.
+	if got := pixel(application, 384, 100); !near(got, fixtureBlue) {
+		t.Fatalf("top = %v, want TST_split's own first colour %v", got, fixtureBlue)
+	}
+
+	// A colour added to the layer takes the place of that one. The editor
+	// fills a new slot in with white.
+	driver.Click(panelSelected, "Add Colour")
+
+	sub, ok := lastLayer(t, application).(*pdx.SubFlag)
+	if !ok || len(sub.Colors) != 1 || sub.Colors[0].Slot != "color1" {
+		t.Fatalf("sub flag colours = %+v, want the first slot filled in", lastLayer(t, application))
+	}
+
+	waitForArtwork(t, application, driver, 1)
+
+	if got := pixel(application, 384, 100); !near(got, fixtureWhite) {
+		t.Errorf("top = %v, want the colour the sub flag was handed %v", got, fixtureWhite)
+	}
+
+	// Only the slot that was handed over changes; the rest stays as the coat
+	// of arms itself has it.
+	if got := pixel(application, 384, 400); !near(got, fixtureWhite) {
+		t.Errorf("bottom = %v, want TST_split's own second colour %v", got, fixtureWhite)
+	}
+}
+
+// A textured emblem can be restricted to one colour of the pattern, the way a
+// coloured emblem is.
+func TestAMaskRestrictsATexturedEmblem(t *testing.T) {
+	application, driver := startApp(t)
+
+	driver.Menu("File", "New Flag")
+
+	// A mask needs a pattern to cut the emblem out of.
+	driver.ClickItem(driver.Find(panelSelected, "Change..."))
+	driver.Click("", "pattern_split.png")
+
+	driver.Click("", labelAddLayer)
+	driver.Click("", "Textured Emblem...")
+	driver.Click("", "te_mark.png")
+
+	driver.Click(panelSelected, "Mask")
+	driver.Click("", "Pattern colour 2")
+
+	emblem, ok := lastLayer(t, application).(*pdx.TexturedEmblem)
+	if !ok || emblem.Mask != 2 {
+		t.Fatalf("last layer = %#v, want a textured emblem masked to the second colour", lastLayer(t, application))
+	}
+
+	waitForArtwork(t, application, driver, 2)
+
+	// The emblem covers the whole flag, but only shows where the pattern has
+	// its second colour, which is the lower half.
+	if got := pixel(application, 384, 100); near(got, texturedMark) {
+		t.Errorf("top = %v, want the pattern rather than the masked emblem", got)
+	}
+
+	if got := pixel(application, 384, 400); !near(got, texturedMark) {
+		t.Errorf("bottom = %v, want the emblem's own colour %v", got, texturedMark)
+	}
+}

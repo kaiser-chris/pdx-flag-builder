@@ -28,9 +28,10 @@ func TestScriptLayout(t *testing.T) {
 					{Position: Vec2{X: 0.75, Y: 0.5}, Scale: Vec2{X: -0.5, Y: 0.5}, Rotation: 45},
 				},
 			},
-			&TexturedEmblem{Texture: "te_crest.dds"},
+			&TexturedEmblem{Texture: "te_crest.dds", Mask: 1},
 			&SubFlag{
 				Parent:    "GBR",
+				Colors:    Colors{{Slot: "color1", Value: SlotColor{Slot: "color2"}}},
 				Instances: []SubInstance{{Offset: Vec2{X: 0.5}, Scale: Vec2{X: 0.5, Y: 0.5}}},
 			},
 		},
@@ -60,10 +61,12 @@ func TestScriptLayout(t *testing.T) {
 		``,
 		`	textured_emblem = {`,
 		`		texture = "te_crest.dds"`,
+		`		mask = { 1 }`,
 		`	}`,
 		``,
 		`	sub = {`,
 		`		parent = "GBR"`,
+		`		color1 = color2`,
 		`		instance = {`,
 		`			offset = { 0.5 0 }`,
 		`			scale = { 0.5 0.5 }`,
@@ -115,8 +118,8 @@ TST = {
 		instance = { scale = { @third @third } position = { @third 0.5 } rotation = 90 }
 		instance = { scale = { 0.07 } }
 	}
-	textured_emblem = { texture = "te_b.dds" instance = { position = { 0.1 0.2 } } }
-	sub = { parent = "OTHER" instance = { offset = { 0.5 0 } scale = { 0.5 0.5 } } }
+	textured_emblem = { texture = "te_b.dds" mask = { 3 } instance = { position = { 0.1 0.2 } } }
+	sub = { parent = "OTHER" color1 = color2 color2 = "red" instance = { offset = { 0.5 0 } scale = { 0.5 0.5 } } }
 	sub = { parent = "EMPTY" }
 }`
 
@@ -150,6 +153,21 @@ TST = {
 	// both values say so.
 	if got := emblem.Instances[1].Scale; got != (Vec2{X: 0.07, Y: 1}) {
 		t.Errorf("single value scale reread as %v, want {0.07 1}", got)
+	}
+
+	// A textured emblem keeps its mask, and a sub flag the colours it hands
+	// the coat of arms it draws.
+	if textured := reread.Layers[1].(*TexturedEmblem); textured.Mask != 3 {
+		t.Errorf("textured emblem reread as %#v, want its mask kept", textured)
+	}
+
+	sub := reread.Layers[2].(*SubFlag)
+	if len(sub.Colors) != 2 {
+		t.Fatalf("sub flag reread as %#v, want both colours kept", sub)
+	}
+
+	if first, _ := sub.Colors.Get("color1"); first.Value != (SlotColor{Slot: "color2"}) {
+		t.Errorf("the sub flag's color1 reread as %#v, want the reference it was written as", first.Value)
 	}
 }
 

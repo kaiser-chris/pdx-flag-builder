@@ -119,10 +119,10 @@ func (p *Painter) draw(flag pdx.Flag, destination rl.Rectangle, depth int) {
 			p.drawColoredEmblem(typed, flag, destination)
 
 		case *pdx.TexturedEmblem:
-			p.drawTexturedEmblem(typed, destination)
+			p.drawTexturedEmblem(typed, flag, destination)
 
 		case *pdx.SubFlag:
-			p.drawSubFlag(typed, destination, depth)
+			p.drawSubFlag(typed, flag, destination, depth)
 		}
 	}
 }
@@ -150,7 +150,7 @@ func (p *Painter) drawColoredEmblem(emblem *pdx.ColoredEmblem, flag pdx.Flag, de
 	// flag's own colours are what those references resolve against.
 	recolorings := p.recolorings(emblem.Colors, flag.Colors, EmblemSlotColors)
 
-	maskTexture, maskColor, masked := p.mask(emblem, flag)
+	maskTexture, maskColor, masked := p.mask(emblem.Mask, flag)
 
 	for _, instance := range pdx.Placements(emblem.Instances) {
 		target := instanceRect(instance, destination)
@@ -172,23 +172,38 @@ func (p *Painter) drawColoredEmblem(emblem *pdx.ColoredEmblem, flag pdx.Flag, de
 	}
 }
 
-func (p *Painter) drawTexturedEmblem(emblem *pdx.TexturedEmblem, destination rl.Rectangle) {
+func (p *Painter) drawTexturedEmblem(emblem *pdx.TexturedEmblem, flag pdx.Flag, destination rl.Rectangle) {
 	texture, ok := p.textures.Get(emblem.Texture)
 	if !ok {
 		return
 	}
 
-	// A textured emblem is already in its final colours, so it is drawn as it
-	// is with no shader involved.
+	maskTexture, maskColor, masked := p.mask(emblem.Mask, flag)
+
 	for _, instance := range pdx.Placements(emblem.Instances) {
 		target := instanceRect(instance, destination)
 		origin := rl.Vector2{X: target.Width / 2, Y: target.Height / 2}
 
-		drawTexture(texture, wholeTexture(texture), target, origin, instance.Rotation, rl.White)
+		// A textured emblem is already in its final colours, so it is drawn
+		// as it is. Only a mask needs the shader, which replaces no colour
+		// and cuts the emblem to the part of the pattern it belongs to.
+		if !masked {
+			drawTexture(texture, wholeTexture(texture), target, origin, instance.Rotation, rl.White)
+
+			continue
+		}
+
+		mask := maskFor(maskTexture, maskColor, destination, target, origin, instance.Rotation)
+
+		p.shader.Draw(texture, wholeTexture(texture), target, DrawOptions{
+			Origin:   origin,
+			Rotation: instance.Rotation,
+			Mask:     &mask,
+		})
 	}
 }
 
-func (p *Painter) drawSubFlag(sub *pdx.SubFlag, destination rl.Rectangle, depth int) {
+func (p *Painter) drawSubFlag(sub *pdx.SubFlag, flag pdx.Flag, destination rl.Rectangle, depth int) {
 	if p.subFlag == nil {
 		return
 	}
@@ -198,15 +213,44 @@ func (p *Painter) drawSubFlag(sub *pdx.SubFlag, destination rl.Rectangle, depth 
 		return
 	}
 
+	parent = p.handOver(parent, sub.Colors, flag.Colors)
+
 	for _, instance := range pdx.SubPlacements(sub.Instances) {
 		p.draw(parent, subFlagRect(instance, destination), depth+1)
 	}
 }
 
+// handOver gives a coat of arms the colours the sub flag layer hands it, in
+// place of its own.
+//
+// What is handed over is worked out here rather than passed down, because a
+// colour of the layer may refer back to a slot of the flag the layer sits on,
+// which the coat of arms being drawn knows nothing about.
+func (p *Painter) handOver(parent pdx.Flag, handed, flag pdx.Colors) pdx.Flag {
+	if len(handed) == 0 {
+		return parent
+	}
+
+	parent.Colors = append(pdx.Colors(nil), parent.Colors...)
+
+	for _, entry := range handed {
+		resolved, ok := entry.Resolve(p.palette, flag)
+		if !ok {
+			// A colour that cannot be worked out is left to the coat of arms
+			// being drawn, which has one of its own.
+			continue
+		}
+
+		parent.Colors.Set(pdx.Color{Slot: entry.Slot, Value: pdx.RGBColor{R: resolved.R, G: resolved.G, B: resolved.B}})
+	}
+
+	return parent
+}
+
 // mask returns the pattern texture and the marker colour a masked emblem is
 // restricted to, and whether the emblem is masked at all.
-func (p *Painter) mask(emblem *pdx.ColoredEmblem, flag pdx.Flag) (rl.Texture2D, color.RGBA, bool) {
-	if emblem.Mask <= 0 || emblem.Mask > len(PatternSlotColors) || flag.Pattern == "" {
+func (p *Painter) mask(mask int, flag pdx.Flag) (rl.Texture2D, color.RGBA, bool) {
+	if mask <= 0 || mask > len(PatternSlotColors) || flag.Pattern == "" {
 		return rl.Texture2D{}, color.RGBA{}, false
 	}
 
@@ -217,7 +261,7 @@ func (p *Painter) mask(emblem *pdx.ColoredEmblem, flag pdx.Flag) (rl.Texture2D, 
 
 	// A mask of one means the first slot, so the count is one ahead of the
 	// index into the marker colours.
-	return pattern, PatternSlotColors[emblem.Mask-1], true
+	return pattern, PatternSlotColors[mask-1], true
 }
 
 func (p *Painter) recolorings(colors, parent pdx.Colors, markers []color.RGBA) []Recoloring {

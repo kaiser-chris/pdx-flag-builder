@@ -98,14 +98,26 @@ type ColoredEmblem struct {
 
 // TexturedEmblem is an emblem drawn as it is, without recolouring.
 type TexturedEmblem struct {
-	Texture   string
+	Texture string
+
+	// Mask restricts the emblem to the part of the pattern matching one of the
+	// pattern's colours, as it does for a coloured emblem. Zero means the
+	// emblem is not masked.
+	Mask int
+
 	Instances []Instance
 }
 
 // SubFlag draws another coat of arms as a layer of this one.
 type SubFlag struct {
 	// Parent is the name of the coat of arms to draw.
-	Parent    string
+	Parent string
+
+	// Colors are handed to that coat of arms in place of its own, so that the
+	// same one can be drawn in the colours of whichever flag it is part of. A
+	// slot may refer back to a colour of this flag.
+	Colors Colors
+
 	Instances []SubInstance
 }
 
@@ -214,6 +226,7 @@ func cloneLayer(layer Layer) Layer {
 
 	case *SubFlag:
 		clone := *typed
+		clone.Colors = append(Colors(nil), typed.Colors...)
 		clone.Instances = append([]SubInstance(nil), typed.Instances...)
 
 		return &clone

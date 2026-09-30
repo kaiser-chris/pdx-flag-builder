@@ -32,12 +32,14 @@ func FromCoatOfArms(arms *victoria3.CoatOfArms, origin Origin) Flag {
 		case *victoria3.TexturedEmblem:
 			flag.Layers = append(flag.Layers, &TexturedEmblem{
 				Texture:   typed.Texture.File,
+				Mask:      mask(typed.Masks),
 				Instances: instances(typed.Instances),
 			})
 
 		case *victoria3.SubCoatOfArms:
 			flag.Layers = append(flag.Layers, &SubFlag{
 				Parent:    typed.Parent,
+				Colors:    append(Colors(nil), typed.Colors...),
 				Instances: subInstances(typed.Instances),
 			})
 		}

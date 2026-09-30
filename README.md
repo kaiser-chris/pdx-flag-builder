@@ -44,9 +44,13 @@ The **Layers** panel lists the coat of arms and its layers. Click one to edit it
 in the **Selected Layer** panel:
 
 - The coat of arms has its name, its pattern and its colours.
-- An emblem has its texture, its colours, a mask that limits it to one colour of
-  the pattern, and its placements: position, scale and rotation.
-- A sub flag draws another coat of arms, with an offset and a scale.
+- A coloured emblem has its texture, its colours, a mask that limits it to one
+  colour of the pattern, and its placements: position, scale and rotation.
+- A textured emblem is drawn in the colours of its own texture, so it has no
+  colours of its own, but it can be masked like any other emblem.
+- A sub flag draws another coat of arms, with an offset and a scale. The
+  colours you give it are handed to that coat of arms in place of its own, so
+  the same one can be drawn in the colours of whichever flag it is part of.
 
 Add layers with **Add Layer**, or straight from the texture database with
 **Add as Layer** and **Set as Pattern**, or from the flag database with

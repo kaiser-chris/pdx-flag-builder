@@ -38,7 +38,7 @@ func TestFromCoatOfArms(t *testing.T) {
 			{Slot: "color2", Value: victoria3.SlotColor{Slot: "color1"}},
 		},
 		Layers: []victoria3.Layer{
-			&victoria3.TexturedEmblem{Texture: victoria3.Texture{File: "te_crow.dds"}},
+			&victoria3.TexturedEmblem{Texture: victoria3.Texture{File: "te_crow.dds"}, Masks: []int{3}},
 			&victoria3.ColoredEmblem{
 				Texture: victoria3.Texture{File: "ce_solid.dds"},
 				Colors:  victoria3.Colors{{Slot: "color1", Value: victoria3.NamedColor{Name: "yellow"}}},
@@ -50,6 +50,7 @@ func TestFromCoatOfArms(t *testing.T) {
 			},
 			&victoria3.SubCoatOfArms{
 				Parent:    "sub_ENG_coa",
+				Colors:    victoria3.Colors{{Slot: "color1", Value: victoria3.NamedColor{Name: "yellow"}}},
 				Instances: []victoria3.Instance{{Offset: victoria3.Vec2{X: 0.25}, Scale: victoria3.Vec2{X: 0.5, Y: 0.5}}},
 			},
 		},
@@ -74,8 +75,8 @@ func TestFromCoatOfArms(t *testing.T) {
 	}
 
 	textured, ok := flag.Layers[0].(*TexturedEmblem)
-	if !ok || textured.Texture != "te_crow.dds" {
-		t.Errorf("layer 0 = %#v, want the textured emblem", flag.Layers[0])
+	if !ok || textured.Texture != "te_crow.dds" || textured.Mask != 3 {
+		t.Errorf("layer 0 = %#v, want the textured emblem with its mask", flag.Layers[0])
 	}
 
 	colored, ok := flag.Layers[1].(*ColoredEmblem)
@@ -100,6 +101,11 @@ func TestFromCoatOfArms(t *testing.T) {
 	sub, ok := flag.Layers[2].(*SubFlag)
 	if !ok || sub.Parent != "sub_ENG_coa" {
 		t.Fatalf("layer 2 = %#v, want the sub flag", flag.Layers[2])
+	}
+
+	// The colours a sub flag hands the coat of arms it draws come with it.
+	if color, _ := sub.Colors.Get("color1"); color.Value != (NamedColor{Name: "yellow"}) {
+		t.Errorf("the sub flag's color1 = %#v, want the colour it hands over", color.Value)
 	}
 
 	if got := sub.Instances[0]; got.Offset != (Vec2{X: 0.25}) || got.Scale != (Vec2{X: 0.5, Y: 0.5}) {
