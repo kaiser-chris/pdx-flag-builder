@@ -240,6 +240,17 @@ func TestVictoria3PreviewSaysWhichGameFilesAreMissing(t *testing.T) {
 		t.Fatal("the preview does not say that the game's own files are missing")
 	}
 
+	// It names them where they belong in a game folder, which is where
+	// someone has to go and look for them.
+	driver.Click(windowVictoria3, labelWhatIsMissing)
+
+	for _, file := range render.GameFiles {
+		if !driver.Exists(windowVictoria3, file.Path) {
+			driver.Dump()
+			t.Fatalf("%s is missing but not listed under its path", file.Name)
+		}
+	}
+
 	// What it can show is the flag itself, unshaded and unframed.
 	large := render.IconSizes[0]
 	left, top := flagArea(large)

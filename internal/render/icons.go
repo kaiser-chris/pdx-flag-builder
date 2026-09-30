@@ -61,6 +61,10 @@ var IconSizes = []IconSize{
 	},
 }
 
+// InterfaceFlagFolder is where the game keeps the artwork its interface draws
+// a flag with, below its game folder.
+const InterfaceFlagFolder = "gfx/interface/flag"
+
 // OverlayTexture is the file of the shading the game multiplies over every
 // flag its interface draws.
 const OverlayTexture = "flag_overlay.dds"

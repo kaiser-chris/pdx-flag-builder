@@ -63,7 +63,7 @@ func (a *App) victoria3Body() {
 
 	// The fancy flag is the widest of them, and the rest are centred under it,
 	// so that they read as one flag at several sizes rather than a staircase.
-	widest := max(float32(render.IconSizes[0].BorderWidth), render.FancyWidth) * scale
+	widest := max(float32(render.IconSizes[0].BorderWidth), render.FancyImageWidth) * scale
 
 	if !imgui.BeginTableV("sizes", 2, imgui.TableFlagsSizingFixedFit, imgui.Vec2{}, 0) {
 		return
@@ -78,15 +78,17 @@ func (a *App) victoria3Body() {
 	imgui.TableNextRow()
 
 	imgui.TableNextColumn()
-	imgui.SetCursorPosY(imgui.CursorPosY() + max((render.FancyHeight*scale-imgui.TextLineHeight())/2, 0))
+	imgui.SetCursorPosY(imgui.CursorPosY() + max((render.FancyImageHeight*scale-imgui.TextLineHeight())/2, 0))
 	imgui.TextUnformatted(labelFancy)
 	gui.Record(labelFancy)
 
 	imgui.TableNextColumn()
-	imgui.SetCursorPosX(imgui.CursorPosX() + max((widest-render.FancyWidth*scale)/2, 0))
+	imgui.SetCursorPosX(imgui.CursorPosX() + max((widest-render.FancyImageWidth*scale)/2, 0))
 	a.window.Backend().DrawImageRenderTexture(a.fancy.Target(),
-		imgui.Vec2{X: render.FancyWidth * scale, Y: render.FancyHeight * scale}, true, false)
+		imgui.Vec2{X: render.FancyImageWidth * scale, Y: render.FancyImageHeight * scale}, true, false)
 	gui.Record(labelFancy + " flag")
+
+	sizeTooltip(labelFancy, render.FancyWidth, render.FancyHeight)
 
 	for index, size := range render.IconSizes {
 		width, height := float32(size.BorderWidth)*scale, float32(size.BorderHeight)*scale
@@ -104,11 +106,21 @@ func (a *App) victoria3Body() {
 		a.window.Backend().DrawImageRenderTexture(a.icons.Target(index), imgui.Vec2{X: width, Y: height}, true, false)
 		gui.Record(size.Name + " flag")
 
-		if imgui.IsItemHovered() {
-			imgui.SetTooltip(fmt.Sprintf("%d by %d, in a border of %d by %d",
-				size.Width, size.Height, size.BorderWidth, size.BorderHeight))
-		}
+		sizeTooltip(size.Name, size.Width, size.Height)
 	}
+}
+
+// sizeTooltip names the size of the flag the pointer is over.
+func sizeTooltip(name string, width, height int32) {
+	if imgui.IsItemHovered() {
+		imgui.SetTooltip(sizeLabel(name, width, height))
+	}
+}
+
+// sizeLabel names a size the way the game's own files give it: what it is
+// called, and how many pixels of a flag it draws.
+func sizeLabel(name string, width, height int32) string {
+	return fmt.Sprintf("%s: %dx%d", name, width, height)
 }
 
 // missingGameFiles says which of the game's own files the preview needs and
@@ -121,9 +133,9 @@ func (a *App) victoria3Body() {
 func (a *App) missingGameFiles() {
 	var missing []string
 
-	for _, name := range render.GameFiles {
-		if _, ok := a.state.library.set.GameArt(name); !ok {
-			missing = append(missing, name)
+	for _, file := range render.GameFiles {
+		if _, ok := a.state.library.set.GameArt(file.Name); !ok {
+			missing = append(missing, file.Path)
 		}
 	}
 
@@ -136,16 +148,22 @@ func (a *App) missingGameFiles() {
 		return
 	}
 
-	dimmedWrapped(fmt.Sprintf("%s of the game's own is not in any configured folder, so the flag is shown "+
+	verb := "is"
+	if len(missing) > 1 {
+		verb = "are"
+	}
+
+	dimmedWrapped(fmt.Sprintf("%s of the game's own %s not in any configured folder, so the flag is shown "+
 		"without what the game draws it with. Add the game's folder in the settings to see the rest.",
-		plural(len(missing), "file", "files")))
+		plural(len(missing), "file", "files"), verb))
 
 	open := imgui.TreeNodeExStrV(labelWhatIsMissing, imgui.TreeNodeFlagsSpanAvailWidth)
 	gui.Record(labelWhatIsMissing)
 
 	if open {
-		for _, name := range missing {
-			imgui.TextDisabled(name)
+		for _, path := range missing {
+			imgui.TextDisabled(path)
+			gui.Record(path)
 		}
 
 		imgui.TreePop()

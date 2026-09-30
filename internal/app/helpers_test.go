@@ -239,3 +239,20 @@ func TestWhichSlotsAColourMayReferTo(t *testing.T) {
 		t.Errorf("the flag's own color2 may refer to %v, want every colour but itself", got)
 	}
 }
+
+// The sizes of the Victoria 3 preview are named the way the game's own files
+// name them.
+func TestSizeLabel(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		width, height int32
+		want          string
+	}{
+		{"Normal", 66, 44, "Normal: 66x44"},
+		{"Fancy", 120, 90, "Fancy: 120x90"},
+	} {
+		if got := sizeLabel(test.name, test.width, test.height); got != test.want {
+			t.Errorf("sizeLabel(%s) = %q, want %q", test.name, got, test.want)
+		}
+	}
+}
