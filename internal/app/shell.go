@@ -109,6 +109,15 @@ func (a *App) menuBar() {
 	if gui.BeginMenu("Databases") {
 		gui.MenuToggle(windowFlagDatabase, "", &a.state.showFlagDatabase)
 		gui.MenuToggle(windowTextureDatabase, "", &a.state.showTextureDatabase)
+
+		imgui.Separator()
+
+		// Without a folder there is nothing to read, so the entry is there to
+		// be seen but not to be used.
+		if gui.MenuItem(labelReload, "", a.hasFolders()) {
+			a.reloadDatabases()
+		}
+
 		imgui.EndMenu()
 	}
 

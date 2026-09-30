@@ -38,6 +38,10 @@ into the search box to narrow a list down, and click a column header to sort it.
 
 Click a flag to open it. **File → New Flag** starts from an empty one.
 
+The folders are read when the tool starts and whenever the settings are saved.
+**Databases → Reload** reads them again, for files that changed since: a mod
+edited by hand, or written by another tool.
+
 ### Editing
 
 The **Layers** panel lists the coat of arms and its layers. Click one to edit it

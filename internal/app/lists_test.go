@@ -316,3 +316,60 @@ func TestSettingsWindowCanBeWidened(t *testing.T) {
 		t.Errorf("the window is %v tall after the drag, want it to stay %v", after.Y, before.Y)
 	}
 }
+
+// The files belong to the game and to the user, and change outside the
+// application. Reload reads the configured folders again, as starting up and
+// saving the settings do.
+func TestReloadReadsTheFoldersAgain(t *testing.T) {
+	application, driver := startApp(t)
+
+	if driver.Exists("", "TST_added") {
+		t.Fatal("the fixture already has the flag this test adds")
+	}
+
+	path := fixtureFile(application)
+	writeFile(t, path, readText(t, path)+"\nTST_added = { pattern = \"pattern_split.png\" }\n")
+
+	driver.Menu("Databases", labelReload)
+
+	driver.WaitFor("the folders to be read again", func() bool { return !application.state.library.loading })
+	driver.Frame()
+
+	driver.Menu("Databases", windowFlagDatabase)
+
+	if !driver.Exists("", "TST_added") {
+		t.Error("the flag written to the folder is not listed after reloading")
+	}
+}
+
+// With no folder configured there is nothing to read, and the entry cannot be
+// used.
+func TestReloadIsOffWithoutFolders(t *testing.T) {
+	application, driver := startApp(t)
+
+	// Take the one folder away, which is what leaves the application with
+	// nothing configured.
+	driver.Menu("Settings", "Open Settings")
+	driver.ClickItem(driver.FindAll(windowSettings, "X")[0])
+	driver.Click(windowSettings, "Save")
+
+	driver.WaitFor("the folders to be read", func() bool { return !application.state.library.loading })
+	driver.Frame()
+
+	if application.hasFolders() {
+		t.Fatalf("folders = %+v, want none left", application.settings.Databases)
+	}
+
+	before := application.state.library.version
+	status := application.state.status
+
+	driver.Menu("Databases", labelReload)
+
+	if application.state.library.loading || application.state.library.version != before {
+		t.Error("the reload entry started a read although no folder is configured")
+	}
+
+	if application.state.status != status {
+		t.Errorf("status = %q, want it left at %q", application.state.status, status)
+	}
+}

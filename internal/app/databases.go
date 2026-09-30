@@ -37,6 +37,31 @@ const (
 // labelAddAsSubFlag is the flag database's row action.
 const labelAddAsSubFlag = "Add as Sub Flag"
 
+// labelReload is the Databases menu's entry for reading the folders again.
+const labelReload = "Reload"
+
+// reloadDatabases reads the configured folders again, the way starting up and
+// saving the settings do.
+//
+// The files are the game's and the user's, and change outside this
+// application: a mod is edited by hand, or another tool writes to it. Reading
+// them again is the way to see that without restarting.
+func (a *App) reloadDatabases() {
+	a.state.library.reload(a.settings.Databases)
+	a.setStatus("Reading the configured folders")
+}
+
+// hasFolders reports whether there is a folder to read at all.
+func (a *App) hasFolders() bool {
+	for _, folder := range a.settings.Databases {
+		if folder.Path != "" {
+			return true
+		}
+	}
+
+	return false
+}
+
 // flagDatabaseWindow lists every coat of arms found in the configured folders.
 func (a *App) flagDatabaseWindow() {
 	if !a.state.showFlagDatabase {

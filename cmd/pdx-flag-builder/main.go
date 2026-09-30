@@ -19,7 +19,7 @@ func init() {
 
 func main() {
 	if err := app.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "pdx-flag-builder: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "pdx-flag-builder: %v\n", err)
 		os.Exit(1)
 	}
 }
