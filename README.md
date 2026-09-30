@@ -78,24 +78,19 @@ To move a placement with the keyboard, click the flag and use the arrow keys:
 
 ### Seeing it as the game will
 
-**Preview → Victoria 3** opens the flag the way the game shows a country's:
+**Preview → Victoria 3** and **Preview → Europa Universalis 5** open the flag
+the way each game shows a country's: as the cloth it hangs one on, and at each
+of the sizes it draws a flat one at.
 
-| Size   | Flag     | Border   |
-|--------|----------|----------|
-| Fancy  | 120 x 90 | none     |
-| Large  | 96 x 64  | 114 x 82 |
-| Normal | 66 x 44  | 80 x 58  |
-| Small  | 48 x 32  | 62 x 46  |
-| Tiny   | 27 x 18  | 33 x 24  |
+Victoria 3 draws a flag at 96 x 64 down to 27 x 18 and frames it from outside
+with the border of the country's rank, which **Rank Border** chooses. Europa
+Universalis 5 draws it at 180 x 120 down to 22 x 14, frames it from the
+outside in, and has a round flag cut to a mask. Both shade every flag with a
+picture they multiply over it, and both hang one on the same waving cloth.
 
-The flat sizes carry the shading the game multiplies over every flag and the
-border of a rank, which **Rank Border** chooses. The fancy flag is the cloth
-the game hangs a flag on: the game's own mesh, waved by the game's own
-animation and lit by the sun of its interface.
-
-All of that is read from the game's own files, so a set of folders with only
+All of that is read from the games' own files, so a set of folders with only
 mods in it shows the flags on their own, and the window says which files it
-did not find.
+did not find and where they belong.
 
 ### Saving and exporting
 

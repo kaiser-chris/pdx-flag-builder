@@ -57,10 +57,9 @@ type App struct {
 	painter  *render.Painter
 	preview  *render.Preview
 
-	// icons are the flag as the games' own interfaces show it, drawn into one
-	// target per size, and fancy is the waving cloth the game hangs it on.
-	icons *render.Icons
-	fancy *render.Fancy
+	// previews are the flag as the games' own interfaces show it, one window
+	// per game.
+	previews []*preview
 
 	// thumbnails are the small previews in the lists, drawn into an atlas that
 	// is handed to Dear ImGui once, the first time a list shows one.
@@ -158,9 +157,7 @@ func New(options Options) (*App, error) {
 	application.painter.SetSubFlagLookup(application.subFlag)
 
 	application.preview = render.NewPreview(render.FlagWidth, render.FlagHeight, application.painter)
-	application.icons = render.NewIcons(application.painter, application.textures)
-
-	fancy, err := render.NewFancy(application.painter, application.texturePath)
+	previews, err := newPreviews(application.painter, application.textures, application.texturePath)
 	if err != nil {
 		application.window.Close()
 
@@ -169,7 +166,7 @@ func New(options Options) (*App, error) {
 		return nil, fmt.Errorf("load the cloth shader: %w", err)
 	}
 
-	application.fancy = fancy
+	application.previews = previews
 	application.thumbnails = render.NewThumbnails(shader, application.texturePath)
 	application.thumbnails.SetSubFlagLookup(application.subFlag)
 	application.dockWindowClass = imgui.NewWindowClass()
@@ -178,8 +175,7 @@ func New(options Options) (*App, error) {
 
 	application.window.OnShutdown(func() {
 		application.preview.Unload()
-		application.icons.Unload()
-		application.fancy.Unload()
+		application.unloadPreviews()
 		application.thumbnails.Unload()
 		application.textures.Unload()
 		application.shader.Unload()
@@ -234,10 +230,7 @@ func (a *App) drawOffscreen() {
 	a.textures.Upload()
 	a.preview.Draw(a.state.flag)
 
-	if a.state.showVictoria3 {
-		a.icons.Draw(a.state.flag, a.state.previewRank)
-		a.fancy.Draw(a.state.flag, float32(rl.GetTime()))
-	}
+	a.drawPreviews(float32(rl.GetTime()))
 
 	a.finishExport()
 	a.thumbnails.Draw()
@@ -295,7 +288,7 @@ func (a *App) reportLoad() {
 
 	a.painter.SetPalette(library.palette)
 	a.textures.Forget()
-	a.fancy.Forget()
+	a.forgetPreviews()
 	a.thumbnails.SetPalette(library.palette)
 	a.thumbnails.Forget()
 
@@ -355,7 +348,7 @@ func (a *App) frame() {
 	a.settingsWindow()
 	a.flagDatabaseWindow()
 	a.textureDatabaseWindow()
-	a.victoria3Window()
+	a.previewWindows()
 	a.aboutPopup()
 	a.pickerPopup()
 	a.discardPopup()

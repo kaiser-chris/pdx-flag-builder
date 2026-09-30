@@ -15,26 +15,9 @@ import (
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/texture"
 )
 
-// The size Victoria 3 gives the fancy flag, and the size the cloth is drawn
-// at.
-//
-// The game's widget is 120 by 90, but the cloth in it is drawn at 300 by 180
-// and shown at half that, overflowing the widget. Doing the same here is both
-// what keeps a curved edge from looking ragged and what gives the cloth the
-// room it needs: at the widget's own shape the frustum cuts its ends off.
-const (
-	FancyWidth  = 120
-	FancyHeight = 90
-
-	FancyImageWidth  = 150
-	FancyImageHeight = 90
-
-	fancyOversample = 2
-)
-
 // The size the coat of arms itself is drawn at before it is put on the cloth.
-// The cloth covers a fraction of the window it is drawn in, so the flag needs
-// no more than this.
+// The cloth covers a fraction of the picture it is drawn in, so the flag
+// needs no more than this.
 const (
 	fancyFlagWidth  = FlagWidth / 2
 	fancyFlagHeight = FlagHeight / 2
@@ -69,10 +52,6 @@ var (
 // where its own values live.
 const shaderLocations = 32
 
-// ClothFolder is where the game keeps the cloth of the fancy flag, below its
-// game folder.
-const ClothFolder = "gfx/models/ui/flags"
-
 // The files of the game the cloth is drawn from: the mesh the flag hangs on,
 // and the three maps its material is drawn with.
 const (
@@ -82,37 +61,6 @@ const (
 	ClothProperties = "ui_flag_01_properties.dds"
 )
 
-// GameFile is one file of the game's own that the preview draws a flag with.
-type GameFile struct {
-	// Name is what the file is asked for by, which is its own name: the
-	// folders are searched by name, the way a coat of arms names a texture.
-	Name string
-
-	// Path is where the file sits below a game folder, which is what to tell
-	// someone who has to go and find it.
-	Path string
-}
-
-// GameFiles are every file of the game's own the preview draws a flag with.
-// None of them belong to a coat of arms, so a set of folders without a game
-// in it has none, and the preview says so rather than showing half of what
-// the game would.
-var GameFiles = gameFiles()
-
-func gameFiles() []GameFile {
-	files := []GameFile{{Name: OverlayTexture, Path: InterfaceFlagFolder + "/" + OverlayTexture}}
-
-	for _, name := range []string{ClothMesh, ClothDiffuse, ClothNormal, ClothProperties} {
-		files = append(files, GameFile{Name: name, Path: ClothFolder + "/" + name})
-	}
-
-	for _, size := range IconSizes {
-		files = append(files, GameFile{Name: size.Border, Path: InterfaceFlagFolder + "/" + size.Border})
-	}
-
-	return files
-}
-
 // Fancy draws a coat of arms as the cloth banner Victoria 3 waves in its
 // interface: the game's own mesh, its three material maps, and its wave, with
 // the coat of arms drawn into the cloth.
@@ -121,6 +69,7 @@ func gameFiles() []GameFile {
 // from the configured folders the first time it is wanted. A set of folders
 // without it draws nothing, and Ready says so.
 type Fancy struct {
+	cloth   Cloth
 	painter *Painter
 
 	// resolve turns the name of one of the game's files into a path on disk.
@@ -167,7 +116,7 @@ type Fancy struct {
 //
 // It requires an active OpenGL context, so it must be called after the window
 // exists.
-func NewFancy(painter *Painter, resolve func(name string) (string, bool)) (*Fancy, error) {
+func NewFancy(cloth Cloth, painter *Painter, resolve func(name string) (string, bool)) (*Fancy, error) {
 	vertex, err := assets.Read(assets.ShaderFlagVertex)
 	if err != nil {
 		return nil, err
@@ -184,9 +133,10 @@ func NewFancy(painter *Painter, resolve func(name string) (string, bool)) (*Fanc
 	}
 
 	fancy := &Fancy{
+		cloth:   cloth,
 		painter: painter,
 		resolve: resolve,
-		target:  rl.LoadRenderTexture(FancyWidth*fancyOversample, FancyHeight*fancyOversample),
+		target:  rl.LoadRenderTexture(cloth.RenderWidth, cloth.RenderHeight),
 		flag:    rl.LoadRenderTexture(fancyFlagWidth, fancyFlagHeight),
 		shader:  shader,
 		time:    rl.GetShaderLocation(shader, "time"),

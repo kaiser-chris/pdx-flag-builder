@@ -66,6 +66,9 @@ var europaRoots = []string{"main_menu", "loading_screen", "in_game"}
 // hung on with the maps its material is drawn from.
 var gameArtFolders = []folders.Folder{
 	{Path: "gfx/interface/flag", Extension: ".dds"},
+	{Path: "gfx/interface/coat_of_arms", Extension: ".dds"},
+	{Path: "gfx/interface/component_decoration/flag_frames", Extension: ".dds"},
+	{Path: "gfx/interface/component_masks", Extension: ".dds"},
 	{Path: "gfx/models/ui/flags", Extension: ".dds"},
 	{Path: "gfx/models/ui/flags", Extension: ".mesh"},
 }

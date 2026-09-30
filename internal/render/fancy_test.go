@@ -55,7 +55,7 @@ func newFancy(t *testing.T) *Fancy {
 		writePicture(t, filepath.Join(folder, name+".png"))
 	}
 
-	fancy, err := NewFancy(NewPainter(shader, textures), func(name string) (string, bool) {
+	fancy, err := NewFancy(Victoria3.Cloth, NewPainter(shader, textures), func(name string) (string, bool) {
 		if name == ClothMesh {
 			return filepath.Join(folder, name), true
 		}
@@ -117,8 +117,8 @@ func TestFancyDrawsTheClothWithTheFlagOnIt(t *testing.T) {
 	cloth := fancy.Image()
 
 	bounds := cloth.Bounds()
-	if bounds.Dx() != FancyWidth*fancyOversample || bounds.Dy() != FancyHeight*fancyOversample {
-		t.Fatalf("the cloth is %v, want the fancy flag oversampled", bounds)
+	if bounds.Dx() != int(Victoria3.Cloth.RenderWidth) || bounds.Dy() != int(Victoria3.Cloth.RenderHeight) {
+		t.Fatalf("the cloth is %v, want the size the game draws it at", bounds)
 	}
 
 	// The cloth hangs in the middle of the target, covering much of it but

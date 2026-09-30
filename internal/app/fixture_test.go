@@ -132,25 +132,72 @@ var (
 	clothMark = color.RGBA{R: 255, G: 255, B: 255, A: 255}
 )
 
-// writeGameArt fills in the game's own flag artwork, which the preview reads
+// writeGameArt fills in the games' own flag artwork, which the previews read
 // from a configured folder like anything else. The colours are ones a DXT5
-// block holds exactly, since that is the format the game's artwork comes in.
+// block holds exactly, since that is the format the games' artwork comes in.
+//
+// One fixture folder stands in for both games, which no real folder does, but
+// the previews only ever ask for files by name.
 func writeGameArt(t *testing.T, root string) {
 	t.Helper()
 
-	flags := filepath.Join(root, "gfx", "interface", "flag")
-	writeDXT5(t, filepath.Join(flags, render.OverlayTexture), 64, 64, interfaceGrey)
+	for _, game := range render.Games {
+		for _, file := range game.Files() {
+			path := filepath.Join(root, filepath.FromSlash(file.Path))
 
-	for _, size := range render.IconSizes {
-		writeDXT5Frames(t, filepath.Join(flags, size.Border), int(size.FrameWidth), int(size.FrameHeight), borderMarks)
+			switch {
+			case file.Name == render.ClothMesh:
+				writeFile(t, path, string(meshtest.Quad(9, 6)))
+
+			case file.Name == render.ClothDiffuse:
+				writeDXT5(t, path, 32, 32, clothMark)
+
+			case file.Name == render.ClothNormal:
+				writeDXT5(t, path, 32, 32, color.RGBA{R: 0, G: 132, B: 255, A: 255})
+
+			case file.Name == render.ClothProperties:
+				writeDXT5(t, path, 32, 32, color.RGBA{R: 33, G: 0, B: 0, A: 33})
+
+			case file.Name == game.Overlay:
+				writeDXT5(t, path, 64, 64, interfaceGrey)
+
+			default:
+				writeBorder(t, path, game, file.Name)
+			}
+		}
 	}
+}
 
-	models := filepath.Join(root, "gfx", "models", "ui", "flags")
-	writeFile(t, filepath.Join(models, render.ClothMesh), string(meshtest.Quad(9, 6)))
+// writeBorder writes the picture a game frames a flag with: one frame per
+// rank where the game has them, and one frame otherwise.
+func writeBorder(t *testing.T, path string, game *render.Game, name string) {
+	t.Helper()
 
-	writeDXT5(t, filepath.Join(models, render.ClothDiffuse), 32, 32, clothMark)
-	writeDXT5(t, filepath.Join(models, render.ClothNormal), 32, 32, color.RGBA{R: 0, G: 132, B: 255, A: 255})
-	writeDXT5(t, filepath.Join(models, render.ClothProperties), 32, 32, color.RGBA{R: 33, G: 0, B: 0, A: 33})
+	for _, size := range game.Sizes {
+		if size.Mask == name {
+			// A mask is solid where the flag shows, which for the fixture is
+			// all of it.
+			writeDXT5(t, path, int(size.Width), int(size.Height), clothMark)
+
+			return
+		}
+
+		if size.Border != name {
+			continue
+		}
+
+		if size.FrameWidth > 0 {
+			writeDXT5Frames(t, path, int(size.FrameWidth), int(size.FrameHeight), borderMarks)
+
+			return
+		}
+
+		// A border of one frame is stretched over the whole picture, so the
+		// fixture writes one of the size the game's own is.
+		writeDXT5Frames(t, path, int(size.Width)*2, int(size.Height)*2, borderMarks[:1])
+
+		return
+	}
 }
 
 // startApp runs the real application in a hidden window, configured with the

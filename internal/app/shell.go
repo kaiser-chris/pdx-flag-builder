@@ -122,7 +122,10 @@ func (a *App) menuBar() {
 	}
 
 	if gui.BeginMenu(menuPreview) {
-		gui.MenuToggle(labelVictoria3, "", &a.state.showVictoria3)
+		for _, preview := range a.previews {
+			gui.MenuToggle(preview.game.Name, "", &preview.show)
+		}
+
 		imgui.EndMenu()
 	}
 
@@ -223,10 +226,12 @@ func (a *App) closeFocusedWindow() {
 		a.state.showFlagDatabase = false
 	case windowTextureDatabase:
 		a.state.showTextureDatabase = false
-	case windowVictoria3:
-		a.state.showVictoria3 = false
 	default:
-		return
+		for _, preview := range a.previews {
+			if a.state.focusedWindow == preview.title {
+				preview.show = false
+			}
+		}
 	}
 
 	a.state.focusedWindow = ""
