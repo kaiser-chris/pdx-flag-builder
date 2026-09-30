@@ -74,12 +74,12 @@ func TestAddLayerThroughThePicker(t *testing.T) {
 			application.state.selectedLayer, application.state.modified)
 	}
 
-	// A new emblem covers the flag and borrows its first colour, so the white
-	// lower half turns blue.
+	// A new emblem covers the flag, in the marker colours of its own texture,
+	// since it has no colours of its own yet.
 	waitForArtwork(t, application, driver, 2)
 
-	if got := pixel(application, 384, 400); !near(got, fixtureBlue) {
-		t.Errorf("lower half = %v, want the flag's first colour %v under the new emblem", got, fixtureBlue)
+	if got := pixel(application, 384, 400); !near(got, emblemFirst) {
+		t.Errorf("lower half = %v, want the emblem's own marker colour %v", got, emblemFirst)
 	}
 }
 
@@ -301,4 +301,73 @@ func TestEditingPanelsFitTheWindow(t *testing.T) {
 
 	selectLayer(t, application, driver, 0)
 	check("a coloured emblem")
+}
+
+// A layer's colour may point at the flag's colour of the same number, which is
+// what the games' files write more often than anything else. Pointing one
+// colour of the layer at a slot must not take that slot away from the others.
+func TestALayerColourMayReferToEveryColourOfItsFlag(t *testing.T) {
+	application, driver := startApp(t)
+	openFixture(t, application, driver, "TST_emblem")
+	selectLayer(t, application, driver, 0)
+
+	// The emblem's own colour, switched from a named colour to a reference.
+	driver.ClickItem(driver.FindAll(panelSelected, "##kind")[0])
+	driver.Click("", "Slot")
+
+	driver.ClickItem(driver.FindAll(panelSelected, "##slot")[0])
+
+	// The flag has two colours, and the emblem's color1 may take either.
+	for _, slot := range []string{"color1", "color2"} {
+		if !driver.Exists("", slot) {
+			t.Errorf("%s is not offered to refer to", slot)
+		}
+	}
+
+	driver.Click("", "color2")
+
+	emblem := application.state.flag.Layers[0].(*pdx.ColoredEmblem)
+	if color, _ := emblem.Colors.Get("color1"); color.Value != (pdx.SlotColor{Slot: "color2"}) {
+		t.Fatalf("color1 = %#v, want a reference to the flag's color2", color.Value)
+	}
+
+	driver.ClickItem(driver.FindAll(panelSelected, "##slot")[0])
+	driver.Click("", "color1")
+
+	if color, _ := emblem.Colors.Get("color1"); color.Value != (pdx.SlotColor{Slot: "color1"}) {
+		t.Errorf("color1 = %#v, want a reference to the flag's color1", color.Value)
+	}
+}
+
+// A layer the editor adds is new, and a new layer has no colours: the emblem
+// shows the colours of its own texture until the user fills a slot in.
+func TestANewLayerHasNoColours(t *testing.T) {
+	application, driver := startApp(t)
+	openFixture(t, application, driver, "TST_split")
+
+	driver.Click(panelLayers, labelAddLayer)
+	driver.Click("", "Colored Emblem...")
+	driver.Click("", "ce_square.png")
+
+	added, ok := application.state.flag.Layers[0].(*pdx.ColoredEmblem)
+	if !ok {
+		t.Fatalf("layer = %#v, want a coloured emblem", application.state.flag.Layers[0])
+	}
+
+	if len(added.Colors) != 0 {
+		t.Errorf("the new emblem starts with %+v, want no colours at all", added.Colors)
+	}
+
+	// From the texture database it is the same layer, added the same way.
+	driver.Menu("Databases", windowTextureDatabase)
+	driver.ClickItem(rowButton(t, driver, "ce_square.png", labelAddAsLayer))
+
+	fromDatabase, ok := lastLayer(t, application).(*pdx.ColoredEmblem)
+	if !ok {
+		t.Fatalf("last layer = %#v, want a coloured emblem", lastLayer(t, application))
+	}
+
+	if len(fromDatabase.Colors) != 0 {
+		t.Errorf("the emblem added from the database starts with %+v, want no colours at all", fromDatabase.Colors)
+	}
 }

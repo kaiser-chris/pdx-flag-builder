@@ -65,17 +65,14 @@ func RemoveColor(colors *Colors, slot string) bool {
 	return false
 }
 
-// NewColoredEmblem is a coloured emblem as the editor adds one: it borrows the
-// first two colours of the flag it is placed on, so that it shows up in the
-// flag's own colours instead of in the raw marker colours of its texture.
+// NewColoredEmblem is a coloured emblem as the editor adds one.
+//
+// It has no colours: a layer that was just added has said nothing about its
+// colours yet, so it shows the marker colours its texture is painted in until
+// a slot is filled in, and nothing is written to the file that the author did
+// not ask for.
 func NewColoredEmblem(texture string) *ColoredEmblem {
-	return &ColoredEmblem{
-		Texture: texture,
-		Colors: Colors{
-			{Slot: "color1", Value: SlotColor{Slot: "color1"}},
-			{Slot: "color2", Value: SlotColor{Slot: "color2"}},
-		},
-	}
+	return &ColoredEmblem{Texture: texture}
 }
 
 // NewTexturedEmblem is a textured emblem as the editor adds one.

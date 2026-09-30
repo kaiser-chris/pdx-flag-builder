@@ -75,8 +75,9 @@ const (
 //
 // slots is what a slot may refer back to: the flag's colours, whether the set
 // being edited is the flag's own or a layer's. A layer can therefore borrow a
-// colour of its flag, and the flag can reuse one of its own.
-func (a *App) colorEditor(id string, colors *pdx.Colors, slots pdx.Colors) {
+// colour of its flag, and the flag can reuse one of its own; owner is which of
+// the two it is, which decides what a reference may point at.
+func (a *App) colorEditor(id string, colors *pdx.Colors, slots pdx.Colors, owner colorOwner) {
 	imgui.PushIDStr(id)
 	defer imgui.PopID()
 
@@ -94,14 +95,14 @@ func (a *App) colorEditor(id string, colors *pdx.Colors, slots pdx.Colors) {
 		imgui.TextUnformatted(entry.Slot)
 
 		imgui.SameLine()
-		a.kindCombo(entry, slots)
+		a.kindCombo(entry, slots, owner)
 
 		// The value takes whatever the line has left beside the remove button.
 		imgui.SameLine()
 		style := imgui.CurrentStyle()
 		removeWidth := imgui.CalcTextSize("Remove").X + style.FramePadding().X*2
 		width := max(imgui.ContentRegionAvail().X-removeWidth-style.ItemSpacing().X, gui.Scaled(minColorValueWidth))
-		a.colorValueEditor(entry, slots, width)
+		a.colorValueEditor(entry, slots, width, owner)
 
 		imgui.SameLine()
 		if gui.SmallButton("Remove") {
@@ -158,7 +159,7 @@ func (a *App) swatch(entry pdx.Color, slots pdx.Colors) {
 // kindCombo switches a slot between spellings. The colour is carried across as
 // closely as the new spelling allows, so that switching does not change what
 // the flag looks like more than it has to.
-func (a *App) kindCombo(entry *pdx.Color, slots pdx.Colors) {
+func (a *App) kindCombo(entry *pdx.Color, slots pdx.Colors, owner colorOwner) {
 	current := kindOf(entry.Value)
 
 	imgui.SetNextItemWidth(gui.Scaled(kindComboWidth))
@@ -169,19 +170,19 @@ func (a *App) kindCombo(entry *pdx.Color, slots pdx.Colors) {
 	defer imgui.EndCombo()
 
 	for _, kind := range []colorKind{kindNamed, kindRGB, kindHSV, kindSlot} {
-		if kind == kindSlot && len(otherSlots(entry.Slot, slots)) == 0 {
+		if kind == kindSlot && len(referableSlots(entry.Slot, slots, owner)) == 0 {
 			// Nothing to refer to.
 			continue
 		}
 
 		if gui.Selectable(kind.String(), kind == current, 0) && kind != current {
-			entry.Value = a.convertColor(*entry, kind, slots)
+			entry.Value = a.convertColor(*entry, kind, slots, owner)
 			a.changed()
 		}
 	}
 }
 
-func (a *App) convertColor(entry pdx.Color, kind colorKind, slots pdx.Colors) pdx.ColorValue {
+func (a *App) convertColor(entry pdx.Color, kind colorKind, slots pdx.Colors, owner colorOwner) pdx.ColorValue {
 	resolved, _ := entry.Resolve(a.state.library.palette, slots)
 
 	switch kind {
@@ -194,7 +195,7 @@ func (a *App) convertColor(entry pdx.Color, kind colorKind, slots pdx.Colors) pd
 		return pdx.HSVColor{H: hue, S: saturation, V: value}
 
 	case kindSlot:
-		return pdx.SlotColor{Slot: otherSlots(entry.Slot, slots)[0]}
+		return pdx.SlotColor{Slot: referableSlots(entry.Slot, slots, owner)[0]}
 	}
 
 	if name, ok := a.state.library.palette.Nearest(resolved); ok {
@@ -204,21 +205,40 @@ func (a *App) convertColor(entry pdx.Color, kind colorKind, slots pdx.Colors) pd
 	return pdx.NamedColor{Name: "white"}
 }
 
-// otherSlots lists the slots a slot may refer to: every filled one but itself,
-// since a slot pointing at itself resolves to nothing.
-func otherSlots(slot string, slots pdx.Colors) []string {
+// colorOwner is whose colours are being edited.
+type colorOwner uint8
+
+const (
+	// flagColors are the coat of arms' own colours.
+	flagColors colorOwner = iota
+
+	// layerColors are a layer's, which refer back to the flag's.
+	layerColors
+)
+
+// referableSlots lists the slots a colour may refer to: the filled colours of
+// the coat of arms.
+//
+// A layer may refer to any of them, the one of its own number included, which
+// is the reference the games' files write most often; what one colour of the
+// layer refers to does not take that slot away from the others. Only the coat
+// of arms' own colours may not refer to themselves, since a slot pointing at
+// itself resolves to nothing.
+func referableSlots(slot string, slots pdx.Colors, owner colorOwner) []string {
 	var names []string
 
 	for _, candidate := range slots {
-		if candidate.Slot != slot {
-			names = append(names, candidate.Slot)
+		if owner == flagColors && candidate.Slot == slot {
+			continue
 		}
+
+		names = append(names, candidate.Slot)
 	}
 
 	return names
 }
 
-func (a *App) colorValueEditor(entry *pdx.Color, slots pdx.Colors, width float32) {
+func (a *App) colorValueEditor(entry *pdx.Color, slots pdx.Colors, width float32, owner colorOwner) {
 	switch value := entry.Value.(type) {
 	case pdx.NamedColor:
 		a.namedColorEditor(entry, value, width)
@@ -239,7 +259,7 @@ func (a *App) colorValueEditor(entry *pdx.Color, slots pdx.Colors, width float32
 	case pdx.SlotColor:
 		imgui.SetNextItemWidth(width)
 		if gui.BeginCombo("##slot", value.Slot) {
-			for _, candidate := range otherSlots(entry.Slot, slots) {
+			for _, candidate := range referableSlots(entry.Slot, slots, owner) {
 				imgui.PushIDStr(candidate)
 
 				// The colour the slot comes to, so that the choice is not made

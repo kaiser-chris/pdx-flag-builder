@@ -223,3 +223,19 @@ func TestWordingHelpers(t *testing.T) {
 		}
 	}
 }
+
+// A layer's colour may refer to any colour of the flag it sits on, including
+// the one of its own number: color2 = color2 is the commonest reference the
+// games' files write. Only the flag's own colours may not refer to
+// themselves, since a slot pointing at itself resolves to nothing.
+func TestWhichSlotsAColourMayReferTo(t *testing.T) {
+	flag := pdx.Colors{{Slot: "color1"}, {Slot: "color2"}, {Slot: "color3"}}
+
+	if got := referableSlots("color2", flag, layerColors); !slices.Equal(got, []string{"color1", "color2", "color3"}) {
+		t.Errorf("a layer's color2 may refer to %v, want every colour of the flag", got)
+	}
+
+	if got := referableSlots("color2", flag, flagColors); !slices.Equal(got, []string{"color1", "color3"}) {
+		t.Errorf("the flag's own color2 may refer to %v, want every colour but itself", got)
+	}
+}

@@ -77,24 +77,31 @@ func TestNewInstanceIsTheImpliedPlacement(t *testing.T) {
 	}
 }
 
-func TestNewColoredEmblemTakesTheFlagColours(t *testing.T) {
-	flag := Flag{Colors: Colors{
-		{Slot: "color1", Value: RGBColor{R: 10}},
-		{Slot: "color2", Value: RGBColor{G: 20}},
-	}}
-
+// A layer the editor adds has said nothing about its colours yet, so it has
+// none: it shows the colours of its own texture until one is filled in, and
+// writing it out puts nothing in the file the author did not ask for.
+func TestNewLayersHaveNothingSet(t *testing.T) {
 	emblem := NewColoredEmblem("ce_solid.dds")
 
-	first, _ := emblem.Colors.Get("color1")
-	resolved, ok := first.Resolve(Palette{}, flag.Colors)
+	if emblem.Texture != "ce_solid.dds" || len(emblem.Colors) != 0 || len(emblem.Instances) != 0 {
+		t.Errorf("a new coloured emblem = %+v, want its texture and nothing else", emblem)
+	}
 
-	if !ok || resolved.R != 10 {
-		t.Errorf("a new emblem's first colour resolved to %v, want the flag's first colour", resolved)
+	if textured := NewTexturedEmblem("te_mark.dds"); textured.Texture != "te_mark.dds" || len(textured.Instances) != 0 {
+		t.Errorf("a new textured emblem = %+v, want its texture and nothing else", textured)
+	}
+
+	if sub := NewSubFlag("OTHER"); sub.Parent != "OTHER" || len(sub.Instances) != 0 {
+		t.Errorf("a new sub flag = %+v, want its parent and nothing else", sub)
 	}
 }
 
 func TestCloneDoesNotShareLayers(t *testing.T) {
 	emblem := NewColoredEmblem("ce_solid.dds")
+	emblem.Colors = Colors{
+		{Slot: "color1", Value: SlotColor{Slot: "color1"}},
+		{Slot: "color2", Value: RGBColor{G: 20}},
+	}
 	emblem.Instances = append(emblem.Instances, NewInstance())
 	original := Flag{Layers: []Layer{emblem}}
 

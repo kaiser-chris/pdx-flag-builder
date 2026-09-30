@@ -214,7 +214,7 @@ func (a *App) selectedLayerBody() {
 		a.maskField(typed)
 
 		sectionHeader("Colours")
-		a.colorEditor("emblem", &typed.Colors, flag.Colors)
+		a.colorEditor("emblem", &typed.Colors, flag.Colors, layerColors)
 
 		a.placementEditor(&typed.Instances)
 
@@ -245,7 +245,7 @@ func (a *App) coatOfArmsEditor(flag *pdx.Flag) {
 	a.textureField("Pattern", flag.Pattern, pickPattern)
 
 	sectionHeader("Colours")
-	a.colorEditor("flag", &flag.Colors, flag.Colors)
+	a.colorEditor("flag", &flag.Colors, flag.Colors, flagColors)
 }
 
 // textureField shows a texture and offers to change it. It also says when the
