@@ -14,6 +14,8 @@ import (
 	"testing"
 
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/config"
+	"github.com/kaiser-chris/pdx-flag-builder-go/internal/mesh/meshtest"
+	"github.com/kaiser-chris/pdx-flag-builder-go/internal/render"
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/uitest"
 )
 
@@ -111,7 +113,44 @@ func newFixtureGame(t *testing.T) string {
 			return color.RGBA{}
 		})
 
+	writeGameArt(t, root)
+
 	return root
+}
+
+// The artwork the game's own interface draws a flag with, which the fixture
+// stands in for: a grey that halves whatever it is multiplied over, a border
+// of one colour per rank, and a cloth of one colour on a square mesh.
+var (
+	interfaceGrey = color.RGBA{R: 132, G: 130, B: 132, A: 255}
+	borderMarks   = []color.RGBA{
+		{R: 255, G: 0, B: 132, A: 255},
+		{R: 0, G: 255, B: 132, A: 255},
+		{R: 0, G: 130, B: 255, A: 255},
+		{R: 255, G: 255, B: 132, A: 255},
+	}
+	clothMark = color.RGBA{R: 255, G: 255, B: 255, A: 255}
+)
+
+// writeGameArt fills in the game's own flag artwork, which the preview reads
+// from a configured folder like anything else. The colours are ones a DXT5
+// block holds exactly, since that is the format the game's artwork comes in.
+func writeGameArt(t *testing.T, root string) {
+	t.Helper()
+
+	flags := filepath.Join(root, "gfx", "interface", "flag")
+	writeDXT5(t, filepath.Join(flags, render.OverlayTexture), 64, 64, interfaceGrey)
+
+	for _, size := range render.IconSizes {
+		writeDXT5Frames(t, filepath.Join(flags, size.Border), int(size.FrameWidth), int(size.FrameHeight), borderMarks)
+	}
+
+	models := filepath.Join(root, "gfx", "models", "ui", "flags")
+	writeFile(t, filepath.Join(models, render.ClothMesh), string(meshtest.Quad(9, 6)))
+
+	writeDXT5(t, filepath.Join(models, render.ClothDiffuse), 32, 32, clothMark)
+	writeDXT5(t, filepath.Join(models, render.ClothNormal), 32, 32, color.RGBA{R: 0, G: 132, B: 255, A: 255})
+	writeDXT5(t, filepath.Join(models, render.ClothProperties), 32, 32, color.RGBA{R: 33, G: 0, B: 0, A: 33})
 }
 
 // startApp runs the real application in a hidden window, configured with the
@@ -240,13 +279,47 @@ func writePNG(t *testing.T, path string, width, height int, paint func(x, y int)
 func writeDXT5(t *testing.T, path string, width, height int, fill color.RGBA) {
 	t.Helper()
 
-	// Both endpoints the same colour and every index zero: every pixel of
-	// the block is the first endpoint.
+	writeDXT5Blocks(t, path, width, height, func(int, int) color.RGBA { return fill })
+}
+
+// dxt5Block is one four by four block of a single colour: both endpoints that
+// colour and every index zero.
+func dxt5Block(fill color.RGBA) []byte {
 	rgb565 := uint16(fill.R>>3)<<11 | uint16(fill.G>>2)<<5 | uint16(fill.B>>3)
-	block := []byte{
+
+	return []byte{
 		fill.A, fill.A, 0, 0, 0, 0, 0, 0, // alpha: both endpoints, all indices zero
 		byte(rgb565), byte(rgb565 >> 8), byte(rgb565), byte(rgb565 >> 8), 0, 0, 0, 0,
 	}
+}
+
+// writeDXT5Frames writes a DXT5 compressed DDS file of frames side by side,
+// each a frame around nothing in one colour, the way the game's rank borders
+// hold one frame per rank.
+func writeDXT5Frames(t *testing.T, path string, frameWidth, height int, fills []color.RGBA) {
+	t.Helper()
+
+	// How wide the frame's own line is, in the picture's own pixels. The
+	// borders are drawn at half their size, so this is a couple of pixels on
+	// screen: enough to be seen, little enough to leave the flag showing.
+	const line = 8
+
+	writeDXT5Blocks(t, path, frameWidth*len(fills), height, func(x, y int) color.RGBA {
+		fill := fills[min(x/frameWidth, len(fills)-1)]
+
+		if across := x % frameWidth; across < line || across >= frameWidth-line || y < line || y >= height-line {
+			return fill
+		}
+
+		// A frame is a line around the flag, which shows through the middle.
+		return color.RGBA{}
+	})
+}
+
+// writeDXT5Blocks writes a DXT5 compressed DDS file whose colour is given per
+// four by four block, by the coordinates of the block in the whole picture.
+func writeDXT5Blocks(t *testing.T, path string, width, height int, colorAt func(x, y int) color.RGBA) {
+	t.Helper()
 
 	levels := 1
 	for size := max(width, height); size > 1; size /= 2 {
@@ -268,9 +341,15 @@ func writeDXT5(t *testing.T, path string, width, height int, fill color.RGBA) {
 	data := header
 
 	for level := range levels {
-		blocks := (max(width>>level, 1) + 3) / 4 * ((max(height>>level, 1) + 3) / 4)
-		for range blocks {
-			data = append(data, block...)
+		across := (max(width>>level, 1) + 3) / 4
+		down := (max(height>>level, 1) + 3) / 4
+
+		for row := range down {
+			for column := range across {
+				// Where the block sits in the picture at its full size, since
+				// that is what the colour is asked for in.
+				data = append(data, dxt5Block(colorAt(column*4<<level, row*4<<level))...)
+			}
 		}
 	}
 

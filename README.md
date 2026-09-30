@@ -76,6 +76,27 @@ To move a placement with the keyboard, click the flag and use the arrow keys:
 
 **Ctrl+Z** undoes and **Ctrl+Y** redoes.
 
+### Seeing it as the game will
+
+**Preview → Victoria 3** opens the flag the way the game shows a country's:
+
+| Size   | Flag     | Border   |
+|--------|----------|----------|
+| Fancy  | 120 x 90 | none     |
+| Large  | 96 x 64  | 114 x 82 |
+| Normal | 66 x 44  | 80 x 58  |
+| Small  | 48 x 32  | 62 x 46  |
+| Tiny   | 27 x 18  | 33 x 24  |
+
+The flat sizes carry the shading the game multiplies over every flag and the
+border of a rank, which **Rank Border** chooses. The fancy flag is the cloth
+the game hangs a flag on: the game's own mesh, waved by the game's own
+animation and lit by the sun of its interface.
+
+All of that is read from the game's own files, so a set of folders with only
+mods in it shows the flags on their own, and the window says which files it
+did not find.
+
 ### Saving and exporting
 
 | Menu entry                                   | Effect |

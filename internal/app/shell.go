@@ -121,6 +121,11 @@ func (a *App) menuBar() {
 		imgui.EndMenu()
 	}
 
+	if gui.BeginMenu(menuPreview) {
+		gui.MenuToggle(labelVictoria3, "", &a.state.showVictoria3)
+		imgui.EndMenu()
+	}
+
 	if gui.BeginMenu("View") {
 		gui.MenuToggle(panelLayers, "", &a.state.showLayers)
 		gui.MenuToggle(panelSelected, "", &a.state.showSelected)
@@ -218,6 +223,8 @@ func (a *App) closeFocusedWindow() {
 		a.state.showFlagDatabase = false
 	case windowTextureDatabase:
 		a.state.showTextureDatabase = false
+	case windowVictoria3:
+		a.state.showVictoria3 = false
 	default:
 		return
 	}

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/AllenDang/cimgui-go/imgui"
+	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"github.com/kaiser-chris/pdx-flag-builder-go/assets"
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/config"
@@ -55,6 +56,11 @@ type App struct {
 	textures *render.Textures
 	painter  *render.Painter
 	preview  *render.Preview
+
+	// icons are the flag as the games' own interfaces show it, drawn into one
+	// target per size, and fancy is the waving cloth the game hangs it on.
+	icons *render.Icons
+	fancy *render.Fancy
 
 	// thumbnails are the small previews in the lists, drawn into an atlas that
 	// is handed to Dear ImGui once, the first time a list shows one.
@@ -152,6 +158,18 @@ func New(options Options) (*App, error) {
 	application.painter.SetSubFlagLookup(application.subFlag)
 
 	application.preview = render.NewPreview(render.FlagWidth, render.FlagHeight, application.painter)
+	application.icons = render.NewIcons(application.painter, application.textures)
+
+	fancy, err := render.NewFancy(application.painter, application.texturePath)
+	if err != nil {
+		application.window.Close()
+
+		// The cloth's shader is bundled with the application, so a failure
+		// here is a broken build rather than anything the user can put right.
+		return nil, fmt.Errorf("load the cloth shader: %w", err)
+	}
+
+	application.fancy = fancy
 	application.thumbnails = render.NewThumbnails(shader, application.texturePath)
 	application.thumbnails.SetSubFlagLookup(application.subFlag)
 	application.dockWindowClass = imgui.NewWindowClass()
@@ -160,6 +178,8 @@ func New(options Options) (*App, error) {
 
 	application.window.OnShutdown(func() {
 		application.preview.Unload()
+		application.icons.Unload()
+		application.fancy.Unload()
 		application.thumbnails.Unload()
 		application.textures.Unload()
 		application.shader.Unload()
@@ -213,18 +233,25 @@ func openStore(dir string) (config.Store, error) {
 func (a *App) drawOffscreen() {
 	a.textures.Upload()
 	a.preview.Draw(a.state.flag)
+
+	if a.state.showVictoria3 {
+		a.icons.Draw(a.state.flag, a.state.previewRank)
+		a.fancy.Draw(a.state.flag, float32(rl.GetTime()))
+	}
+
 	a.finishExport()
 	a.thumbnails.Draw()
 }
 
-// texturePath turns the file name a coat of arms refers to into a path on disk.
+// texturePath turns the file name a coat of arms refers to into a path on
+// disk. The artwork the game's own interface draws a flag with is found the
+// same way, since it is asked for by name just like any other texture.
 func (a *App) texturePath(name string) (string, bool) {
-	found, ok := a.state.library.set.Texture(name)
-	if !ok {
-		return "", false
+	if found, ok := a.state.library.set.Texture(name); ok {
+		return found.Path, true
 	}
 
-	return found.Path, true
+	return a.state.library.set.GameArt(name)
 }
 
 // subFlag finds the coat of arms a sub flag layer refers to.
@@ -268,6 +295,7 @@ func (a *App) reportLoad() {
 
 	a.painter.SetPalette(library.palette)
 	a.textures.Forget()
+	a.fancy.Forget()
 	a.thumbnails.SetPalette(library.palette)
 	a.thumbnails.Forget()
 
@@ -327,6 +355,7 @@ func (a *App) frame() {
 	a.settingsWindow()
 	a.flagDatabaseWindow()
 	a.textureDatabaseWindow()
+	a.victoria3Window()
 	a.aboutPopup()
 	a.pickerPopup()
 	a.discardPopup()

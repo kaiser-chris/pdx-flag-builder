@@ -44,6 +44,20 @@ func (s Set) Texture(name string) (Texture, bool) {
 	return Texture{}, false
 }
 
+// GameArt finds a piece of the games' own interface artwork by file name,
+// such as the shading drawn over a flag or the cloth it is hung on.
+func (s Set) GameArt(name string) (string, bool) {
+	for index := len(s) - 1; index >= 0; index-- {
+		for candidate, path := range s[index].GameArt {
+			if strings.EqualFold(candidate, name) {
+				return path, true
+			}
+		}
+	}
+
+	return "", false
+}
+
 // Palette merges the named colours of every folder.
 func (s Set) Palette() pdx.Palette {
 	merged := pdx.Palette{}

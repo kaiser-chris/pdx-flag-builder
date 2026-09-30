@@ -60,6 +60,16 @@ const (
 // europaRoots are the three folders Europa Universalis 5 splits its data over.
 var europaRoots = []string{"main_menu", "loading_screen", "in_game"}
 
+// gameArtFolders are where the games keep the artwork their own interface
+// draws a flag with, rather than the artwork a coat of arms is made of: the
+// shading over a flag and the borders of the ranks, and the cloth a flag is
+// hung on with the maps its material is drawn from.
+var gameArtFolders = []folders.Folder{
+	{Path: "gfx/interface/flag", Extension: ".dds"},
+	{Path: "gfx/models/ui/flags", Extension: ".dds"},
+	{Path: "gfx/models/ui/flags", Extension: ".mesh"},
+}
+
 // TextureKind is which part of a coat of arms a texture can be used for.
 type TextureKind uint8
 
@@ -131,6 +141,11 @@ type Database struct {
 	Flags    []pdx.Flag
 	Palette  pdx.Palette
 	Textures []Texture
+
+	// GameArt is the artwork the game's own interface draws a flag with, by
+	// file name. It is kept apart from the textures a coat of arms is made
+	// of, which are what the texture database lists.
+	GameArt map[string]string
 
 	Problems []Problem
 }
@@ -214,6 +229,7 @@ func load(configured []Folder, index int) (*Database, error) {
 
 	database.readFlags(heraldry)
 	database.readTextures(heraldry)
+	database.readGameArt(set)
 	database.readProblems(set.Diagnostics, heraldry.Diagnostics)
 
 	sort.Slice(database.Flags, func(first, second int) bool {
@@ -283,6 +299,21 @@ func (d *Database) readTextures(heraldry *victoria3.Heraldry) {
 // author can act on. What the library reports at info severity is not a
 // problem but a remark, such as one file overriding another, and would only
 // bury the rest.
+// readGameArt lists the interface artwork this folder holds.
+func (d *Database) readGameArt(set *folders.Set) {
+	d.GameArt = map[string]string{}
+
+	for _, folder := range gameArtFolders {
+		files, _ := set.Files(folder)
+
+		for _, file := range files {
+			if d.holds(file.Path) {
+				d.GameArt[filepath.Base(file.Path)] = file.Path
+			}
+		}
+	}
+}
+
 func (d *Database) readProblems(diagnostics ...report.Diagnostics) {
 	for _, group := range diagnostics {
 		for _, diagnostic := range group.Filter(report.SeverityWarning) {

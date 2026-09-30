@@ -18,6 +18,7 @@ const (
 	windowSettings        = "Settings"
 	windowFlagDatabase    = "Flag Database"
 	windowTextureDatabase = "Texture Database"
+	windowVictoria3       = "Victoria 3 Preview"
 
 	popupAbout   = "About"
 	popupDiscard = "Unsaved Changes"
@@ -47,6 +48,11 @@ type state struct {
 	showSettings        bool
 	showFlagDatabase    bool
 	showTextureDatabase bool
+	showVictoria3       bool
+
+	// previewRank is the rank whose border the Victoria 3 preview draws,
+	// counted from one the way the game's files number them.
+	previewRank int
 
 	// focusedWindow is the closable window the user touched most recently.
 	// Escape closes that one, matching how the Odin version unstacked windows.

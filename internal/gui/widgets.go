@@ -81,10 +81,31 @@ func recordIn(where place, label string, checked bool) {
 	})
 }
 
+// Record makes the interface tests aware of something drawn without one of the
+// widgets here, such as an image drawn through the backend, under a name of
+// its own. It records whatever was drawn last.
+func Record(label string) {
+	record(label, false)
+}
+
 // Button is imgui.Button.
 func Button(label string) bool {
 	pressed := imgui.Button(label)
 	record(label, false)
+
+	return pressed
+}
+
+// ToggleButton is a button that stays pressed in while it is the one that is
+// on, which is what makes a row of them read as a choice between them.
+func ToggleButton(label string, on bool) bool {
+	if on {
+		imgui.PushStyleColorVec4(imgui.ColButton, *imgui.StyleColorVec4(imgui.ColButtonActive))
+		defer imgui.PopStyleColor()
+	}
+
+	pressed := imgui.Button(label)
+	record(label, on)
 
 	return pressed
 }

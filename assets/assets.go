@@ -17,8 +17,10 @@ var files embed.FS
 // Well known assets, referenced by name instead of by a raw path so that a
 // typo is a compile error rather than a missing file at runtime.
 const (
-	Icon          = "icon.png"
-	ShaderRecolor = "shaders/recolor.fs"
+	Icon               = "icon.png"
+	ShaderRecolor      = "shaders/recolor.fs"
+	ShaderFlagVertex   = "shaders/flag3d.vs"
+	ShaderFlagFragment = "shaders/flag3d.fs"
 )
 
 // Read returns the contents of a bundled asset.
