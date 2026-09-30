@@ -135,7 +135,7 @@ func (p *Painter) drawPattern(flag pdx.Flag, destination rl.Rectangle) {
 
 	recolorings := p.recolorings(flag.Colors, flag.Colors, PatternSlotColors)
 
-	p.shader.Draw(pattern, wholeTexture(pattern), destination, DrawOptions{
+	p.shader.Draw(pattern, wholeTexture(pattern), quadOf(destination), DrawOptions{
 		Recolorings: recolorings,
 	})
 }
@@ -153,18 +153,15 @@ func (p *Painter) drawColoredEmblem(emblem *pdx.ColoredEmblem, flag pdx.Flag, de
 	maskTexture, maskColor, masked := p.mask(emblem.Mask, flag)
 
 	for _, instance := range pdx.Placements(emblem.Instances) {
-		target := instanceRect(instance, destination)
-		origin := rl.Vector2{X: target.Width / 2, Y: target.Height / 2}
+		target := instanceQuad(instance, destination)
 
 		options := DrawOptions{
-			Origin:             origin,
-			Rotation:           instance.Rotation,
 			Recolorings:        recolorings,
 			BlueChannelShading: true,
 		}
 
 		if masked {
-			mask := maskFor(maskTexture, maskColor, destination, target, origin, instance.Rotation)
+			mask := maskFor(maskTexture, maskColor, destination, target)
 			options.Mask = &mask
 		}
 
@@ -181,25 +178,20 @@ func (p *Painter) drawTexturedEmblem(emblem *pdx.TexturedEmblem, flag pdx.Flag, 
 	maskTexture, maskColor, masked := p.mask(emblem.Mask, flag)
 
 	for _, instance := range pdx.Placements(emblem.Instances) {
-		target := instanceRect(instance, destination)
-		origin := rl.Vector2{X: target.Width / 2, Y: target.Height / 2}
+		target := instanceQuad(instance, destination)
 
 		// A textured emblem is already in its final colours, so it is drawn
 		// as it is. Only a mask needs the shader, which replaces no colour
 		// and cuts the emblem to the part of the pattern it belongs to.
 		if !masked {
-			drawTexture(texture, wholeTexture(texture), target, origin, instance.Rotation, rl.White)
+			drawQuad(texture, wholeTexture(texture), target, rl.White)
 
 			continue
 		}
 
-		mask := maskFor(maskTexture, maskColor, destination, target, origin, instance.Rotation)
+		mask := maskFor(maskTexture, maskColor, destination, target)
 
-		p.shader.Draw(texture, wholeTexture(texture), target, DrawOptions{
-			Origin:   origin,
-			Rotation: instance.Rotation,
-			Mask:     &mask,
-		})
+		p.shader.Draw(texture, wholeTexture(texture), target, DrawOptions{Mask: &mask})
 	}
 }
 
@@ -292,20 +284,42 @@ func wholeTexture(texture rl.Texture2D) rl.Rectangle {
 	return rl.Rectangle{Width: float32(texture.Width), Height: float32(texture.Height)}
 }
 
-// instanceRect works out where one placement of an emblem lands on the flag.
-func instanceRect(instance pdx.Instance, flag rl.Rectangle) rl.Rectangle {
-	stretch, squish := rotationDistortion(instance.Rotation)
+// instanceQuad works out where one placement of an emblem lands on the flag.
+//
+// The games turn an emblem inside its own picture rather than on the flag: the
+// texture is turned as the square it is drawn as, and that turned picture is
+// then stretched to the size the scale asks for, across by the width of the
+// flag and down by its height. On a canvas half again as wide as it is tall
+// the two orders are not the same, and the games' own flags show which one
+// they use. A quarter turn leaves an emblem in exactly the rectangle it had,
+// with the texture lying on its side in it: that is why Catalonia's nine
+// stripes, turned upright, still cover the flag from edge to edge, and why the
+// Orange Free State's canton is filled by a tricolour turned into it. Turned
+// by anything else the picture leans over, and at an eighth of a turn it comes
+// out the diamond the fascist Hungarian and Polish flags are drawn with.
+func instanceQuad(instance pdx.Instance, flag rl.Rectangle) Quad {
+	halfWidth := flag.Width * instance.Scale.X / 2
+	halfHeight := flag.Height * instance.Scale.Y / 2
 
-	width := flag.Width * instance.Scale.X * squish
-	height := flag.Height * instance.Scale.Y * stretch
+	sin, cos := math.Sincos(float64(instance.Rotation) * math.Pi / 180)
+
+	// Where the texture's own axes end up: turned first, and each part of the
+	// turned axis then stretched by the flag's own width and height.
+	alongX := rl.Vector2{X: halfWidth * float32(cos), Y: halfHeight * float32(sin)}
+	alongY := rl.Vector2{X: -halfWidth * float32(sin), Y: halfHeight * float32(cos)}
 
 	// A position of one half is the middle of the flag, and moving away from
 	// it shifts the emblem by that fraction of the whole flag.
-	return rl.Rectangle{
-		X:      flag.X + (flag.Width-width)/2 + flag.Width*(instance.Position.X-0.5) + width/2,
-		Y:      flag.Y + (flag.Height-height)/2 + flag.Height*(instance.Position.Y-0.5) + height/2,
-		Width:  width,
-		Height: height,
+	centre := rl.Vector2{
+		X: flag.X + flag.Width*instance.Position.X,
+		Y: flag.Y + flag.Height*instance.Position.Y,
+	}
+
+	return Quad{
+		{X: centre.X - alongX.X - alongY.X, Y: centre.Y - alongX.Y - alongY.Y},
+		{X: centre.X + alongX.X - alongY.X, Y: centre.Y + alongX.Y - alongY.Y},
+		{X: centre.X + alongX.X + alongY.X, Y: centre.Y + alongX.Y + alongY.Y},
+		{X: centre.X - alongX.X + alongY.X, Y: centre.Y - alongX.Y + alongY.Y},
 	}
 }
 
@@ -320,81 +334,25 @@ func subFlagRect(instance pdx.SubInstance, flag rl.Rectangle) rl.Rectangle {
 	}
 }
 
-// rotationDistortion reproduces the way the games resize a rotated emblem.
-//
-// The canvas is half again as wide as it is tall while scales are fractions of
-// it, so a quarter turn would squash an emblem unless its size changes with the
-// angle. Both factors are strongest at a quarter turn and fade to nothing at no
-// turn and at a half turn. The numbers are an approximation carried over from
-// the Odin version, which is the only description of this behaviour there is;
-// four instances in the base game rotate at all.
-func rotationDistortion(rotation float32) (stretch, squish float32) {
-	angle := float32(math.Mod(float64(rotation), 180))
-	if angle < 0 {
-		angle += 180
-	}
-
-	amount := 1 - float32(math.Abs(float64((angle-90)/90)))
-
-	return 1 + 0.5*amount, 1 - 0.25*amount
-}
-
 // maskFor works out how the shader turns a point on the emblem into a point on
 // the pattern, so that it can look up which slot that pixel of the pattern
 // belongs to.
 //
 // The emblem is drawn as its own quad with its own position, scale and
-// rotation, so the corner and the two edge directions of that quad are worked
-// out in the flag's own space first, then divided through by the flag
-// rectangle to land in the pattern's texture coordinates.
-func maskFor(
-	texture rl.Texture2D,
-	markerColor color.RGBA,
-	flag rl.Rectangle,
-	target rl.Rectangle,
-	origin rl.Vector2,
-	rotation float32,
-) Mask {
-	var (
-		topLeft    [2]float32
-		alongEdgeX [2]float32
-		alongEdgeY [2]float32
-	)
-
-	if rotation == 0 {
-		topLeft = [2]float32{target.X - origin.X, target.Y - origin.Y}
-		alongEdgeX = [2]float32{target.Width, 0}
-		alongEdgeY = [2]float32{0, target.Height}
-	} else {
-		radians := float64(rotation) * math.Pi / 180
-		sin := float32(math.Sin(radians))
-		cos := float32(math.Cos(radians))
-
-		offsetX := -origin.X
-		offsetY := -origin.Y
-
-		topLeft = [2]float32{
-			target.X + offsetX*cos - offsetY*sin,
-			target.Y + offsetX*sin + offsetY*cos,
-		}
-		alongEdgeX = [2]float32{target.Width * cos, target.Width * sin}
-		alongEdgeY = [2]float32{-target.Height * sin, target.Height * cos}
-	}
+// rotation, so the corner the texture starts at and the two edges it runs
+// along are worked out in the flag's own space first, then divided through by
+// the flag rectangle to land in the pattern's texture coordinates.
+func maskFor(texture rl.Texture2D, markerColor color.RGBA, flag rl.Rectangle, target Quad) Mask {
+	alongX, alongY := target.edges()
 
 	return Mask{
 		Texture: texture,
 		Color:   markerColor,
 		UVOffset: [2]float32{
-			(topLeft[0] - flag.X) / flag.Width,
-			(topLeft[1] - flag.Y) / flag.Height,
+			(target[0].X - flag.X) / flag.Width,
+			(target[0].Y - flag.Y) / flag.Height,
 		},
-		UVAxisX: [2]float32{
-			alongEdgeX[0] / flag.Width,
-			alongEdgeX[1] / flag.Height,
-		},
-		UVAxisY: [2]float32{
-			alongEdgeY[0] / flag.Width,
-			alongEdgeY[1] / flag.Height,
-		},
+		UVAxisX: [2]float32{alongX.X / flag.Width, alongX.Y / flag.Height},
+		UVAxisY: [2]float32{alongY.X / flag.Width, alongY.Y / flag.Height},
 	}
 }

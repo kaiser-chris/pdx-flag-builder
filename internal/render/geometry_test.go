@@ -23,37 +23,121 @@ func sameRect(got, want rl.Rectangle) bool {
 		nearly(got.Width, want.Width) && nearly(got.Height, want.Height)
 }
 
-func TestInstanceRect(t *testing.T) {
+// bounds is the rectangle a quad takes up.
+func bounds(quad Quad) rl.Rectangle {
+	left, right := quad[0].X, quad[0].X
+	top, bottom := quad[0].Y, quad[0].Y
+
+	for _, corner := range quad[1:] {
+		left, right = min(left, corner.X), max(right, corner.X)
+		top, bottom = min(top, corner.Y), max(bottom, corner.Y)
+	}
+
+	return rl.Rectangle{X: left, Y: top, Width: right - left, Height: bottom - top}
+}
+
+func sameQuad(got, want Quad) bool {
+	for index, corner := range got {
+		if !nearly(corner.X, want[index].X) || !nearly(corner.Y, want[index].Y) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func TestInstanceQuad(t *testing.T) {
+	// The corners of the flag itself, in the order a quad holds them.
+	whole := Quad{{X: 100, Y: 50}, {X: 868, Y: 50}, {X: 868, Y: 562}, {X: 100, Y: 562}}
+
 	tests := []struct {
 		name     string
 		instance pdx.Instance
-		want     rl.Rectangle
+		want     Quad
 	}{
 		{
-			// The implied placement covers the whole flag. The rectangle is
-			// given by its centre, which is where the emblem turns around.
+			// The implied placement covers the whole flag.
 			name:     "default",
 			instance: pdx.NewInstance(),
-			want:     rl.Rectangle{X: 100 + 384, Y: 50 + 256, Width: 768, Height: 512},
+			want:     whole,
 		},
 		{
 			name:     "half size in the top left quarter",
 			instance: pdx.Instance{Position: pdx.Vec2{X: 0.25, Y: 0.25}, Scale: pdx.Vec2{X: 0.5, Y: 0.5}},
-			want:     rl.Rectangle{X: 100 + 192, Y: 50 + 128, Width: 384, Height: 256},
+			want:     Quad{{X: 100, Y: 50}, {X: 484, Y: 50}, {X: 484, Y: 306}, {X: 100, Y: 306}},
 		},
 		{
-			// A negative scale mirrors the emblem; the rectangle keeps its
-			// centre and turns its width around.
+			// A negative scale mirrors the emblem, and its corners cross over.
 			name:     "mirrored",
 			instance: pdx.Instance{Position: pdx.Vec2{X: 0.5, Y: 0.5}, Scale: pdx.Vec2{X: -1, Y: 1}},
-			want:     rl.Rectangle{X: 100 + 384, Y: 50 + 256, Width: -768, Height: 512},
+			want:     Quad{{X: 868, Y: 50}, {X: 100, Y: 50}, {X: 100, Y: 562}, {X: 868, Y: 562}},
+		},
+		{
+			// Half a turn is the same rectangle upside down.
+			name:     "half a turn",
+			instance: pdx.Instance{Position: pdx.Vec2{X: 0.5, Y: 0.5}, Scale: pdx.Vec2{X: 1, Y: 1}, Rotation: 180},
+			want:     Quad{{X: 868, Y: 562}, {X: 100, Y: 562}, {X: 100, Y: 50}, {X: 868, Y: 50}},
+		},
+		{
+			// A quarter turn leaves the emblem in the rectangle it had, with the
+			// texture lying on its side in it. That is why Catalonia's nine
+			// stripes, turned upright, still cover the flag from edge to edge.
+			name:     "a quarter turn covers the same rectangle",
+			instance: pdx.Instance{Position: pdx.Vec2{X: 0.5, Y: 0.5}, Scale: pdx.Vec2{X: 1, Y: 1}, Rotation: 90},
+			want:     Quad{{X: 868, Y: 50}, {X: 868, Y: 562}, {X: 100, Y: 562}, {X: 100, Y: 50}},
+		},
+		{
+			// The canton of the Orange Free State: a tricolour turned upright
+			// into exactly the rectangle the plain emblem under it fills.
+			name: "a quarter turn of a canton",
+			instance: pdx.Instance{
+				Position: pdx.Vec2{X: 0.2, Y: 0.25}, Scale: pdx.Vec2{X: 0.4, Y: 0.5}, Rotation: 90,
+			},
+			want: Quad{{X: 407.2, Y: 50}, {X: 407.2, Y: 306}, {X: 100, Y: 306}, {X: 100, Y: 50}},
 		},
 	}
 
 	for _, test := range tests {
-		if got := instanceRect(test.instance, canvas); !sameRect(got, test.want) {
-			t.Errorf("%s: instanceRect = %+v, want %+v", test.name, got, test.want)
+		if got := instanceQuad(test.instance, canvas); !sameQuad(got, test.want) {
+			t.Errorf("%s: instanceQuad = %+v, want %+v", test.name, got, test.want)
 		}
+	}
+}
+
+// The diamond of the fascist Hungarian and Polish flags: a square emblem given
+// an eighth of a turn, whose corners land halfway along the sides of the space
+// it takes up.
+//
+// Those flags write the scale so that the emblem is square in pixels, a third
+// of the width by half the height, and the game draws a diamond 362 pixels
+// across on its 768 by 512 canvas.
+func TestInstanceQuadOfAnEighthTurn(t *testing.T) {
+	instance := pdx.Instance{
+		Position: pdx.Vec2{X: 0.5, Y: 0.5},
+		Scale:    pdx.Vec2{X: 1.0 / 3, Y: 0.5},
+		Rotation: 45,
+	}
+
+	quad := instanceQuad(instance, canvas)
+
+	const across = 362.0387 // 256 * sqrt(2)
+
+	if box := bounds(quad); !nearly(box.Width, across) || !nearly(box.Height, across) {
+		t.Errorf("the diamond takes up %v by %v, want %v square", box.Width, box.Height, across)
+	}
+
+	centre := rl.Vector2{X: canvas.X + canvas.Width/2, Y: canvas.Y + canvas.Height/2}
+
+	// Top, right, bottom and left, each halfway along its side.
+	want := Quad{
+		{X: centre.X, Y: centre.Y - across/2},
+		{X: centre.X + across/2, Y: centre.Y},
+		{X: centre.X, Y: centre.Y + across/2},
+		{X: centre.X - across/2, Y: centre.Y},
+	}
+
+	if !sameQuad(quad, want) {
+		t.Errorf("the diamond has corners %+v, want %+v", quad, want)
 	}
 }
 
@@ -68,28 +152,6 @@ func TestSubFlagRect(t *testing.T) {
 
 	if got := subFlagRect(pdx.NewSubInstance(), canvas); !sameRect(got, canvas) {
 		t.Errorf("the implied sub flag placement = %+v, want the whole flag %+v", got, canvas)
-	}
-}
-
-func TestRotationDistortion(t *testing.T) {
-	tests := []struct {
-		rotation        float32
-		stretch, squish float32
-	}{
-		{0, 1, 1},
-		{90, 1.5, 0.75},
-		{180, 1, 1},
-		{270, 1.5, 0.75},
-		{-90, 1.5, 0.75},
-		{45, 1.25, 0.875},
-	}
-
-	for _, test := range tests {
-		stretch, squish := rotationDistortion(test.rotation)
-		if !nearly(stretch, test.stretch) || !nearly(squish, test.squish) {
-			t.Errorf("rotationDistortion(%v) = %v, %v, want %v, %v",
-				test.rotation, stretch, squish, test.stretch, test.squish)
-		}
 	}
 }
 
@@ -116,10 +178,9 @@ func TestFitRect(t *testing.T) {
 
 // An unrotated emblem maps straight onto the part of the pattern under it.
 func TestMaskForAnUnrotatedEmblem(t *testing.T) {
-	target := instanceRect(pdx.Instance{Position: pdx.Vec2{X: 0.25, Y: 0.75}, Scale: pdx.Vec2{X: 0.5, Y: 0.5}}, canvas)
-	origin := rl.Vector2{X: target.Width / 2, Y: target.Height / 2}
+	target := instanceQuad(pdx.Instance{Position: pdx.Vec2{X: 0.25, Y: 0.75}, Scale: pdx.Vec2{X: 0.5, Y: 0.5}}, canvas)
 
-	mask := maskFor(rl.Texture2D{}, color.RGBA{R: 255, A: 255}, canvas, target, origin, 0)
+	mask := maskFor(rl.Texture2D{}, color.RGBA{R: 255, A: 255}, canvas, target)
 
 	if !nearly(mask.UVOffset[0], 0) || !nearly(mask.UVOffset[1], 0.5) {
 		t.Errorf("UV offset = %v, want the emblem's top left corner at (0, 0.5) of the pattern", mask.UVOffset)
@@ -131,20 +192,48 @@ func TestMaskForAnUnrotatedEmblem(t *testing.T) {
 	}
 }
 
-// A quarter turn swaps the directions the emblem's edges run in.
+// A quarter turn swaps the directions the emblem's edges run in, and leaves it
+// over the same part of the pattern as before.
 func TestMaskForARotatedEmblem(t *testing.T) {
-	target := rl.Rectangle{X: 100 + 384, Y: 50 + 256, Width: 200, Height: 100}
-	origin := rl.Vector2{X: 100, Y: 50}
+	instance := pdx.Instance{Position: pdx.Vec2{X: 0.25, Y: 0.75}, Scale: pdx.Vec2{X: 0.5, Y: 0.5}, Rotation: 90}
 
-	mask := maskFor(rl.Texture2D{}, color.RGBA{}, canvas, target, origin, 90)
+	mask := maskFor(rl.Texture2D{}, color.RGBA{}, canvas, instanceQuad(instance, canvas))
 
-	// The emblem's top edge now runs down the flag, its left edge leftwards.
-	if !nearly(mask.UVAxisX[0], 0) || !nearly(mask.UVAxisX[1], 200.0/512) {
+	// The texture now starts at the far corner of that part of the pattern.
+	if !nearly(mask.UVOffset[0], 0.5) || !nearly(mask.UVOffset[1], 0.5) {
+		t.Errorf("UV offset = %v, want the corner at (0.5, 0.5) of the pattern", mask.UVOffset)
+	}
+
+	// Its top edge runs down the pattern, its left edge leftwards.
+	if !nearly(mask.UVAxisX[0], 0) || !nearly(mask.UVAxisX[1], 0.5) {
 		t.Errorf("UV axis along the top edge = %v, want straight down", mask.UVAxisX)
 	}
 
-	if !nearly(mask.UVAxisY[0], -100.0/768) || !nearly(mask.UVAxisY[1], 0) {
+	if !nearly(mask.UVAxisY[0], -0.5) || !nearly(mask.UVAxisY[1], 0) {
 		t.Errorf("UV axis along the left edge = %v, want straight left", mask.UVAxisY)
+	}
+}
+
+// A mirrored quad has its corners the other way round, and is drawn from the
+// other end so that the graphics card is still shown the front of it.
+func TestMirroredQuad(t *testing.T) {
+	plain := instanceQuad(pdx.NewInstance(), canvas)
+	if plain.mirrored() {
+		t.Error("a plain emblem counts as mirrored")
+	}
+
+	flipped := pdx.Instance{Position: pdx.Vec2{X: 0.5, Y: 0.5}, Scale: pdx.Vec2{X: -1, Y: 1}}
+	if !instanceQuad(flipped, canvas).mirrored() {
+		t.Error("an emblem mirrored across does not count as mirrored")
+	}
+
+	over := pdx.Instance{Position: pdx.Vec2{X: 0.5, Y: 0.5}, Scale: pdx.Vec2{X: -1, Y: -1}}
+	if instanceQuad(over, canvas).mirrored() {
+		t.Error("an emblem mirrored both ways counts as mirrored, but it is only turned over")
+	}
+
+	if got := quadOf(canvas); !sameQuad(got, plain) {
+		t.Errorf("quadOf the flag = %+v, want the same as an emblem covering it %+v", got, plain)
 	}
 }
 

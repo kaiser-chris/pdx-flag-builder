@@ -106,9 +106,6 @@ func (r Recolor) Unload() {
 // DrawOptions are the parts of a recoloured draw that vary between a pattern
 // and an emblem.
 type DrawOptions struct {
-	Origin   rl.Vector2
-	Rotation float32
-
 	// Recolorings are applied in order, and the first one that matches a pixel
 	// wins.
 	Recolorings []Recoloring
@@ -122,8 +119,8 @@ type DrawOptions struct {
 	Mask *Mask
 }
 
-// Draw draws a texture with its marker colours replaced.
-func (r Recolor) Draw(texture rl.Texture2D, source, destination rl.Rectangle, options DrawOptions) {
+// Draw draws a texture into a quad with its marker colours replaced.
+func (r Recolor) Draw(texture rl.Texture2D, source rl.Rectangle, destination Quad, options DrawOptions) {
 	// The shader has to be bound before its uniforms are set, because setting a
 	// sampler uniform for the mask acts on whichever program is bound, unlike
 	// the other uniforms which bind the shader themselves.
@@ -132,7 +129,7 @@ func (r Recolor) Draw(texture rl.Texture2D, source, destination rl.Rectangle, op
 
 	r.apply(options)
 
-	drawTexture(texture, source, destination, options.Origin, options.Rotation, rl.White)
+	drawQuad(texture, source, destination, rl.White)
 }
 
 func (r Recolor) apply(options DrawOptions) {
