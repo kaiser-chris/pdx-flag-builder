@@ -16,6 +16,12 @@ const (
 	labelCancel    = "Cancel"
 )
 
+// Labels of the dialog a renamed flag raises when it is saved.
+const (
+	labelRenameFlag = "Rename"
+	labelAddNewFlag = "Add as New Flag"
+)
+
 // pendingAction is something that would throw away unsaved changes, held back
 // until the user has said what should happen to them.
 type pendingAction struct {
@@ -113,13 +119,15 @@ func (a *App) discardPopup() {
 		if gui.Button(labelSaveFirst) || imgui.IsKeyPressedBool(imgui.KeyEnter) {
 			a.save()
 
-			// A save that failed says why in the status bar, and the
-			// changes stay.
-			if !a.state.modified {
-				pending.run()
+			// A renamed flag has a question of its own to answer first, and
+			// carries the action on once it is answered. Otherwise this is
+			// as far as it goes: a save that failed says why in the status
+			// bar, and the changes stay.
+			if a.state.popup != popupRename {
+				a.finishPending()
+				a.state.pending = nil
 			}
 
-			a.state.pending = nil
 			imgui.CloseCurrentPopup()
 		}
 
@@ -138,4 +146,67 @@ func (a *App) discardPopup() {
 		a.state.pending = nil
 		imgui.CloseCurrentPopup()
 	}
+}
+
+// renamePopup asks what a flag that was renamed since it was read does to the
+// definition it came from: take its place under the new name, or leave it
+// alone and join it in the file.
+func (a *App) renamePopup() {
+	imgui.SetNextWindowSizeV(gui.ScaledVec2(460, 0), imgui.CondAlways)
+
+	if !imgui.BeginPopupModalV(popupRename, nil, imgui.WindowFlagsNoResize|imgui.WindowFlagsNoSavedSettings) {
+		return
+	}
+	defer imgui.EndPopup()
+
+	flag := a.state.flag
+	if flag == nil || flag.Origin.Path == "" || flag.Name == flag.Origin.Key {
+		imgui.CloseCurrentPopup()
+
+		return
+	}
+
+	imgui.TextWrapped(fmt.Sprintf("%s was read as %s from %s.", flag.Name, flag.Origin.Key, flag.Origin.File))
+	imgui.TextWrapped(fmt.Sprintf("%s gives that definition the new name. %s leaves %s as it is and writes %s beside it.",
+		labelRenameFlag, labelAddNewFlag, flag.Origin.Key, flag.Name))
+
+	imgui.Spacing()
+
+	// The path is taken before the flag is written, since writing it moves the
+	// flag to wherever it was written.
+	write := func(path, key string) {
+		a.writeFlag(path, key)
+		a.finishPending()
+		imgui.CloseCurrentPopup()
+	}
+
+	if gui.Button(labelRenameFlag) {
+		write(flag.Origin.Path, flag.Origin.Key)
+	}
+
+	imgui.SameLine()
+
+	// Enter takes the choice that leaves the file as it was.
+	if gui.Button(labelAddNewFlag) || imgui.IsKeyPressedBool(imgui.KeyEnter) {
+		write(flag.Origin.Path, flag.Name)
+	}
+
+	imgui.SameLine()
+
+	if gui.Button(labelCancel) || imgui.IsKeyPressedBool(imgui.KeyEscape) {
+		a.state.pending = nil
+		imgui.CloseCurrentPopup()
+	}
+}
+
+// finishPending carries on with whatever a save was asked for on the way to,
+// such as opening another flag, once the save has worked.
+func (a *App) finishPending() {
+	pending := a.state.pending
+	if pending == nil || a.state.modified {
+		return
+	}
+
+	pending.run()
+	a.state.pending = nil
 }

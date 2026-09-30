@@ -76,10 +76,11 @@ func TestSaveWritesBackIntoItsFile(t *testing.T) {
 	driver.Menu("Databases", windowFlagDatabase)
 	driver.Click("", "TST_split")
 
-	// Renamed in the editor, the flag still replaces the definition it was
-	// read from.
+	// Renamed in the editor, the flag replaces the definition it was read
+	// from once the user says that is what the new name means.
 	driver.Fill(driver.Find(panelSelected, "Name"), "TST_renamed")
 	driver.Shortcut(imgui.ModCtrl, imgui.KeyS)
+	driver.Click("", labelRenameFlag)
 
 	saved := readText(t, fixtureFile(application))
 
@@ -287,7 +288,7 @@ func TestSaveBeforeOpeningAnotherFlag(t *testing.T) {
 
 	driver.Menu("Databases", windowFlagDatabase)
 	driver.Click("", "TST_split")
-	driver.Fill(driver.Find(panelSelected, "Name"), "TST_kept")
+	driver.Click(panelSelected, "Add Colour")
 
 	driver.Click("", "TST_emblem")
 	driver.Click("", labelSaveFirst)
@@ -296,7 +297,108 @@ func TestSaveBeforeOpeningAnotherFlag(t *testing.T) {
 		t.Errorf("open flag = %q after saving, want TST_emblem opened as asked", name)
 	}
 
-	if saved := readText(t, fixtureFile(application)); !strings.Contains(saved, "TST_kept = {") {
+	if saved := readText(t, fixtureFile(application)); !strings.Contains(saved, `color3 = "white"`) {
 		t.Errorf("the changes were not saved before opening another flag:\n%s", saved)
+	}
+}
+
+// A coat of arms is often the starting point for a variant of itself, for one
+// form of government or one ideology. Renaming the open flag and saving it
+// therefore asks what the new name means, and adding it as a flag of its own
+// leaves the one it was built from untouched.
+func TestARenamedFlagCanBeAddedBesideTheOneItCameFrom(t *testing.T) {
+	application, driver := startApp(t)
+
+	driver.Menu("Databases", windowFlagDatabase)
+	driver.Click("", "TST_split")
+
+	driver.Fill(driver.Find(panelSelected, "Name"), "TST_split_communist")
+	driver.Click(panelSelected, "Add Colour")
+	driver.Shortcut(imgui.ModCtrl, imgui.KeyS)
+
+	if !driver.Exists("", labelAddNewFlag) {
+		t.Fatal("saving a renamed flag did not ask what the new name means")
+	}
+
+	driver.Click("", labelAddNewFlag)
+
+	saved := readText(t, fixtureFile(application))
+
+	if !strings.Contains(saved, "TST_split = {") {
+		t.Errorf("the flag it was built from is gone:\n%s", saved)
+	}
+
+	if !strings.Contains(saved, "TST_split_communist = {") {
+		t.Errorf("the new flag was not added:\n%s", saved)
+	}
+
+	// The editor is on the new flag, which is where further saves go.
+	if application.state.modified || application.state.flag.Origin.Key != "TST_split_communist" {
+		t.Errorf("origin = %+v, modified %v; want the editor on the flag that was just added",
+			application.state.flag.Origin, application.state.modified)
+	}
+
+	// Saving it again is an ordinary save: it has a name of its own now.
+	driver.Fill(driver.Find(panelSelected, "Name"), "TST_split_communist")
+	driver.Click(panelSelected, "Add Colour")
+	driver.Shortcut(imgui.ModCtrl, imgui.KeyS)
+
+	if driver.Exists("", labelAddNewFlag) {
+		t.Error("saving the flag under its own name asked about the name again")
+	}
+
+	if application.state.modified {
+		t.Error("the second save did not go through")
+	}
+}
+
+// Cancelling the question leaves the file alone, changes and all.
+func TestCancellingTheRenameQuestionSavesNothing(t *testing.T) {
+	application, driver := startApp(t)
+
+	before := readText(t, fixtureFile(application))
+
+	driver.Menu("Databases", windowFlagDatabase)
+	driver.Click("", "TST_split")
+
+	driver.Fill(driver.Find(panelSelected, "Name"), "TST_split_communist")
+	driver.Shortcut(imgui.ModCtrl, imgui.KeyS)
+	driver.Click("", labelCancel)
+
+	if after := readText(t, fixtureFile(application)); after != before {
+		t.Errorf("the file was written after cancelling:\n%s", after)
+	}
+
+	if !application.state.modified {
+		t.Error("the flag no longer counts as modified, although nothing was saved")
+	}
+}
+
+// Saving on the way to something else, such as opening another flag, carries
+// on once the question about the new name has been answered.
+func TestSavingOnTheWayToAnotherFlagAsksAboutTheNameFirst(t *testing.T) {
+	application, driver := startApp(t)
+
+	driver.Menu("Databases", windowFlagDatabase)
+	driver.Click("", "TST_split")
+
+	driver.Fill(driver.Find(panelSelected, "Name"), "TST_split_communist")
+
+	// Opening another flag would throw the changes away, so it waits.
+	driver.Click("", "TST_emblem")
+	driver.Click("", labelSaveFirst)
+
+	if !driver.Exists("", labelAddNewFlag) {
+		t.Fatal("saving a renamed flag did not ask what the new name means")
+	}
+
+	driver.Click("", labelAddNewFlag)
+
+	if saved := readText(t, fixtureFile(application)); !strings.Contains(saved, "TST_split_communist = {") {
+		t.Errorf("the flag was not saved before the other one was opened:\n%s", saved)
+	}
+
+	if application.state.flag.Name != "TST_emblem" {
+		t.Errorf("the editor is on %s, want the flag that was waiting to be opened", application.state.flag.Name)
 	}
 }

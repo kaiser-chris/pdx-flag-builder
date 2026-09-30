@@ -21,6 +21,7 @@ const (
 
 	popupAbout   = "About"
 	popupDiscard = "Unsaved Changes"
+	popupRename  = "Save Under a New Name"
 	popupPicker  = "Choose###picker"
 )
 

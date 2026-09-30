@@ -80,6 +80,12 @@ To move a placement with the keyboard, click the flag and use the arrow keys:
 Values a file wrote with `@variables` or `@[expressions]` are saved as the
 numbers they came to.
 
+Renaming a flag and saving it asks what the new name means: **Rename** gives
+the definition it was read from the new name, and **Add as New Flag** leaves
+that one as it is and writes the flag beside it. That is the way to build a
+variant of a coat of arms, for one form of government or one ideology, from
+the flag it starts out as.
+
 The tool asks before it throws away unsaved changes.
 
 ### Settings

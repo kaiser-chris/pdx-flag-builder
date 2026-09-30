@@ -49,7 +49,36 @@ func (a *App) save() {
 		return
 	}
 
-	a.writeFlag(flag.Origin.Path, flag.Origin.Key)
+	a.saveTo(flag.Origin.Path)
+}
+
+// saveTo writes the open flag into a file.
+//
+// A flag that has been renamed since it was read poses a question when it goes
+// back into its own file: does the definition it came from take the new name,
+// or does the flag join it as one of its own? Building a variant of a coat of
+// arms, for one form of government or one ideology, means renaming the flag it
+// was built from and keeping both, so the answer is the user's to give.
+func (a *App) saveTo(path string) {
+	flag := a.state.flag
+	if flag == nil || !a.checkName(flag.Name) {
+		return
+	}
+
+	// In any other file the flag simply goes by its name.
+	if !samePath(path, flag.Origin.Path) {
+		a.writeFlag(path, flag.Name)
+
+		return
+	}
+
+	if flag.Name == flag.Origin.Key {
+		a.writeFlag(path, flag.Origin.Key)
+
+		return
+	}
+
+	a.state.popup = popupRename
 }
 
 // saveToFile asks for a coat of arms file and puts the open flag into it: in
@@ -69,21 +98,7 @@ func (a *App) saveToFile() {
 	}
 
 	a.ask(request, func(path string) {
-		current := a.state.flag
-		if current == nil {
-			return
-		}
-
-		path = withExtension(path, ".txt")
-
-		// Back into its own file, the flag replaces the definition it was read
-		// from, whatever it is called now. Anywhere else it goes by its name.
-		key := current.Name
-		if samePath(path, current.Origin.Path) {
-			key = current.Origin.Key
-		}
-
-		a.writeFlag(path, key)
+		a.saveTo(withExtension(path, ".txt"))
 	})
 }
 

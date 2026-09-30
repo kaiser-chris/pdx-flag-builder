@@ -330,6 +330,7 @@ func (a *App) frame() {
 	a.aboutPopup()
 	a.pickerPopup()
 	a.discardPopup()
+	a.renamePopup()
 
 	a.handleShortcuts()
 

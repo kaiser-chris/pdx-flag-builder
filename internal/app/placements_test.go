@@ -221,8 +221,11 @@ func TestEscapeAndEnterAnswerTheUnsavedChangesPrompt(t *testing.T) {
 		t.Error("Escape closed the settings behind the prompt as well")
 	}
 
-	// Enter saves, then goes on.
+	// Enter saves, then goes on. The flag was renamed, so a second Enter
+	// answers the question that raises: it is added beside the one it came
+	// from rather than taking its place.
 	driver.Menu("File", "New Flag")
+	driver.Press(imgui.KeyEnter)
 	driver.Press(imgui.KeyEnter)
 
 	if application.state.flag.Name != "new_flag" {
