@@ -2,6 +2,7 @@ package render
 
 import (
 	"image"
+	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
@@ -71,7 +72,13 @@ func (i *Icons) drawIcon(index int, flag pdx.Flag, size IconSize, rank int) {
 
 	whole := rl.Rectangle{Width: float32(size.Width), Height: float32(size.Height)}
 
+	// An emblem may be placed partly outside the flag, and here the flag is
+	// drawn into the middle of a larger picture, where there is room for the
+	// overflow to show. The game has none: it draws an icon from the coat of
+	// arms, which stops at its own edge.
+	clip(area)
 	i.painter.Draw(flag, area)
+	rl.EndScissorMode()
 
 	// The game stretches the overlay over the flag and multiplies it in, which
 	// is what gives every flag in its interface the same shading.
@@ -93,6 +100,21 @@ func (i *Icons) drawIcon(index int, flag pdx.Flag, size IconSize, rank int) {
 	if border, ok := i.textures.Get(size.Border); ok {
 		drawTexture(border, size.frame(border, rank), whole, rl.Vector2{}, 0, rl.White)
 	}
+}
+
+// clip keeps the drawing that follows inside a rectangle, until the scissor is
+// ended again.
+//
+// A scissor is given whole pixels, and the rectangle is rounded outwards to
+// them: a flag whose edge falls between two pixels is drawn whole, and what a
+// fraction of a pixel of an emblem overflows by does not show.
+func clip(area rl.Rectangle) {
+	left := int32(math.Floor(float64(area.X)))
+	top := int32(math.Floor(float64(area.Y)))
+	right := int32(math.Ceil(float64(area.X + area.Width)))
+	bottom := int32(math.Ceil(float64(area.Y + area.Height)))
+
+	rl.BeginScissorMode(left, top, right-left, bottom-top)
 }
 
 // The blending a mask is drawn with: what is already there, kept only as far
