@@ -202,14 +202,15 @@ func (f Flag) Clone() Flag {
 
 	clone.Layers = make([]Layer, 0, len(f.Layers))
 	for _, layer := range f.Layers {
-		clone.Layers = append(clone.Layers, cloneLayer(layer))
+		clone.Layers = append(clone.Layers, CloneLayer(layer))
 	}
 
 	return clone
 }
 
-// cloneLayer copies a layer, including the slices it holds.
-func cloneLayer(layer Layer) Layer {
+// CloneLayer copies a layer, including the slices it holds, so that the copy
+// can be edited without touching the one it came from.
+func CloneLayer(layer Layer) Layer {
 	switch typed := layer.(type) {
 	case *ColoredEmblem:
 		clone := *typed

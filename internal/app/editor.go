@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/AllenDang/cimgui-go/imgui"
 
@@ -16,6 +17,22 @@ const (
 	labelMoveUp     = "##up"
 	labelMoveDown   = "##down"
 	labelRemove     = "X##remove"
+)
+
+// Labels of the buttons that act on the layer being edited.
+const (
+	labelDuplicateLayer = "Duplicate"
+	labelDeleteLayer    = "Delete"
+)
+
+// layerAction is what the buttons beside a layer's name ask for. The list it
+// belongs to is changed once the layer has been drawn, never while it is.
+type layerAction int
+
+const (
+	noLayerAction layerAction = iota
+	duplicateLayer
+	deleteLayer
 )
 
 // How finely a drag changes a value, per pixel the pointer moves.
@@ -171,6 +188,18 @@ func (a *App) moveLayer(index, delta int) {
 	a.changed()
 }
 
+// duplicateLayer puts a copy of a layer directly over the one it was copied
+// from, and selects the copy, since that is the one further changes are meant
+// for.
+func (a *App) duplicateLayer(index int) {
+	flag := a.state.flag
+
+	flag.Layers = slices.Insert(flag.Layers, index+1, pdx.CloneLayer(flag.Layers[index]))
+
+	a.selectLayer(index + 1)
+	a.changed()
+}
+
 // removeLayer drops a layer. There is no confirmation: undo brings it back.
 func (a *App) removeLayer(index int) {
 	flag := a.state.flag
@@ -202,9 +231,13 @@ func (a *App) selectedLayerBody() {
 		return
 	}
 
+	index := a.state.selectedLayer
+
 	gui.PushStrongFont()
 	imgui.TextUnformatted(layerKind(layer))
 	gui.PopFont()
+
+	action := layerActions()
 
 	imgui.Spacing()
 
@@ -233,6 +266,45 @@ func (a *App) selectedLayerBody() {
 
 		a.subPlacementEditor(&typed.Instances)
 	}
+
+	switch action {
+	case duplicateLayer:
+		a.duplicateLayer(index)
+	case deleteLayer:
+		a.removeLayer(index)
+	}
+}
+
+// layerActions draws the buttons that act on the layer as a whole, level with
+// its name and over at the right, clear of the fields below them. A panel too
+// narrow to hold them beside the name keeps them next to it rather than
+// letting them fall off the edge.
+func layerActions() layerAction {
+	style := imgui.CurrentStyle()
+
+	width := buttonWidth(labelDuplicateLayer) + buttonWidth(labelDeleteLayer) + style.ItemSpacing().X
+
+	imgui.SameLine()
+	imgui.SetCursorPosX(max(imgui.CursorPosX(), imgui.CursorPosX()+imgui.ContentRegionAvail().X-width))
+
+	action := noLayerAction
+
+	if gui.Button(labelDuplicateLayer) {
+		action = duplicateLayer
+	}
+
+	imgui.SameLine()
+
+	if gui.Button(labelDeleteLayer) {
+		action = deleteLayer
+	}
+
+	return action
+}
+
+// buttonWidth is how wide a button with this label comes out.
+func buttonWidth(label string) float32 {
+	return imgui.CalcTextSize(label).X + imgui.CurrentStyle().FramePadding().X*2
 }
 
 // coatOfArmsEditor edits what belongs to the coat of arms rather than a layer.

@@ -371,3 +371,94 @@ func TestANewLayerHasNoColours(t *testing.T) {
 		t.Errorf("the emblem added from the database starts with %+v, want no colours at all", fromDatabase.Colors)
 	}
 }
+
+// The buttons beside a layer's name copy it and throw it away.
+func TestDuplicateAndDeleteTheSelectedLayer(t *testing.T) {
+	application, driver := startApp(t)
+	openFixture(t, application, driver, "TST_emblem")
+
+	selectLayer(t, application, driver, 0)
+
+	flag := application.state.flag
+	original, ok := flag.Layers[0].(*pdx.ColoredEmblem)
+	if !ok {
+		t.Fatalf("the fixture's layer is %T, want a coloured emblem", flag.Layers[0])
+	}
+
+	// They belong at the top of the panel, side by side and over at the right,
+	// out of the way of the fields that edit the layer itself.
+	duplicate := driver.Find(panelSelected, labelDuplicateLayer)
+	remove := driver.Find(panelSelected, labelDeleteLayer)
+
+	if duplicate.Min.Y != remove.Min.Y || duplicate.Max.X > remove.Min.X {
+		t.Errorf("the buttons are at %v and %v, want them side by side in that order", duplicate.Min, remove.Min)
+	}
+
+	for _, item := range driver.Items() {
+		if item.Window != panelSelected || item.Label == labelDuplicateLayer || item.Label == labelDeleteLayer {
+			continue
+		}
+
+		if item.Min.Y < duplicate.Max.Y {
+			t.Errorf("%q is level with the buttons at %v, want them alone at the top", item.Label, item.Min)
+		}
+
+		if item.Max.X > remove.Max.X {
+			t.Errorf("%q reaches further right than the buttons, want them against the edge", item.Label)
+		}
+	}
+
+	driver.Click(panelSelected, labelDuplicateLayer)
+
+	if len(flag.Layers) != 2 {
+		t.Fatalf("got %d layers after duplicating one, want 2", len(flag.Layers))
+	}
+
+	if flag.Layers[0] != original {
+		t.Error("the copy was put under the layer it came from, want it over")
+	}
+
+	copied, ok := flag.Layers[1].(*pdx.ColoredEmblem)
+	if !ok || copied == original {
+		t.Fatalf("the copy is %#v, want a coloured emblem of its own", flag.Layers[1])
+	}
+
+	if application.state.selectedLayer != 1 {
+		t.Errorf("selected layer = %d, want the copy at 1", application.state.selectedLayer)
+	}
+
+	if copied.Texture != original.Texture || len(copied.Colors) != len(original.Colors) {
+		t.Errorf("the copy is %+v, want the same layer as %+v", copied, original)
+	}
+
+	// What the copy holds is its own: editing it leaves the original alone.
+	copied.Instances[0].Position.X = 0.25
+	copied.Colors[0].Slot = "color2"
+
+	if original.Instances[0].Position.X == 0.25 || original.Colors[0].Slot == "color2" {
+		t.Error("editing the copy changed the layer it came from")
+	}
+
+	driver.Click(panelSelected, labelDeleteLayer)
+
+	if len(flag.Layers) != 1 || flag.Layers[0] != original {
+		t.Fatalf("got %d layers after deleting the copy, want only the original", len(flag.Layers))
+	}
+
+	if application.state.selectedLayer != noLayer {
+		t.Errorf("selection = %d after its layer was deleted, want the coat of arms", application.state.selectedLayer)
+	}
+
+	// Deleting it is a step of its own to undo, and so is duplicating it.
+	driver.Menu("Edit", "Undo")
+
+	if got := len(application.state.flag.Layers); got != 2 {
+		t.Errorf("undo after deleting left %d layers, want the copy back", got)
+	}
+
+	driver.Menu("Edit", "Undo")
+
+	if got := len(application.state.flag.Layers); got != 1 {
+		t.Errorf("undo after duplicating left %d layers, want only the original", got)
+	}
+}
