@@ -1,6 +1,10 @@
 package gui
 
-import "github.com/AllenDang/cimgui-go/imgui"
+import (
+	"math"
+
+	"github.com/AllenDang/cimgui-go/imgui"
+)
 
 // The icons of the interface come from its icon font. The eyedropper is drawn
 // instead, because it is painted over a colour that decides its own.
@@ -27,11 +31,20 @@ func drawIcon(icon string, low, high imgui.Vec2, color imgui.Vec4) {
 		return
 	}
 
+	// A disabled button is drawn faded, which Dear ImGui does by thinning
+	// everything drawn while it is, and an icon drawn in a colour of its own
+	// has to do the same to fade with the button it is on.
+	color.W *= imgui.CurrentStyle().Alpha()
+
 	// Where the ink of the glyph lands, relative to where the text is drawn
 	// from, which is what centres it.
+	//
+	// The place it is drawn from is rounded to a whole pixel, because Dear
+	// ImGui cuts the fraction off one rather than rounding it, which would
+	// nudge every icon up and to the left of the middle it was given.
 	at := imgui.Vec2{
-		X: (low.X+high.X)/2 - (glyph.X0()+glyph.X1())/2,
-		Y: (low.Y+high.Y)/2 - (glyph.Y0()+glyph.Y1())/2,
+		X: round((low.X+high.X)/2 - (glyph.X0()+glyph.X1())/2),
+		Y: round((low.Y+high.Y)/2 - (glyph.Y0()+glyph.Y1())/2),
 	}
 
 	imgui.WindowDrawList().AddTextFontPtr(font, size, at, imgui.ColorU32Vec4(color), icon)
@@ -67,4 +80,9 @@ func drawPickerIcon(low, high imgui.Vec2, behind [3]float32) {
 // luminance is how light a colour looks, from zero to one.
 func luminance(channels [3]float32) float32 {
 	return 0.2126*channels[0] + 0.7152*channels[1] + 0.0722*channels[2]
+}
+
+// round is the nearest whole number to a coordinate.
+func round(value float32) float32 {
+	return float32(math.Round(float64(value)))
 }
