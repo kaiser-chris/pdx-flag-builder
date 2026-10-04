@@ -35,6 +35,13 @@ var credits = []credit{
 		link: "openfontlicense.org",
 		url:  "https://openfontlicense.org",
 	},
+	{
+		work: "Material Symbols, the icons",
+		notice: "Copyright 2026 Google LLC. Licensed under the Apache License, Version 2.0. " +
+			"The bundled font is cut down to the icons the interface draws.",
+		link: "fonts.google.com/icons",
+		url:  "https://fonts.google.com/icons",
+	},
 }
 
 func (c credit) show() {

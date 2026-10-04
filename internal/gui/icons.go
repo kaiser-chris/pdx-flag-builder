@@ -2,7 +2,40 @@ package gui
 
 import "github.com/AllenDang/cimgui-go/imgui"
 
-// The interface has no icon font, so the one icon it needs is drawn.
+// The icons of the interface come from its icon font. The eyedropper is drawn
+// instead, because it is painted over a colour that decides its own.
+
+// iconFill is how much of the box it is drawn in an icon takes up.
+const iconFill = 0.9
+
+// drawIcon draws an icon of the icon font in the middle of a box.
+//
+// It is placed by the icon's own ink rather than by the line of text it would
+// otherwise sit on: an icon is a picture in a square, and a line of text has
+// room above and below it for parts of letters this font has none of, which
+// would leave the icon sitting high in its box.
+func drawIcon(icon string, low, high imgui.Vec2, color imgui.Vec4) {
+	font := imgui.CurrentFont()
+	if font == nil || icon == "" {
+		return
+	}
+
+	size := (high.Y - low.Y) * iconFill
+
+	glyph := font.FontBaked(size).FindGlyph(imgui.Wchar([]rune(icon)[0]))
+	if glyph == nil {
+		return
+	}
+
+	// Where the ink of the glyph lands, relative to where the text is drawn
+	// from, which is what centres it.
+	at := imgui.Vec2{
+		X: (low.X+high.X)/2 - (glyph.X0()+glyph.X1())/2,
+		Y: (low.Y+high.Y)/2 - (glyph.Y0()+glyph.Y1())/2,
+	}
+
+	imgui.WindowDrawList().AddTextFontPtr(font, size, at, imgui.ColorU32Vec4(color), icon)
+}
 
 // drawPickerIcon draws an eyedropper into a square, the usual sign that
 // clicking it opens a colour picker. It is drawn in black or white, whichever

@@ -207,3 +207,25 @@ func TestDXTPatternIsDrawn(t *testing.T) {
 		}
 	}
 }
+
+// An icon is drawn as a letter of the interface font, which only works while
+// the icon font is folded into it.
+func TestTheIconFontIsLoaded(t *testing.T) {
+	startApp(t)
+
+	font := imgui.CurrentFont()
+	if font == nil {
+		t.Fatal("the interface has no font")
+	}
+
+	for name, icon := range map[string]string{"link": gui.IconLink, "link_off": gui.IconLinkOff} {
+		runes := []rune(icon)
+		if len(runes) != 1 {
+			t.Fatalf("the %s icon is %q, want one code point", name, icon)
+		}
+
+		if !font.IsGlyphInFont(imgui.Wchar(runes[0])) {
+			t.Errorf("the interface font has no glyph for %s at %U", name, runes[0])
+		}
+	}
+}

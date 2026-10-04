@@ -45,4 +45,9 @@ var (
 
 	//go:embed fonts/roboto/Roboto-Medium.ttf
 	FontMedium string
+
+	// FontIcons is Material Symbols, cut down to the icons the interface
+	// draws. See the README beside it for what is in it and how to add to it.
+	//go:embed fonts/material-symbols/MaterialSymbolsOutlined-Subset.ttf
+	FontIcons string
 )
