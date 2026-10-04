@@ -13,7 +13,17 @@ import (
 const (
 	labelPlacementUp     = "##placement-up"
 	labelPlacementDown   = "##placement-down"
-	labelRemovePlacement = "Remove##placement"
+	labelRemovePlacement = "##placement-remove"
+)
+
+// What the buttons of a placement, and the link between a pair of fields, are
+// for.
+const (
+	tooltipPlacementUp   = "Move up, under the placement above it"
+	tooltipPlacementDown = "Move down, over the placement below it"
+	tooltipRemovePlaced  = "Remove this placement"
+	tooltipLink          = "Link the two together"
+	tooltipLinked        = "Linked: changing one changes the other by the same amount"
 )
 
 // pairFields are the names of a row that edits two numbers: what the row is
@@ -166,8 +176,7 @@ func (a *App) placementHeader(index, count int) placementAction {
 	style := imgui.CurrentStyle()
 	height := imgui.FrameHeight()
 
-	removeWidth := imgui.CalcTextSizeV(labelRemovePlacement, true, -1).X + style.FramePadding().X*2
-	buttons := height*2 + removeWidth + style.ItemSpacing().X*3
+	buttons := height*3 + style.ItemSpacing().X*3
 
 	action := placementKeep
 
@@ -182,22 +191,25 @@ func (a *App) placementHeader(index, count int) placementAction {
 
 	imgui.SameLine()
 	imgui.BeginDisabledV(index == 0)
-	if gui.ArrowButton(labelPlacementUp, imgui.DirUp) {
+	if gui.IconButton(labelPlacementUp, gui.IconUp) {
 		action = placementUp
 	}
+	gui.Tooltip(tooltipPlacementUp)
 	imgui.EndDisabled()
 
 	imgui.SameLine()
 	imgui.BeginDisabledV(index == count-1)
-	if gui.ArrowButton(labelPlacementDown, imgui.DirDown) {
+	if gui.IconButton(labelPlacementDown, gui.IconDown) {
 		action = placementDown
 	}
+	gui.Tooltip(tooltipPlacementDown)
 	imgui.EndDisabled()
 
 	imgui.SameLine()
-	if gui.Button(labelRemovePlacement) {
+	if gui.IconButton(labelRemovePlacement, gui.IconDelete) {
 		action = placementRemove
 	}
+	gui.Tooltip(tooltipRemovePlaced)
 
 	return action
 }
@@ -269,20 +281,16 @@ func tandem(changed, other *float32, was, otherWas, low, high float32) {
 	*other = otherWas + delta
 }
 
-// lockTooltip says what the lock between two fields does, which a small
-// padlock on its own does not.
+// lockTooltip says what the link between two fields does, which a chain on its
+// own does not.
 func lockTooltip(locked bool) {
-	if !imgui.IsItemHovered() {
-		return
-	}
-
 	if locked {
-		imgui.SetTooltip("Linked: changing one changes the other by the same amount")
+		gui.Tooltip(tooltipLinked)
 
 		return
 	}
 
-	imgui.SetTooltip("Link the two together")
+	gui.Tooltip(tooltipLink)
 }
 
 // focusPlacement selects a placement as the one the arrow keys move as soon

@@ -137,7 +137,7 @@ func TestChooseANamedColourAndRemoveOne(t *testing.T) {
 	}
 
 	// Each colour row can go again.
-	driver.ClickItem(driver.FindAll(panelSelected, "Remove")[1])
+	driver.ClickItem(driver.FindAll(panelSelected, labelRemoveColor)[1])
 
 	if _, found := application.state.flag.Colors.Get("color2"); found || len(application.state.flag.Colors) != 1 {
 		t.Errorf("colours after removing color2 = %#v", application.state.flag.Colors)

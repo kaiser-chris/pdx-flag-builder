@@ -16,13 +16,21 @@ const (
 	labelAddLayer   = "Add Layer"
 	labelMoveUp     = "##up"
 	labelMoveDown   = "##down"
-	labelRemove     = "X##remove"
+	labelRemove     = "##remove"
+)
+
+// What the buttons of a layer are for, which an icon on its own does not say.
+const (
+	tooltipMoveUp    = "Move up, under the layer above it"
+	tooltipMoveDown  = "Move down, over the layer below it"
+	tooltipRemove    = "Delete this layer"
+	tooltipDuplicate = "Duplicate this layer"
 )
 
 // Labels of the buttons that act on the layer being edited.
 const (
-	labelDuplicateLayer = "Duplicate"
-	labelDeleteLayer    = "Delete"
+	labelDuplicateLayer = "##duplicate-layer"
+	labelDeleteLayer    = "##delete-layer"
 )
 
 // layerAction is what the buttons beside a layer's name ask for. The list it
@@ -122,7 +130,7 @@ func (a *App) layerRows(flag *pdx.Flag, height float32) {
 	moveFrom, moveBy, remove := noAction, 0, noAction
 
 	style := imgui.CurrentStyle()
-	buttons := imgui.FrameHeight()*3 + style.ItemSpacing().X*3 + imgui.CalcTextSize("X").X + style.FramePadding().X*2
+	buttons := imgui.FrameHeight()*3 + style.ItemSpacing().X*3
 
 	for index, layer := range flag.Layers {
 		imgui.PushIDInt(int32(index))
@@ -134,22 +142,25 @@ func (a *App) layerRows(flag *pdx.Flag, height float32) {
 
 		imgui.SameLine()
 		imgui.BeginDisabledV(index == 0)
-		if gui.ArrowButton(labelMoveUp, imgui.DirUp) {
+		if gui.IconButton(labelMoveUp, gui.IconUp) {
 			moveFrom, moveBy = index, -1
 		}
+		gui.Tooltip(tooltipMoveUp)
 		imgui.EndDisabled()
 
 		imgui.SameLine()
 		imgui.BeginDisabledV(index == len(flag.Layers)-1)
-		if gui.ArrowButton(labelMoveDown, imgui.DirDown) {
+		if gui.IconButton(labelMoveDown, gui.IconDown) {
 			moveFrom, moveBy = index, 1
 		}
+		gui.Tooltip(tooltipMoveDown)
 		imgui.EndDisabled()
 
 		imgui.SameLine()
-		if gui.Button(labelRemove) {
+		if gui.IconButton(labelRemove, gui.IconDelete) {
 			remove = index
 		}
+		gui.Tooltip(tooltipRemove)
 
 		imgui.PopID()
 	}
@@ -280,31 +291,28 @@ func (a *App) selectedLayerBody() {
 // narrow to hold them beside the name keeps them next to it rather than
 // letting them fall off the edge.
 func layerActions() layerAction {
-	style := imgui.CurrentStyle()
-
-	width := buttonWidth(labelDuplicateLayer) + buttonWidth(labelDeleteLayer) + style.ItemSpacing().X
+	width := imgui.FrameHeight()*2 + imgui.CurrentStyle().ItemSpacing().X
 
 	imgui.SameLine()
 	imgui.SetCursorPosX(max(imgui.CursorPosX(), imgui.CursorPosX()+imgui.ContentRegionAvail().X-width))
 
 	action := noLayerAction
 
-	if gui.Button(labelDuplicateLayer) {
+	if gui.IconButton(labelDuplicateLayer, gui.IconCopy) {
 		action = duplicateLayer
 	}
 
+	gui.Tooltip(tooltipDuplicate)
+
 	imgui.SameLine()
 
-	if gui.Button(labelDeleteLayer) {
+	if gui.IconButton(labelDeleteLayer, gui.IconDelete) {
 		action = deleteLayer
 	}
 
-	return action
-}
+	gui.Tooltip(tooltipRemove)
 
-// buttonWidth is how wide a button with this label comes out.
-func buttonWidth(label string) float32 {
-	return imgui.CalcTextSize(label).X + imgui.CurrentStyle().FramePadding().X*2
+	return action
 }
 
 // coatOfArmsEditor edits what belongs to the coat of arms rather than a layer.

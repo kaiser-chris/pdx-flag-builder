@@ -15,8 +15,12 @@ const interfaceFontSize = 16
 // The icons of Material Symbols, by the code point the font maps them to.
 // Each is a string rather than a rune, since that is what a label is.
 const (
+	IconCopy    = "\ue14d"
+	IconDelete  = "\ue872"
+	IconDown    = "\ue5db"
 	IconLink    = "\ue157"
 	IconLinkOff = "\ue16f"
+	IconUp      = "\ue5d8"
 )
 
 // iconFontSize is the size the icons are baked at when they stand among text.

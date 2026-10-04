@@ -110,6 +110,27 @@ func ToggleButton(label string, on bool) bool {
 	return pressed
 }
 
+// IconButton is a square button carrying one icon of the icon font.
+//
+// The icon is drawn rather than set as the button's label, so that it is
+// centred on the button by its own ink; a label is centred on the line of text
+// it would sit on, which an icon shares none of the proportions of.
+func IconButton(id, icon string) bool {
+	size := imgui.FrameHeight()
+
+	pressed := imgui.ButtonV(id, imgui.Vec2{X: size, Y: size})
+	record(id, false)
+
+	drawIcon(icon, imgui.ItemRectMin(), imgui.ItemRectMax(), *imgui.StyleColorVec4(imgui.ColText))
+
+	return pressed
+}
+
+// Tooltip says what the item just drawn is for, while the pointer rests on it.
+func Tooltip(text string) {
+	imgui.SetItemTooltip(text)
+}
+
 // LockButton is a button carrying a chain link, whole while whatever it sits
 // between is tied together and broken while it is not.
 //
@@ -226,15 +247,6 @@ func SelectableSized(label string, selected bool, width, height float32) bool {
 func SmallButton(label string) bool {
 	pressed := imgui.SmallButton(label)
 	record(label, false)
-
-	return pressed
-}
-
-// ArrowButton is imgui.ArrowButton. It has no visible text, so it is recorded
-// under its id.
-func ArrowButton(id string, direction imgui.Dir) bool {
-	pressed := imgui.ArrowButton(id, direction)
-	record(id, false)
 
 	return pressed
 }

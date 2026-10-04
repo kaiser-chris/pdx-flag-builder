@@ -71,6 +71,12 @@ const (
 	minColorValueWidth = 90
 )
 
+// The button that drops a colour slot, and what it is for.
+const (
+	labelRemoveColor   = "##remove-colour"
+	tooltipRemoveColor = "Remove this colour"
+)
+
 // colorEditor edits a set of colour slots.
 //
 // slots is what a slot may refer back to: the flag's colours, whether the set
@@ -100,14 +106,14 @@ func (a *App) colorEditor(id string, colors *pdx.Colors, slots pdx.Colors, owner
 		// The value takes whatever the line has left beside the remove button.
 		imgui.SameLine()
 		style := imgui.CurrentStyle()
-		removeWidth := imgui.CalcTextSize("Remove").X + style.FramePadding().X*2
-		width := max(imgui.ContentRegionAvail().X-removeWidth-style.ItemSpacing().X, gui.Scaled(minColorValueWidth))
+		width := max(imgui.ContentRegionAvail().X-imgui.FrameHeight()-style.ItemSpacing().X, gui.Scaled(minColorValueWidth))
 		a.colorValueEditor(entry, slots, width, owner)
 
 		imgui.SameLine()
-		if gui.SmallButton("Remove") {
+		if gui.IconButton(labelRemoveColor, gui.IconDelete) {
 			remove = entry.Slot
 		}
+		gui.Tooltip(tooltipRemoveColor)
 
 		imgui.PopID()
 	}
