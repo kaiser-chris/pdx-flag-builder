@@ -57,7 +57,12 @@ type Thumbnail struct {
 // editor draws with, so that scrolling a list never unloads what the open flag
 // is using.
 type Thumbnails struct {
-	atlas    rl.RenderTexture2D
+	atlas rl.RenderTexture2D
+
+	// canvas is the coat of arms at its own size, which a thumbnail of a flag
+	// is a copy of: a thumbnail is a sixth of the size the artwork is made
+	// for, and drawing one straight from the artwork loses most of it.
+	canvas   *Canvas
 	textures *Textures
 	painter  *Painter
 
@@ -106,10 +111,13 @@ func NewThumbnails(shader Recolor, resolve func(name string) (string, bool)) *Th
 	columns := atlasSize / stride
 	count := columns * (atlasSize / (ThumbnailHeight + thumbnailGutter))
 
+	painter := NewPainter(shader, textures)
+
 	thumbnails := &Thumbnails{
 		atlas:    rl.LoadRenderTexture(atlasSize, atlasSize),
+		canvas:   NewCanvas(painter),
 		textures: textures,
-		painter:  NewPainter(shader, textures),
+		painter:  painter,
 		columns:  columns,
 		cells:    map[string]*thumbnailCell{},
 		free:     make([]int, 0, count),
@@ -189,8 +197,6 @@ func (t *Thumbnails) Draw() {
 
 	drawn := 0
 
-	rl.BeginTextureMode(t.atlas)
-
 	for key, job := range t.wanted {
 		if drawn == thumbnailsPerFrame {
 			break
@@ -205,12 +211,19 @@ func (t *Thumbnails) Draw() {
 			break
 		}
 
+		// The coat of arms is composed before the atlas is drawn into, since
+		// raylib draws into one target at a time.
+		if job.flag != nil {
+			t.canvas.Draw(*job.flag)
+		}
+
+		rl.BeginTextureMode(t.atlas)
 		t.drawCell(index, job)
+		rl.EndTextureMode()
+
 		t.cells[key] = &thumbnailCell{index: index, shown: t.frame}
 		drawn++
 	}
-
-	rl.EndTextureMode()
 
 	// Whatever is still wanted will be asked for again by the rows showing it.
 	clear(t.wanted)
@@ -267,7 +280,7 @@ func (t *Thumbnails) drawCell(index int, job thumbnailJob) {
 	rl.ClearBackground(rl.Blank)
 
 	if job.flag != nil {
-		t.painter.Draw(*job.flag, cell)
+		drawTexture(t.canvas.Texture(), t.canvas.Source(), cell, rl.Vector2{}, 0, rl.White)
 
 		return
 	}
@@ -350,6 +363,7 @@ func (t *Thumbnails) Forget() {
 // context.
 func (t *Thumbnails) Unload() {
 	t.textures.Unload()
+	t.canvas.Unload()
 	rl.UnloadRenderTexture(t.atlas)
 }
 

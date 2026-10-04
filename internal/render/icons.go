@@ -2,7 +2,6 @@ package render
 
 import (
 	"image"
-	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
@@ -21,6 +20,10 @@ type Icons struct {
 	painter  *Painter
 	textures *Textures
 	targets  []rl.RenderTexture2D
+
+	// canvas is the coat of arms at its own size, which every icon is a copy
+	// of rather than a drawing of its own.
+	canvas *Canvas
 }
 
 // NewIcons allocates one render target per size. It requires an active OpenGL
@@ -29,7 +32,12 @@ type Icons struct {
 // The targets keep their size for their whole lifetime, for the reason Preview
 // gives: the interface caches texture references by raylib texture id.
 func NewIcons(game *Game, painter *Painter, textures *Textures) *Icons {
-	icons := &Icons{game: game, painter: painter, textures: textures}
+	icons := &Icons{
+		game:     game,
+		painter:  painter,
+		textures: textures,
+		canvas:   NewCanvas(painter),
+	}
 
 	for _, size := range game.Sizes {
 		target := rl.LoadRenderTexture(size.Width, size.Height)
@@ -47,6 +55,10 @@ func NewIcons(game *Game, painter *Painter, textures *Textures) *Icons {
 // It has to run while raylib drawing is active and before the interface
 // samples the targets.
 func (i *Icons) Draw(flag *pdx.Flag, rank int) {
+	if flag != nil {
+		i.canvas.Draw(*flag)
+	}
+
 	for index, size := range i.game.Sizes {
 		rl.BeginTextureMode(i.targets[index])
 		rl.ClearBackground(rl.Blank)
@@ -72,13 +84,7 @@ func (i *Icons) drawIcon(index int, flag pdx.Flag, size IconSize, rank int) {
 
 	whole := rl.Rectangle{Width: float32(size.Width), Height: float32(size.Height)}
 
-	// An emblem may be placed partly outside the flag, and here the flag is
-	// drawn into the middle of a larger picture, where there is room for the
-	// overflow to show. The game has none: it draws an icon from the coat of
-	// arms, which stops at its own edge.
-	clip(area)
-	i.painter.Draw(flag, area)
-	rl.EndScissorMode()
+	drawTexture(i.canvas.Texture(), i.canvas.Source(), area, rl.Vector2{}, 0, rl.White)
 
 	// The game stretches the overlay over the flag and multiplies it in, which
 	// is what gives every flag in its interface the same shading.
@@ -100,21 +106,6 @@ func (i *Icons) drawIcon(index int, flag pdx.Flag, size IconSize, rank int) {
 	if border, ok := i.textures.Get(size.Border); ok {
 		drawTexture(border, size.frame(border, rank), whole, rl.Vector2{}, 0, rl.White)
 	}
-}
-
-// clip keeps the drawing that follows inside a rectangle, until the scissor is
-// ended again.
-//
-// A scissor is given whole pixels, and the rectangle is rounded outwards to
-// them: a flag whose edge falls between two pixels is drawn whole, and what a
-// fraction of a pixel of an emblem overflows by does not show.
-func clip(area rl.Rectangle) {
-	left := int32(math.Floor(float64(area.X)))
-	top := int32(math.Floor(float64(area.Y)))
-	right := int32(math.Ceil(float64(area.X + area.Width)))
-	bottom := int32(math.Ceil(float64(area.Y + area.Height)))
-
-	rl.BeginScissorMode(left, top, right-left, bottom-top)
 }
 
 // The blending a mask is drawn with: what is already there, kept only as far
@@ -176,6 +167,8 @@ func (i *Icons) Image(index int) *image.RGBA {
 // Unload releases the render targets. It requires a live OpenGL context, so it
 // has to run before the window is destroyed.
 func (i *Icons) Unload() {
+	i.canvas.Unload()
+
 	for _, target := range i.targets {
 		rl.UnloadRenderTexture(target)
 	}

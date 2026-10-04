@@ -15,18 +15,6 @@ import (
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/texture"
 )
 
-// flagSize is how large the coat of arms is drawn before it is put on the
-// cloth. The cloth covers a fraction of the picture it is drawn in, so a flag
-// as wide as the whole picture already has more in it than the cloth can show,
-// and a smaller cloth needs less again.
-func flagSize(cloth Cloth) (width, height int32) {
-	if cloth.RenderWidth > FlagWidth/2 {
-		return FlagWidth, FlagHeight
-	}
-
-	return FlagWidth / 2, FlagHeight / 2
-}
-
 // The camera the game looks at the flag with, from the widget's own
 // definition: nearly head on, far away and through a narrow lens, which is
 // what keeps the cloth from looking like a perspective drawing.
@@ -136,16 +124,16 @@ func NewFancy(cloth Cloth, painter *Painter, resolve func(name string) (string, 
 		return nil, fmt.Errorf("the cloth shader did not compile")
 	}
 
-	flagWidth, flagHeight := flagSize(cloth)
-
 	fancy := &Fancy{
 		cloth:   cloth,
 		painter: painter,
 		resolve: resolve,
 		target:  rl.LoadRenderTexture(cloth.RenderWidth, cloth.RenderHeight),
-		flag:    rl.LoadRenderTexture(flagWidth, flagHeight),
-		shader:  shader,
-		time:    rl.GetShaderLocation(shader, "time"),
+		// The coat of arms is composed at its own size, as Canvas says, and
+		// the cloth is textured with the whole of it.
+		flag:   rl.LoadRenderTexture(FlagWidth, FlagHeight),
+		shader: shader,
+		time:   rl.GetShaderLocation(shader, "time"),
 	}
 
 	rl.SetTextureFilter(fancy.target.Texture, rl.FilterBilinear)
