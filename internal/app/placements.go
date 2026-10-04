@@ -16,6 +16,27 @@ const (
 	labelRemovePlacement = "Remove##placement"
 )
 
+// pairFields are the names of a row that edits two numbers: what the row is
+// called, the two fields, and the lock between them.
+type pairFields struct {
+	label string
+
+	x, y, lock string
+}
+
+// The rows of a placement that edit a pair, and which lock each of them has.
+// A sub flag's offset is a position by another name, so it takes the same
+// lock as one.
+var (
+	positionFields = pairFields{"Position", "##position-x", "##position-y", "##position-lock"}
+	offsetFields   = pairFields{"Offset", "##offset-x", "##offset-y", "##offset-lock"}
+	scaleFields    = pairFields{"Scale", "##scale-x", "##scale-y", "##scale-lock"}
+)
+
+// minimumFieldWidth is how narrow a number field may become before it stops
+// giving way to the panel around it.
+const minimumFieldWidth = 32
+
 // How far one press of an arrow key changes a placement: a thousandth of the
 // canvas, under a pixel of the flag, for lining things up exactly, and a
 // degree of rotation. Shift makes a step nudgeFaster times bigger.
@@ -59,17 +80,15 @@ func (a *App) placementEditor(instances *[]pdx.Instance) {
 			moveFrom, action = index, chosen
 		}
 
-		if gui.DragPair("Position", &instance.Position.X, &instance.Position.Y,
-			dragFraction, pdx.MinPosition, pdx.MaxPosition, "%.3f") {
+		if a.lockedPair(index, positionFields, &instance.Position.X, &instance.Position.Y,
+			&a.state.lockPosition, pdx.MinPosition, pdx.MaxPosition) {
 			a.changed()
 		}
-		a.focusPlacement(index)
 
-		if gui.DragPair("Scale", &instance.Scale.X, &instance.Scale.Y,
-			dragFraction, pdx.MinScale, pdx.MaxScale, "%.3f") {
+		if a.lockedPair(index, scaleFields, &instance.Scale.X, &instance.Scale.Y,
+			&a.state.lockScale, pdx.MinScale, pdx.MaxScale) {
 			a.changed()
 		}
-		a.focusPlacement(index)
 
 		if gui.DragFloat("Rotation", &instance.Rotation,
 			dragDegrees, -pdx.MaxRotation, pdx.MaxRotation, "%.1f deg") {
@@ -115,17 +134,15 @@ func (a *App) subPlacementEditor(instances *[]pdx.SubInstance) {
 			moveFrom, action = index, chosen
 		}
 
-		if gui.DragPair("Offset", &instance.Offset.X, &instance.Offset.Y,
-			dragFraction, pdx.MinPosition, pdx.MaxPosition, "%.3f") {
+		if a.lockedPair(index, offsetFields, &instance.Offset.X, &instance.Offset.Y,
+			&a.state.lockPosition, pdx.MinPosition, pdx.MaxPosition) {
 			a.changed()
 		}
-		a.focusPlacement(index)
 
-		if gui.DragPair("Scale", &instance.Scale.X, &instance.Scale.Y,
-			dragFraction, pdx.MinScale, pdx.MaxScale, "%.3f") {
+		if a.lockedPair(index, scaleFields, &instance.Scale.X, &instance.Scale.Y,
+			&a.state.lockScale, pdx.MinScale, pdx.MaxScale) {
 			a.changed()
 		}
-		a.focusPlacement(index)
 
 		card.End(index == a.state.selectedPlacement)
 
@@ -183,6 +200,89 @@ func (a *App) placementHeader(index, count int) placementAction {
 	}
 
 	return action
+}
+
+// lockedPair edits the two numbers of a placement's point, with a lock in
+// between them.
+//
+// While the lock is closed the two move together: whichever one is changed,
+// the other changes by the same amount, which is what keeps a square emblem
+// square. A change that would take the other past its limit stops both of
+// them, since moving one on its own is what the lock is there to prevent.
+func (a *App) lockedPair(index int, fields pairFields, x, y *float32, locked *bool, low, high float32) bool {
+	was := [2]float32{*x, *y}
+
+	gui.Label(fields.label)
+
+	// The two halves share what the lock between them leaves, down to a width
+	// that still holds a number: a field given less than nothing would be laid
+	// out from the right edge instead and come out backwards.
+	spacing := imgui.CurrentStyle().ItemInnerSpacing().X
+	width := max((imgui.ContentRegionAvail().X-imgui.FrameHeight()-spacing*2)/2, gui.Scaled(minimumFieldWidth))
+
+	imgui.SetNextItemWidth(width)
+	changed := gui.DragFloat(fields.x, x, dragFraction, low, high, "%.3f")
+	a.focusPlacement(index)
+
+	imgui.SameLineV(0, spacing)
+
+	if gui.LockButton(fields.lock, *locked) {
+		*locked = !*locked
+	}
+
+	lockTooltip(*locked)
+
+	imgui.SameLineV(0, spacing)
+	imgui.SetNextItemWidth(-1)
+
+	changed = gui.DragFloat(fields.y, y, dragFraction, low, high, "%.3f") || changed
+	a.focusPlacement(index)
+
+	if !changed || !*locked {
+		return changed
+	}
+
+	switch {
+	case *x != was[0]:
+		tandem(x, y, was[0], was[1], low, high)
+	case *y != was[1]:
+		tandem(y, x, was[1], was[0], low, high)
+	}
+
+	return changed
+}
+
+// tandem moves the other half of a locked pair by the same amount as the half
+// that was changed, and holds both of them back where that would take it past
+// a limit, so that the two keep the distance between them.
+func tandem(changed, other *float32, was, otherWas, low, high float32) {
+	delta := *changed - was
+
+	switch {
+	case otherWas+delta < low:
+		delta = low - otherWas
+	case otherWas+delta > high:
+		delta = high - otherWas
+	}
+
+	*changed = was + delta
+	*other = otherWas + delta
+}
+
+// lockTooltip says what the lock between two fields does, which a small
+// padlock on its own does not.
+func lockTooltip(locked bool) {
+	if !imgui.IsItemHovered() {
+		return
+	}
+
+	if locked {
+		imgui.SetTooltip("Linked: changing one changes the other by the same amount")
+
+		return
+	}
+
+	imgui.SetTooltip("Link the two together")
 }
 
 // focusPlacement selects a placement as the one the arrow keys move as soon

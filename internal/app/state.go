@@ -83,6 +83,13 @@ type state struct {
 	selectedPlacement int
 	nudging           bool
 
+	// lockPosition and lockScale tie the two halves of those fields together,
+	// so that changing one changes the other by the same amount. They are a
+	// way of working rather than anything about the flag, so they are kept
+	// here and hold for whatever is being edited.
+	lockPosition bool
+	lockScale    bool
+
 	// history is the undo stack of the open flag, and modified says whether
 	// it has changes that have not been saved.
 	history  history

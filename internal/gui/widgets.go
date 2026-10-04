@@ -110,6 +110,34 @@ func ToggleButton(label string, on bool) bool {
 	return pressed
 }
 
+// LockButton is a button carrying a chain link, whole while whatever it sits
+// between is tied together and broken while it is not.
+//
+// It has no button behind it, since a row of fields is busy enough without
+// one: the icon itself answers instead, lighting up under the pointer and
+// turning the accent colour once it is closed.
+func LockButton(id string, locked bool) bool {
+	size := imgui.FrameHeight()
+
+	pressed := imgui.InvisibleButton(id, imgui.Vec2{X: size, Y: size})
+	record(id, locked)
+
+	icon, color := IconLinkOff, colorTextDimmed
+
+	switch {
+	case locked && imgui.IsItemHovered():
+		icon, color = IconLink, colorAccentHover
+	case locked:
+		icon, color = IconLink, colorAccent
+	case imgui.IsItemHovered():
+		color = colorText
+	}
+
+	drawIcon(icon, imgui.ItemRectMin(), imgui.ItemRectMax(), color)
+
+	return pressed
+}
+
 // Checkbox is imgui.Checkbox.
 func Checkbox(label string, value *bool) bool {
 	changed := imgui.Checkbox(label, value)

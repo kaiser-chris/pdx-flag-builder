@@ -236,3 +236,95 @@ func TestEscapeAndEnterAnswerTheUnsavedChangesPrompt(t *testing.T) {
 		t.Errorf("Enter did not save the changes first:\n%s", saved)
 	}
 }
+
+// With the lock closed, changing one half of a pair changes the other by the
+// same amount, and the two stay as far apart as they were.
+func TestLockedPairMovesTogether(t *testing.T) {
+	application, driver := startApp(t)
+	openFixture(t, application, driver, "TST_emblem")
+	selectLayer(t, application, driver, 0)
+
+	emblem := application.state.flag.Layers[0].(*pdx.ColoredEmblem)
+	emblem.Instances[0].Scale = pdx.Vec2{X: 0.5, Y: 0.75}
+	driver.Frames(2)
+
+	// Unlocked, the other half stays where it is.
+	driver.Drag(driver.Find(panelSelected, scaleFields.x), 40, 0)
+
+	scale := emblem.Instances[0].Scale
+	if scale.X <= 0.5 || scale.Y != 0.75 {
+		t.Fatalf("dragging one half of an unlocked pair gave %v, want only the first changed", scale)
+	}
+
+	emblem.Instances[0].Scale = pdx.Vec2{X: 0.5, Y: 0.75}
+	driver.Frames(2)
+
+	driver.Click(panelSelected, scaleFields.lock)
+
+	if !application.state.lockScale {
+		t.Fatal("the lock button did not close the lock")
+	}
+
+	// Locked, dragging the first half takes the second with it.
+	driver.Drag(driver.Find(panelSelected, scaleFields.x), 40, 0)
+
+	scale = emblem.Instances[0].Scale
+	if scale.X <= 0.5 {
+		t.Fatalf("dragging right gave %v, want the first half larger", scale)
+	}
+
+	if difference := scale.Y - scale.X; difference < 0.2499 || difference > 0.2501 {
+		t.Errorf("the pair is %v, want the two of them a quarter apart as they started", scale)
+	}
+
+	// And dragging the second half takes the first with it, the other way.
+	before := scale
+
+	driver.Drag(driver.Find(panelSelected, scaleFields.y), -40, 0)
+
+	scale = emblem.Instances[0].Scale
+	if scale.Y >= before.Y || scale.X >= before.X {
+		t.Errorf("dragging the second half left gave %v, want both smaller than %v", scale, before)
+	}
+
+	// The lock holds for the position as well, and each has its own.
+	if application.state.lockPosition {
+		t.Error("closing the lock on the scale closed the one on the position too")
+	}
+}
+
+// Neither half of a locked pair may be taken past its limit, since that would
+// leave the two of them apart.
+func TestLockedPairStopsAtTheLimit(t *testing.T) {
+	application, driver := startApp(t)
+	openFixture(t, application, driver, "TST_emblem")
+	selectLayer(t, application, driver, 0)
+
+	application.state.lockScale = true
+
+	emblem := application.state.flag.Layers[0].(*pdx.ColoredEmblem)
+
+	// The second half is a hair short of its limit, so there is almost no room
+	// for either of them to move.
+	before := pdx.Vec2{X: 1, Y: pdx.MaxScale - 0.05}
+	emblem.Instances[0].Scale = before
+	driver.Frames(2)
+
+	// Far enough to the right to take it past that limit several times over.
+	driver.Drag(driver.Find(panelSelected, scaleFields.x), 400, 0)
+
+	scale := emblem.Instances[0].Scale
+
+	if scale.Y != pdx.MaxScale {
+		t.Errorf("the second half is %v, want it stopped at its limit %v", scale.Y, pdx.MaxScale)
+	}
+
+	gap, wanted := scale.Y-scale.X, before.Y-before.X
+	if math.Abs(float64(gap-wanted)) > 0.001 {
+		t.Errorf("the pair is %v, want the two of them %v apart as they started", scale, wanted)
+	}
+
+	if scale.X <= before.X {
+		t.Errorf("the first half is %v, want it to have taken the room the second had", scale.X)
+	}
+}

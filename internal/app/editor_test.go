@@ -161,7 +161,7 @@ func TestDraggingAPlacementIsOneUndoStep(t *testing.T) {
 	emblem := application.state.flag.Layers[0].(*pdx.ColoredEmblem)
 	before := emblem.Instances[0].Position.X
 
-	driver.Drag(driver.Find(panelSelected, "Position"), 60, 0)
+	driver.Drag(driver.Find(panelSelected, positionFields.x), 60, 0)
 
 	after := application.state.flag.Layers[0].(*pdx.ColoredEmblem).Instances[0].Position.X
 	if after <= before {
