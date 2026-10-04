@@ -33,7 +33,7 @@ func fakeDDS(fourCC string, flags uint32, width, height, levels, blockSize int) 
 
 // The texture that crashed the Store version: 768 by 512, DXT5, with every
 // mipmap level down to one pixel.
-func TestReadDDSDXTTakesExactlyTheLargestLevel(t *testing.T) {
+func TestReadDDSDXTMeasuresEveryLevel(t *testing.T) {
 	data := fakeDDS("DXT5", 0x4, 768, 512, 10, 16)
 
 	image, ok, err := ReadDDSDXT(data)
@@ -45,15 +45,44 @@ func TestReadDDSDXTTakesExactlyTheLargestLevel(t *testing.T) {
 		t.Errorf("image = %dx%d %v, want 768x512 DXT5", image.Width, image.Height, image.Format)
 	}
 
-	// 192 by 128 blocks of 16 bytes, all of the first level and nothing else.
-	if len(image.Blocks) != 192*128*16 {
-		t.Errorf("blocks = %d bytes, want %d", len(image.Blocks), 192*128*16)
+	if image.Levels != 10 {
+		t.Errorf("levels = %d, want the ten the file holds", image.Levels)
 	}
 
-	for _, value := range image.Blocks {
-		if value != 1 && value != 2 {
-			t.Fatalf("the blocks include bytes of a smaller level")
-		}
+	// Every level, each rounded up to whole blocks.
+	want := 0
+	for level := range 10 {
+		across, down := max(768>>level, 1), max(512>>level, 1)
+		want += (across + 3) / 4 * ((down + 3) / 4) * 16
+	}
+
+	if len(image.Blocks) != want {
+		t.Errorf("blocks = %d bytes, want %d", len(image.Blocks), want)
+	}
+
+	// And the levels together come to more than raylib's rule of thumb of a
+	// third over the largest, which is what read past the end of the buffer.
+	if largest := 192 * 128 * 16; want <= largest*4/3 {
+		t.Errorf("the levels come to %d bytes, want more than the %d raylib would have allowed",
+			want, largest*4/3)
+	}
+}
+
+// A file that holds fewer levels than its header claims is read for the ones
+// it does hold, rather than being refused or read past its end.
+func TestReadDDSDXTReadsTheLevelsAFileHolds(t *testing.T) {
+	data := fakeDDS("DXT5", 0x4, 64, 64, 3, 16)
+
+	// The header says four, the blocks are three levels long.
+	binary.LittleEndian.PutUint32(data[28:], 4)
+
+	image, _, err := ReadDDSDXT(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if image.Levels != 3 {
+		t.Errorf("levels = %d, want the three the file holds", image.Levels)
 	}
 }
 

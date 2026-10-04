@@ -129,10 +129,10 @@ func (t *Textures) Upload() int {
 			gpu := rl.LoadTextureFromImage(result.image)
 			rl.UnloadImage(result.image)
 
-			// Emblems are drawn at all sorts of sizes, so they want smooth
-			// scaling, and clamping keeps a rotated quad from wrapping the
-			// opposite edge of the texture into view.
-			rl.SetTextureFilter(gpu, rl.FilterBilinear)
+			smooth(&gpu)
+
+			// Clamping keeps a rotated quad from wrapping the opposite edge of
+			// the texture into view.
 			rl.SetTextureWrap(gpu, rl.WrapClamp)
 
 			t.loaded[result.name] = gpu
@@ -247,4 +247,33 @@ func (t *Textures) Trim(keep int) {
 		delete(t.loaded, name)
 		delete(t.used, name)
 	}
+}
+
+// firstCompressedFormat is the first of raylib's compressed pixel formats, as
+// its own number. The constants raylib-go declares for them are three short of
+// what raylib means by them, which internal/texture explains.
+const firstCompressedFormat = 14
+
+// smooth gives a texture the smaller copies of itself the graphics card reads
+// when it is drawn small, and the filtering that reads them.
+//
+// A flag is drawn at every size from the whole window down to twenty seven
+// pixels across. Without the smaller copies, a flag that small is built from
+// one pixel in fifty of the artwork and whatever those pixels happen to be:
+// the detailed ones break up, and the detail that is left dances about as the
+// size changes. The compressed files bring their own copies, made by whoever
+// drew them; the rest are made here, which the graphics card can only do for
+// a picture it has not compressed.
+func smooth(texture *rl.Texture2D) {
+	if texture.Mipmaps <= 1 && texture.Format < firstCompressedFormat {
+		rl.GenTextureMipmaps(texture)
+	}
+
+	if texture.Mipmaps > 1 {
+		rl.SetTextureFilter(*texture, rl.FilterTrilinear)
+
+		return
+	}
+
+	rl.SetTextureFilter(*texture, rl.FilterBilinear)
 }

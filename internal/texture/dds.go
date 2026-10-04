@@ -14,6 +14,7 @@ const (
 	ddsHeightOffset   = 12
 	ddsWidthOffset    = 16
 	ddsFourCCOffset   = 84
+	ddsMipCountOffset = 28
 	ddsDXGIFormatOffs = 128
 )
 
@@ -103,17 +104,20 @@ func (f DXTFormat) BlockSize() int {
 	return 16
 }
 
-// DXTImage is the largest mipmap level of a DXT compressed DDS file: the
-// compressed blocks as the file stores them, exactly as many as the image
-// needs.
+// DXTImage is a DXT compressed DDS file as the GPU takes it: the compressed
+// blocks as the file stores them, exactly as many as the image needs.
+//
+// Blocks holds Levels mipmap levels one after another, largest first, which is
+// the order a DDS file and the graphics card both keep them in.
 type DXTImage struct {
 	Width, Height int
 	Format        DXTFormat
+	Levels        int
 	Blocks        []byte
 }
 
-// ReadDDSDXT reads the largest mipmap level of a DXT1, DXT3 or DXT5
-// compressed DDS file. It reports false for any other file.
+// ReadDDSDXT reads a DXT1, DXT3 or DXT5 compressed DDS file, with the smaller
+// copies of the picture it carries. It reports false for any other file.
 //
 // raylib reads these files itself, but sizes the chain of mipmap levels by
 // rule of thumb, as a third more than the largest level. For a texture with
@@ -121,8 +125,8 @@ type DXTImage struct {
 // upload reads past the end of its own buffer. Most allocators leave some
 // memory there and nothing happens; the one Windows gives Store applications
 // puts the end of the buffer at the end of a page, and the application
-// crashes. Only the largest level is ever drawn, so only that is read here,
-// sized from its blocks.
+// crashes. The levels are therefore measured here, block by block, which is
+// how the upload measures them in its turn.
 func ReadDDSDXT(data []byte) (*DXTImage, bool, error) {
 	if len(data) < ddsHeaderSize || [4]byte(data[0:4]) != ddsMagic {
 		return nil, false, nil
@@ -151,9 +155,25 @@ func ReadDDSDXT(data []byte) (*DXTImage, bool, error) {
 		return nil, true, fmt.Errorf("DDS image has no size")
 	}
 
-	// Blocks cover four by four pixels, so an edge that is not a multiple of
-	// four still takes a whole block.
-	size := (width + 3) / 4 * ((height + 3) / 4) * format.BlockSize()
+	levels := int(binary.LittleEndian.Uint32(data[ddsMipCountOffset : ddsMipCountOffset+4]))
+
+	// A file with no count at all still has the one level every file has.
+	levels = max(levels, 1)
+
+	size := levelsSize(width, height, levels, format)
+
+	if len(data) < ddsHeaderSize+size {
+		// A file that holds fewer levels than it claims is read for the levels
+		// it does hold, down to the largest one, which every file has.
+		for levels > 1 {
+			levels--
+			size = levelsSize(width, height, levels, format)
+
+			if len(data) >= ddsHeaderSize+size {
+				break
+			}
+		}
+	}
 
 	if len(data) < ddsHeaderSize+size {
 		return nil, true, fmt.Errorf("DDS file is cut short: %d bytes of blocks, want %d", len(data)-ddsHeaderSize, size)
@@ -163,6 +183,23 @@ func ReadDDSDXT(data []byte) (*DXTImage, bool, error) {
 		Width:  width,
 		Height: height,
 		Format: format,
+		Levels: levels,
 		Blocks: data[ddsHeaderSize : ddsHeaderSize+size],
 	}, true, nil
+}
+
+// levelsSize is how many bytes the given number of mipmap levels take.
+//
+// Each level is half the size of the one before it, down to a single pixel,
+// and blocks cover four by four pixels, so an edge that is not a multiple of
+// four still takes a whole block.
+func levelsSize(width, height, levels int, format DXTFormat) int {
+	size := 0
+
+	for level := range levels {
+		across, down := max(width>>level, 1), max(height>>level, 1)
+		size += (across + 3) / 4 * ((down + 3) / 4) * format.BlockSize()
+	}
+
+	return size
 }

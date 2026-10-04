@@ -139,8 +139,8 @@ var dxtFormats = map[DXTFormat]rl.PixelFormat{
 	DXT5:      17, // PIXELFORMAT_COMPRESSED_DXT5_RGBA
 }
 
-// imageFromBlocks copies compressed blocks into an image raylib owns, with a
-// single mipmap level.
+// imageFromBlocks copies compressed blocks into an image raylib owns, with the
+// mipmap levels the file held.
 //
 // raylib-go offers no allocator of raylib's own, so the memory comes from an
 // uncompressed image of the same size, which is always at least as large as
@@ -157,11 +157,19 @@ func imageFromBlocks(compressed *DXTImage) (*rl.Image, error) {
 	}
 
 	destination := unsafe.Slice((*byte)(image.Data), width*height*4)
+
+	if len(compressed.Blocks) > len(destination) {
+		rl.UnloadImage(image)
+
+		return nil, fmt.Errorf("a %dx%d image of %d levels does not fit in %d bytes",
+			compressed.Width, compressed.Height, compressed.Levels, len(destination))
+	}
+
 	copy(destination, compressed.Blocks)
 
 	image.Width = int32(compressed.Width)
 	image.Height = int32(compressed.Height)
-	image.Mipmaps = 1
+	image.Mipmaps = int32(max(compressed.Levels, 1))
 	image.Format = dxtFormats[compressed.Format]
 
 	return image, nil
