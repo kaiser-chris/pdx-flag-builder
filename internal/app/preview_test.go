@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/AllenDang/cimgui-go/imgui"
+
+	"github.com/kaiser-chris/pdx-flag-builder-go/internal/gui"
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/render"
 	"github.com/kaiser-chris/pdx-flag-builder-go/internal/uitest"
 )
@@ -189,11 +192,13 @@ func TestPreviewShowsTheCloth(t *testing.T) {
 	application, driver := startApp(t)
 	preview := openPreview(t, application, driver, &render.Victoria3, "TST_split")
 
-	driver.WaitFor("the cloth to be read from the folders", preview.fancy.Ready)
+	driver.WaitFor("the cloth to be read from the folders", preview.fancy[0].Ready)
 	driver.Frame()
 
-	name := driver.Find(preview.title, labelFancy)
-	cloth := driver.Find(preview.title, labelFancy+" flag")
+	largest := preview.game.Cloths[0]
+
+	name := driver.Find(preview.title, largest.Name)
+	cloth := driver.Find(preview.title, largest.Name+" flag")
 
 	if !within(centreY(name), centreY(cloth), 1) {
 		t.Errorf("the name sits at %v, want it level with the middle of the cloth at %v", centreY(name), centreY(cloth))
@@ -206,7 +211,7 @@ func TestPreviewShowsTheCloth(t *testing.T) {
 
 	// The cloth carries the flag: its upper half is the first of the fixture
 	// flag's two colours, blue, however the light falls on it.
-	picture := preview.fancy.Image()
+	picture := preview.fancy[0].Image()
 	bounds := picture.Bounds()
 
 	upper := picture.RGBAAt(bounds.Dx()/2, bounds.Dy()/3)
@@ -270,7 +275,7 @@ func TestPreviewSaysWhichGameFilesAreMissing(t *testing.T) {
 	}
 
 	// And nothing at all of the cloth, which is the game's from end to end.
-	if preview.fancy.Ready() {
+	if preview.fancy[0].Ready() {
 		t.Error("the cloth was drawn although the game's files are not there")
 	}
 }
@@ -355,13 +360,15 @@ func TestEachGameShowsItsOwnCloth(t *testing.T) {
 	for _, game := range render.Games {
 		preview := openPreview(t, application, driver, game, "TST_split")
 
-		driver.WaitFor("the cloth of "+game.Name, preview.fancy.Ready)
+		driver.WaitFor("the cloth of "+game.Name, preview.fancy[0].Ready)
 		driver.Frame()
 
-		picture := preview.fancy.Image()
+		picture := preview.fancy[0].Image()
 
-		if got := picture.Bounds(); got.Dx() != int(game.Cloth.RenderWidth) || got.Dy() != int(game.Cloth.RenderHeight) {
-			t.Errorf("%s draws its cloth %v, want %dx%d", game.Name, got, game.Cloth.RenderWidth, game.Cloth.RenderHeight)
+		largest := game.Cloths[0]
+
+		if got := picture.Bounds(); got.Dx() != int(largest.RenderWidth) || got.Dy() != int(largest.RenderHeight) {
+			t.Errorf("%s draws its cloth %v, want %dx%d", game.Name, got, largest.RenderWidth, largest.RenderHeight)
 		}
 
 		bounds := picture.Bounds()
@@ -369,5 +376,103 @@ func TestEachGameShowsItsOwnCloth(t *testing.T) {
 		if upper := picture.RGBAAt(bounds.Dx()/2, bounds.Dy()/3); upper.A == 0 || upper.B <= upper.R {
 			t.Errorf("%s: the upper half of the cloth = %v, want the flag's blue", game.Name, upper)
 		}
+	}
+}
+
+// Victoria 3 hangs a flag on the same cloth at two sizes, a large one and a
+// normal one, each drawn from a picture of its own and shown at the fraction
+// of it the game draws it down to.
+func TestVictoriaShowsTheClothAtTwoSizes(t *testing.T) {
+	application, driver := startApp(t)
+	preview := openPreview(t, application, driver, &render.Victoria3, "TST_split")
+
+	cloths := render.Victoria3.Cloths
+
+	if len(cloths) != 2 || len(preview.fancy) != len(cloths) {
+		t.Fatalf("Victoria 3 has %d cloths and the preview %d, want two of each", len(cloths), len(preview.fancy))
+	}
+
+	if cloths[0].Name != "Fancy Large" || cloths[1].Name != "Fancy Normal" {
+		t.Errorf("the cloths are called %q and %q, want the large one first", cloths[0].Name, cloths[1].Name)
+	}
+
+	var rows []uitest.Item
+
+	for index, cloth := range cloths {
+		driver.WaitFor("the "+cloth.Name+" cloth", preview.fancy[index].Ready)
+		driver.Frame()
+
+		// Each is drawn into a picture of its own size.
+		if got := preview.fancy[index].Image().Bounds(); got.Dx() != int(cloth.RenderWidth) || got.Dy() != int(cloth.RenderHeight) {
+			t.Errorf("%s is drawn %v, want %dx%d", cloth.Name, got, cloth.RenderWidth, cloth.RenderHeight)
+		}
+
+		// And shown at the size the game scales that picture down to.
+		row := driver.Find(preview.title, cloth.Name+" flag")
+		rows = append(rows, row)
+
+		if width := row.Max.X - row.Min.X; !within(width, float32(cloth.Width), 1) {
+			t.Errorf("%s is shown %v wide, want %d", cloth.Name, width, cloth.Width)
+		}
+
+		if height := row.Max.Y - row.Min.Y; !within(height, float32(cloth.Height), 1) {
+			t.Errorf("%s is shown %v tall, want %d", cloth.Name, height, cloth.Height)
+		}
+	}
+
+	// The larger one is above the other, and both are centred with the rest.
+	if rows[0].Min.Y >= rows[1].Min.Y {
+		t.Error("the large cloth is below the normal one, want the largest at the top")
+	}
+
+	if !within(centreX(rows[0]), centreX(rows[1]), 1) {
+		t.Errorf("the cloths are centred on %v and %v, want them lined up", centreX(rows[0]), centreX(rows[1]))
+	}
+}
+
+// The window opens at the size of what is in it, so that every flag it holds
+// can be seen without resizing it or scrolling.
+func TestPreviewWindowShowsEverythingItHolds(t *testing.T) {
+	application, driver := startApp(t)
+
+	for _, game := range render.Games {
+		preview := openPreview(t, application, driver, game, "TST_split")
+
+		window, found := gui.FindWindow(preview.title)
+		if !found {
+			t.Fatalf("the preview of %s is not open", game.Name)
+		}
+
+		if scroll := window.ScrollMax().Y; scroll > 0 {
+			t.Errorf("%s: the window scrolls by %v, want it tall enough for everything in it", game.Name, scroll)
+		}
+
+		low, high := window.Pos(), imgui.Vec2{
+			X: window.Pos().X + window.Size().X,
+			Y: window.Pos().Y + window.Size().Y,
+		}
+
+		for _, item := range driver.Items() {
+			if item.Window != preview.title {
+				continue
+			}
+
+			if item.Min.X < low.X || item.Min.Y < low.Y || item.Max.X > high.X || item.Max.Y > high.Y {
+				t.Errorf("%s: %q lies at %v-%v, outside the window at %v-%v",
+					game.Name, item.Label, item.Min, item.Max, low, high)
+			}
+		}
+
+		// The cloths and the flat sizes are all of them there.
+		for _, cloth := range game.Cloths {
+			driver.Find(preview.title, cloth.Name+" flag")
+		}
+
+		for _, size := range game.Sizes {
+			driver.Find(preview.title, size.Name+" flag")
+		}
+
+		preview.show = false
+		driver.Frames(2)
 	}
 }

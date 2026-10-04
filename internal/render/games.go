@@ -19,8 +19,9 @@ type Game struct {
 	// Sizes are the flat sizes it draws a flag at, largest first.
 	Sizes []IconSize
 
-	// Cloth is the waving flag.
-	Cloth Cloth
+	// Cloths are the waving flags it hangs one on, largest first. A game may
+	// draw the same cloth at more than one size.
+	Cloths []Cloth
 }
 
 // IconSize is one of the sizes a game draws a flag at.
@@ -50,9 +51,15 @@ type IconSize struct {
 	Mask string
 }
 
-// Cloth is the waving flag of a game.
+// Cloth is a waving flag of a game, at one of the sizes it draws one.
 type Cloth struct {
-	// Width and Height are the size the game shows the cloth at.
+	// Name is what to call this one, which is only worth more than "Fancy"
+	// for a game that draws it at more than one size.
+	Name string
+
+	// Width and Height are the size the game shows the cloth at: its own
+	// files give these as the render size times the scale they draw it down
+	// to.
 	Width, Height int32
 
 	// RenderWidth and RenderHeight are the size it draws it at first, which
@@ -97,7 +104,13 @@ var Victoria3 = Game{
 		},
 	},
 
-	Cloth: Cloth{Width: 150, Height: 90, RenderWidth: 300, RenderHeight: 180},
+	// The game draws the cloth at several sizes, each as a render size and
+	// the fraction of it that is shown: 550 by 309 at 0.45 on the end screen,
+	// and 320 by 180 at 0.5 beside a country.
+	Cloths: []Cloth{
+		{Name: "Fancy Large", Width: 248, Height: 139, RenderWidth: 550, RenderHeight: 309},
+		{Name: "Fancy Normal", Width: 160, Height: 90, RenderWidth: 320, RenderHeight: 180},
+	},
 }
 
 // Europa Universalis 5 frames a flag from the outside in: the frame is the
@@ -119,7 +132,9 @@ var EuropaUniversalis5 = Game{
 		euSize("Mini", 22, 14, frameLarge),
 	},
 
-	Cloth: Cloth{Width: 90, Height: 64, RenderWidth: 360, RenderHeight: 256},
+	// One size, drawn from a picture four times as wide as it is shown at,
+	// which is the frame size its own widget asks for.
+	Cloths: []Cloth{{Name: "Fancy", Width: 90, Height: 64, RenderWidth: 360, RenderHeight: 256}},
 }
 
 // The two frames Europa Universalis 5 draws around a flag. Which one a size

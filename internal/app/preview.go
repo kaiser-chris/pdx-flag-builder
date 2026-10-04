@@ -14,7 +14,6 @@ import (
 const (
 	menuPreview        = "Preview"
 	labelRank          = "Rank Border"
-	labelFancy         = "Fancy"
 	labelWhatIsMissing = "What is missing"
 )
 
@@ -26,7 +25,10 @@ type preview struct {
 	title string
 
 	icons *render.Icons
-	fancy *render.Fancy
+
+	// fancy is one waving cloth per size the game hangs a flag on, in the
+	// order the game's own sizes are listed in.
+	fancy []*render.Fancy
 
 	show bool
 
@@ -41,16 +43,22 @@ func newPreviews(painter *render.Painter, textures *render.Textures, resolve fun
 	var previews []*preview
 
 	for _, game := range render.Games {
-		fancy, err := render.NewFancy(game.Cloth, painter, resolve)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", game.Name, err)
+		var cloths []*render.Fancy
+
+		for _, cloth := range game.Cloths {
+			fancy, err := render.NewFancy(cloth, painter, resolve)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", game.Name, err)
+			}
+
+			cloths = append(cloths, fancy)
 		}
 
 		previews = append(previews, &preview{
 			game:  game,
 			title: game.Name + " Preview",
 			icons: render.NewIcons(game, painter, textures),
-			fancy: fancy,
+			fancy: cloths,
 			rank:  1,
 		})
 	}
@@ -67,7 +75,10 @@ func (a *App) drawPreviews(seconds float32) {
 		}
 
 		preview.icons.Draw(a.state.flag, preview.rank)
-		preview.fancy.Draw(a.state.flag, seconds)
+
+		for _, fancy := range preview.fancy {
+			fancy.Draw(a.state.flag, seconds)
+		}
 	}
 }
 
@@ -75,7 +86,9 @@ func (a *App) drawPreviews(seconds float32) {
 // folders have been read again and may hold something else now.
 func (a *App) forgetPreviews() {
 	for _, preview := range a.previews {
-		preview.fancy.Forget()
+		for _, fancy := range preview.fancy {
+			fancy.Forget()
+		}
 	}
 }
 
@@ -83,7 +96,10 @@ func (a *App) forgetPreviews() {
 func (a *App) unloadPreviews() {
 	for _, preview := range a.previews {
 		preview.icons.Unload()
-		preview.fancy.Unload()
+
+		for _, fancy := range preview.fancy {
+			fancy.Unload()
+		}
 	}
 }
 
@@ -106,9 +122,12 @@ func (a *App) previewWindow(preview *preview) {
 		return
 	}
 
-	imgui.SetNextWindowSizeV(gui.ScaledVec2(400, 520), imgui.CondFirstUseEver)
-
-	if imgui.BeginV(preview.title, &preview.show, 0) {
+	// The window is the size of what is in it, which is a column of pictures
+	// of fixed size: there is nothing in it to gain by making it larger, and
+	// a smaller one would cut a flag in half or hide one behind a scrollbar.
+	// It also keeps a window that was opened before a game gained a size from
+	// holding on to the height it was saved at.
+	if imgui.BeginV(preview.title, &preview.show, imgui.WindowFlagsAlwaysAutoResize) {
 		a.trackFocus(preview.title)
 		a.previewBody(preview)
 	}
@@ -134,10 +153,12 @@ func (a *App) previewBody(preview *preview) {
 
 	// The widest of them sets the column, and the rest are centred under it,
 	// so that they read as one flag at several sizes rather than a staircase.
-	cloth := preview.game.Cloth
-	clothWidth, clothHeight := float32(cloth.RenderWidth)/2*scale, float32(cloth.RenderHeight)/2*scale
+	var widest float32
 
-	widest := clothWidth
+	for _, cloth := range preview.game.Cloths {
+		widest = max(widest, float32(cloth.Width)*scale)
+	}
+
 	for _, size := range preview.game.Sizes {
 		widest = max(widest, float32(size.Width)*scale)
 	}
@@ -150,9 +171,12 @@ func (a *App) previewBody(preview *preview) {
 	imgui.TableSetupColumnV("name", imgui.TableColumnFlagsWidthFixed, gui.Scaled(80), 0)
 	imgui.TableSetupColumnV("flag", imgui.TableColumnFlagsWidthFixed, widest, 0)
 
-	// The cloth first, which is how the games' own previews list them: the
+	// The cloths first, which is how the games' own previews list them: the
 	// largest at the top.
-	a.previewRow(labelFancy, cloth.Width, cloth.Height, clothWidth, clothHeight, widest, preview.fancy.Target())
+	for index, cloth := range preview.game.Cloths {
+		a.previewRow(cloth.Name, cloth.Width, cloth.Height,
+			float32(cloth.Width)*scale, float32(cloth.Height)*scale, widest, preview.fancy[index].Target())
+	}
 
 	for index, size := range preview.game.Sizes {
 		a.previewRow(size.Name, size.FlagWidth, size.FlagHeight,
@@ -194,9 +218,15 @@ func (a *App) missingGameFiles(preview *preview) {
 		}
 	}
 
-	if problem := preview.fancy.Problem(); problem != nil {
-		dimmedWrapped(fmt.Sprintf("The cloth could not be read: %v", problem))
-		imgui.Spacing()
+	// Every cloth of a game is the same one drawn at a different size, so
+	// whatever went wrong with one went wrong with all of them.
+	for _, fancy := range preview.fancy {
+		if problem := fancy.Problem(); problem != nil {
+			dimmedWrapped(fmt.Sprintf("The cloth could not be read: %v", problem))
+			imgui.Spacing()
+
+			break
+		}
 	}
 
 	if len(missing) == 0 {

@@ -55,7 +55,7 @@ func newFancy(t *testing.T) *Fancy {
 		writePicture(t, filepath.Join(folder, name+".png"))
 	}
 
-	fancy, err := NewFancy(Victoria3.Cloth, NewPainter(shader, textures), func(name string) (string, bool) {
+	fancy, err := NewFancy(Victoria3.Cloths[0], NewPainter(shader, textures), func(name string) (string, bool) {
 		if name == ClothMesh {
 			return filepath.Join(folder, name), true
 		}
@@ -117,7 +117,7 @@ func TestFancyDrawsTheClothWithTheFlagOnIt(t *testing.T) {
 	cloth := fancy.Image()
 
 	bounds := cloth.Bounds()
-	if bounds.Dx() != int(Victoria3.Cloth.RenderWidth) || bounds.Dy() != int(Victoria3.Cloth.RenderHeight) {
+	if bounds.Dx() != int(Victoria3.Cloths[0].RenderWidth) || bounds.Dy() != int(Victoria3.Cloths[0].RenderHeight) {
 		t.Fatalf("the cloth is %v, want the size the game draws it at", bounds)
 	}
 
